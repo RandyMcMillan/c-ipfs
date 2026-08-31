@@ -60,6 +60,17 @@ jobs:
           IPFS_PATH=/tmp/ipfs_test ./ipfs init
           IPFS_PATH=/tmp/ipfs_test ./ipfs id
 
+      - name: Smoke test — ipfs add / cat sync loop
+        run: |
+          cd main
+          mkdir -p /tmp/ipfs_sync_dir/sub
+          echo "hello ipfs ci" > /tmp/ipfs_sync_dir/hello.txt
+          echo "nested content" > /tmp/ipfs_sync_dir/sub/nested.txt
+          CID=$(IPFS_PATH=/tmp/ipfs_test ./ipfs add -r /tmp/ipfs_sync_dir 2>&1 | tail -1 | awk '{print $2}')
+          echo "Root CID: $CID"
+          IPFS_PATH=/tmp/ipfs_test ./ipfs cat "$CID" | grep -q "hello ipfs ci"
+          echo "Sync loop verified"
+
       - name: Smoke test — nostr publish
         run: |
           cd main
