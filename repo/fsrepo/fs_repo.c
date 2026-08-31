@@ -415,6 +415,28 @@ int fs_repo_open_config(struct FSRepo* repo) {
 	_get_json_int_value(data, tokens, num_tokens, curr_pos, "NoSync", &repo->config->datastore->no_sync);
 	_get_json_int_value(data, tokens, num_tokens, curr_pos, "HashOnRead", &repo->config->datastore->hash_on_read);
 	_get_json_int_value(data, tokens, num_tokens, curr_pos, "BloomFilterSize", &repo->config->datastore->bloom_filter_size);
+	// Kubo compatibility: provide defaults for fields Kubo doesn't include at top level
+	if (repo->config->datastore->type == NULL) {
+		repo->config->datastore->type = malloc(5);
+		if (repo->config->datastore->type != NULL)
+			strcpy(repo->config->datastore->type, "lmdb");
+	}
+	if (repo->config->datastore->path == NULL) {
+		size_t path_len = strlen(repo->path) + 11;
+		repo->config->datastore->path = malloc(path_len);
+		if (repo->config->datastore->path != NULL)
+			os_utils_filepath_join(repo->path, "datastore", repo->config->datastore->path, path_len);
+	}
+	if (repo->config->datastore->storage_max == NULL) {
+		repo->config->datastore->storage_max = malloc(5);
+		if (repo->config->datastore->storage_max != NULL)
+			strcpy(repo->config->datastore->storage_max, "10GB");
+	}
+	if (repo->config->datastore->gc_period == NULL) {
+		repo->config->datastore->gc_period = malloc(3);
+		if (repo->config->datastore->gc_period != NULL)
+			strcpy(repo->config->datastore->gc_period, "1h");
+	}
 
 	// get addresses. First is Swarm array, then Api, then Gateway
 	curr_pos = _find_token(data, tokens, num_tokens, curr_pos, "Addresses");
@@ -542,6 +564,13 @@ int fs_repo_setup_lmdb_datastore(struct FSRepo* repo) {
 int fs_repo_open_datastore(struct FSRepo* repo) {
 	int argc = 0;
 	char** argv = NULL;
+
+	if (repo->config->datastore->type == NULL) {
+		libp2p_logger_error("fs_repo", "Datastore type is NULL; defaulting to lmdb\n");
+		repo->config->datastore->type = malloc(5);
+		if (repo->config->datastore->type != NULL)
+			strcpy(repo->config->datastore->type, "lmdb");
+	}
 
 	if (strncmp(repo->config->datastore->type, "lmdb", 4) == 0) {
 		// this is a LightningDB. Open it.
