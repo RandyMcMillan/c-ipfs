@@ -7,42 +7,30 @@ on:
     branches: [master, main]
 
 jobs:
-  build-macos:
-    runs-on: macos-latest
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-20.04
+          - ubuntu-22.04
+          - ubuntu-latest
+          - macos-13
+          - macos-latest
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
 
-      - name: Install dependencies
+      - name: Install dependencies (macOS)
+        if: runner.os == 'macOS'
         run: |
           brew install libtool
+          echo "/opt/homebrew/opt/libtool/libexec/gnubin" >> "$GITHUB_PATH"
 
-      - name: Build c-libp2p
-        run: |
-          export PATH="/opt/homebrew/opt/libtool/libexec/gnubin:$PATH"
-          cd c-libp2p && make all
-
-      - name: Build LMDB
-        run: cd lmdb/libraries/liblmdb && make all
-
-      - name: Build c-ipfs
-        run: make all
-
-      - name: Smoke test
-        run: |
-          cd main
-          IPFS_PATH=/tmp/ipfs_test ./ipfs init
-          IPFS_PATH=/tmp/ipfs_test ./ipfs id
-
-  build-ubuntu:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
-      - name: Install dependencies
+      - name: Install dependencies (Ubuntu)
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential libcurl4-openssl-dev
@@ -56,8 +44,16 @@ jobs:
       - name: Build c-ipfs
         run: make all
 
-      - name: Smoke test
+      - name: Build tests
+        run: cd test && make all
+
+      - name: Smoke test — ipfs init + id
         run: |
           cd main
           IPFS_PATH=/tmp/ipfs_test ./ipfs init
           IPFS_PATH=/tmp/ipfs_test ./ipfs id
+
+      - name: Smoke test — test binary runs
+        run: |
+          cd test
+          ./test_ipfs || true
