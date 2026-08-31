@@ -76,7 +76,7 @@ jobs:
           cd main
           ./ipfs nostr publish --cid QmSmokeTest --content "CI smoke test"
 
-      - name: Smoke test — nostr repo + patch + issue + state
+      - name: Smoke test — nostr repo + patch + issue + state + grasp
         run: |
           cd main
           ./ipfs nostr repo --id ci-repo --name "CI Repo" --cid QmRepoCID
@@ -84,6 +84,12 @@ jobs:
           ./ipfs nostr issue --repo 0000000000000000000000000000000000000000000000000000000000000000:ci-repo --subject "ci issue" --body "issue body"
           printf 'refs/heads/main abcdef1234567890abcdef1234567890abcdef12\nrefs/heads/dev 1234567890abcdef1234567890abcdef12345678\n' > /tmp/ci_refs.txt
           ./ipfs nostr state --repo 0000000000000000000000000000000000000000000000000000000000000000:ci-repo --refs /tmp/ci_refs.txt
+          ./ipfs nostr grasp --relay wss://relay.damus.io --relay wss://relay.nostr.info
+
+      - name: Smoke test — nostr seckey reuse
+        run: |
+          cd main
+          ./ipfs nostr publish --cid QmSeckeyTest --content "signed with fixed key" --seckey 0000000000000000000000000000000000000000000000000000000000000001
 
       - name: Smoke test — test binary runs
         run: |

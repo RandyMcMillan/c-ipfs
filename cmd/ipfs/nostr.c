@@ -21,6 +21,8 @@ static void print_nostr_help(FILE *out) {
     fprintf(out, "          --body <text> [--euc <commit>]\n");
     fprintf(out, "  issue --repo <pubkey:id> --subject <s>    Publish an issue (kind 1621)\n");
     fprintf(out, "          --body <text>\n");
+    fprintf(out, "\nOPTIONS:\n");
+    fprintf(out, "  --seckey <hex>    Use existing 32-byte secret key (instead of generating)\n");
 }
 
 static const char* get_arg(int argc, char** argv, const char *flag) {
@@ -58,10 +60,19 @@ int ipfs_nostr(int argc, char** argv) {
         return 0;
     }
 
-    if (!nostr_key_generate(ctx, &key)) {
-        fprintf(stderr, "Error: failed to generate key\n");
-        nostr_context_free(ctx);
-        return 0;
+    const char *seckey_arg = get_arg(argc, argv, "--seckey");
+    if (seckey_arg) {
+        if (!nostr_key_from_hex(ctx, seckey_arg, &key)) {
+            fprintf(stderr, "Error: invalid --seckey (expected 64 hex chars)\n");
+            nostr_context_free(ctx);
+            return 0;
+        }
+    } else {
+        if (!nostr_key_generate(ctx, &key)) {
+            fprintf(stderr, "Error: failed to generate key\n");
+            nostr_context_free(ctx);
+            return 0;
+        }
     }
     hex_encode(key.seckey, 32, seckey_hex, sizeof(seckey_hex));
     seckey_hex[64] = '\0';
