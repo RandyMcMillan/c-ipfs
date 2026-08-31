@@ -1,7 +1,7 @@
 [submodule "c-libp2p"]
 	path = c-libp2p
-	url = https://github.com/Agorise/c-libp2p.git
+    url = git@github.com:RandyMcMillan/c-libp2p.git
 [submodule "lmdb"]
 	path = lmdb
-	url = https://github.com/jmjatlanta/lmdb.git
+	url = git@github.com:RandyMcMillan/lmdb.git
 	branch = mdb.master
