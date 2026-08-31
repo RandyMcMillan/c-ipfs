@@ -1,10 +1,10 @@
 [submodule "c-libp2p"]
 	path = c-libp2p
-    url = git@github.com:RandyMcMillan/c-libp2p.git
+	url = https://github.com/RandyMcMillan/c-libp2p.git
 [submodule "lmdb"]
 	path = lmdb
-	url = git@github.com:RandyMcMillan/lmdb.git
+	url = https://github.com/RandyMcMillan/lmdb.git
 	branch = mdb.master
 [submodule "nostril"]
 	path = nostril
-	url = git@github.com:RandyMcMillan/nostril.git
+	url = https://github.com/RandyMcMillan/nostril.git
