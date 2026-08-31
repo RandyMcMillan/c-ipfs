@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "libp2p/utils/logger.h"
@@ -11,6 +12,27 @@
 #include "ipfs/cmd/cli.h"
 #include "ipfs/cmd/ipfs/id.h"
 #include "ipfs/namesys/name.h"
+
+static void print_help(FILE* out) {
+	fprintf(out, "USAGE:\n");
+	fprintf(out, "  ipfs [--config=<path>] <command> [arguments]\n\n");
+	fprintf(out, "COMMANDS:\n");
+	fprintf(out, "  init          Initialize IPFS repo and generate a new keypair\n");
+	fprintf(out, "  add <path>    Add a file to IPFS\n");
+	fprintf(out, "  cat <hash>    Display the contents of an IPFS object\n");
+	fprintf(out, "  get <hash>    Download an IPFS object\n");
+	fprintf(out, "  id            Show IPFS node identity\n");
+	fprintf(out, "  object get    Get a dag object\n");
+	fprintf(out, "  daemon        Run the IPFS daemon\n");
+	fprintf(out, "  ping <peer>   Send echo requests to a peer\n");
+	fprintf(out, "  swarm         Swarm management\n");
+	fprintf(out, "  name          Publish and resolve IPNS names\n");
+	fprintf(out, "  dns <domain>  DNS link resolution\n");
+	fprintf(out, "  help          Show this help text\n\n");
+	fprintf(out, "OPTIONS:\n");
+	fprintf(out, "  -c, --config  Path to the configuration directory\n");
+	fprintf(out, "  -h, --help    Show this help text\n");
+}
 
 #ifdef __MINGW32__
     void bzero(void *s, size_t n)
@@ -73,6 +95,7 @@ void strip_quotes(int argc, char** argv) {
 #define NAME 9
 #define SWARM 10
 #define ID 11
+#define HELP 12
 
 /**
  * Find out if this command line argument is part of a switch
@@ -118,10 +141,17 @@ int get_cli_verb(int argc, char** argv) {
  * Basic parsing of command line arguments to figure out where the user wants to go
  */
 int parse_arguments(int argc, char** argv) {
+	for (int i = 1; i < argc; i++) {
+		if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) {
+			return HELP;
+		}
+	}
 	int index = get_cli_verb(argc, argv);
 	if (argc == 1 || index == 0) {
-		libp2p_logger_error("main", "No parameters passed.\n");
-		return 0;
+		return HELP;
+	}
+	if (strcmp("help", argv[index]) == 0) {
+		return HELP;
 	}
 	if (strcmp("init", argv[index]) == 0) {
 		return INIT;
@@ -171,6 +201,10 @@ int main(int argc, char** argv) {
 		// until then, use the old way
 		int cmd = parse_arguments(argc, argv);
 		switch (cmd) {
+			case (HELP):
+				print_help(stdout);
+				retVal = 1;
+				break;
 			case (INIT):
 				retVal = ipfs_repo_init(argc, argv);
 				break;
@@ -205,7 +239,9 @@ int main(int argc, char** argv) {
 				retVal = ipfs_id(argc, argv);
 				break;
 			default:
-				libp2p_logger_error("main", "Invalid command line arguments.\n");
+				fprintf(stderr, "Error: unknown command.\n\n");
+				print_help(stderr);
+				retVal = 0;
 				break;
 		}
 		cli_arguments_free(args);
