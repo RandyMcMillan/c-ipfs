@@ -1,0 +1,178 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#include "ipfs/cmd/ipfs/nostr.h"
+#include "ipfs/nostr/event.h"
+#include "ipfs/nostr/git.h"
+#include "ipfs/nostr/kind.h"
+#include "hex.h"
+
+static void print_nostr_help(FILE *out) {
+    fprintf(out, "USAGE:\n");
+    fprintf(out, "  ipfs nostr <subcommand> [options]\n\n");
+    fprintf(out, "SUBCOMMANDS:\n");
+    fprintf(out, "  publish --cid <cid> [--content <text>]    Publish IPFS content (kind 1064)\n");
+    fprintf(out, "  repo --id <id> --name <name> --cid <cid>  Announce git repo over IPFS (kind 30617)\n");
+    fprintf(out, "  patch --repo <pubkey:id> --subject <s>    Publish a git patch (kind 1617)\n");
+    fprintf(out, "          --body <text> [--euc <commit>]\n");
+    fprintf(out, "  issue --repo <pubkey:id> --subject <s>    Publish an issue (kind 1621)\n");
+    fprintf(out, "          --body <text>\n");
+}
+
+static const char* get_arg(int argc, char** argv, const char *flag) {
+    for (int i = 2; i < argc - 1; i++) {
+        if (strcmp(argv[i], flag) == 0) {
+            return argv[i + 1];
+        }
+    }
+    return NULL;
+}
+
+static int has_flag(int argc, char** argv, const char *flag) {
+    for (int i = 2; i < argc; i++) {
+        if (strcmp(argv[i], flag) == 0) return 1;
+    }
+    return 0;
+}
+
+int ipfs_nostr(int argc, char** argv) {
+    void *ctx;
+    struct NostrKey key;
+    struct NostrEvent ev;
+    char json_buf[65536];
+    char seckey_hex[65];
+    int ret = 0;
+
+    if (argc < 3) {
+        print_nostr_help(stderr);
+        return 0;
+    }
+
+    ctx = nostr_context_new();
+    if (!ctx) {
+        fprintf(stderr, "Error: failed to create secp256k1 context\n");
+        return 0;
+    }
+
+    if (!nostr_key_generate(ctx, &key)) {
+        fprintf(stderr, "Error: failed to generate key\n");
+        nostr_context_free(ctx);
+        return 0;
+    }
+    hex_encode(key.seckey, 32, seckey_hex, sizeof(seckey_hex));
+    seckey_hex[64] = '\0';
+
+    const char *subcmd = argv[2];
+
+    if (strcmp(subcmd, "publish") == 0) {
+        const char *cid = get_arg(argc, argv, "--cid");
+        const char *content = get_arg(argc, argv, "--content");
+        if (!cid) {
+            fprintf(stderr, "Error: --cid required\n");
+            goto cleanup;
+        }
+        if (!nostr_event_make_ipfs_content(ctx, &key, cid, content, &ev)) {
+            fprintf(stderr, "Error: failed to create event\n");
+            goto cleanup;
+        }
+        if (!nostr_event_to_json(&ev, json_buf, sizeof(json_buf))) {
+            fprintf(stderr, "Error: failed to serialize event\n");
+            goto cleanup;
+        }
+        printf("%s\n", json_buf);
+        ret = 1;
+    }
+    else if (strcmp(subcmd, "repo") == 0) {
+        const char *id = get_arg(argc, argv, "--id");
+        const char *name = get_arg(argc, argv, "--name");
+        const char *cid = get_arg(argc, argv, "--cid");
+        const char *euc = get_arg(argc, argv, "--euc");
+        if (!id || !name || !cid) {
+            fprintf(stderr, "Error: --id, --name, and --cid required\n");
+            goto cleanup;
+        }
+        if (!nostr_git_repo_announce_ipfs(ctx, &key, id, name, cid, euc, &ev)) {
+            fprintf(stderr, "Error: failed to create repo event\n");
+            goto cleanup;
+        }
+        if (!nostr_event_to_json(&ev, json_buf, sizeof(json_buf))) {
+            fprintf(stderr, "Error: failed to serialize event\n");
+            goto cleanup;
+        }
+        printf("%s\n", json_buf);
+        ret = 1;
+    }
+    else if (strcmp(subcmd, "patch") == 0) {
+        const char *repo = get_arg(argc, argv, "--repo");
+        const char *subject = get_arg(argc, argv, "--subject");
+        const char *body = get_arg(argc, argv, "--body");
+        const char *euc = get_arg(argc, argv, "--euc");
+        if (!repo || !subject || !body) {
+            fprintf(stderr, "Error: --repo, --subject, and --body required\n");
+            goto cleanup;
+        }
+        struct NostrGitPatch patch = {0};
+        const char *colon = strchr(repo, ':');
+        if (!colon || (colon - repo) != 64) {
+            fprintf(stderr, "Error: --repo must be <64-char-pubkey>:<repo_id>\n");
+            goto cleanup;
+        }
+        memcpy(patch.repo_pubkey, repo, 64);
+        patch.repo_pubkey[64] = '\0';
+        strncpy(patch.repo_id, colon + 1, sizeof(patch.repo_id) - 1);
+        strncpy(patch.subject, subject, sizeof(patch.subject) - 1);
+        strncpy(patch.body, body, sizeof(patch.body) - 1);
+        if (euc) strncpy(patch.euc, euc, sizeof(patch.euc) - 1);
+        if (!nostr_git_patch_publish(ctx, &key, &patch, &ev)) {
+            fprintf(stderr, "Error: failed to create patch event\n");
+            goto cleanup;
+        }
+        if (!nostr_event_to_json(&ev, json_buf, sizeof(json_buf))) {
+            fprintf(stderr, "Error: failed to serialize event\n");
+            goto cleanup;
+        }
+        printf("%s\n", json_buf);
+        ret = 1;
+    }
+    else if (strcmp(subcmd, "issue") == 0) {
+        const char *repo = get_arg(argc, argv, "--repo");
+        const char *subject = get_arg(argc, argv, "--subject");
+        const char *body = get_arg(argc, argv, "--body");
+        if (!repo || !subject || !body) {
+            fprintf(stderr, "Error: --repo, --subject, and --body required\n");
+            goto cleanup;
+        }
+        struct NostrGitPatch issue = {0};
+        const char *colon = strchr(repo, ':');
+        if (!colon || (colon - repo) != 64) {
+            fprintf(stderr, "Error: --repo must be <64-char-pubkey>:<repo_id>\n");
+            goto cleanup;
+        }
+        memcpy(issue.repo_pubkey, repo, 64);
+        issue.repo_pubkey[64] = '\0';
+        strncpy(issue.repo_id, colon + 1, sizeof(issue.repo_id) - 1);
+        strncpy(issue.subject, subject, sizeof(issue.subject) - 1);
+        strncpy(issue.body, body, sizeof(issue.body) - 1);
+        if (!nostr_git_issue_publish(ctx, &key, &issue, &ev)) {
+            fprintf(stderr, "Error: failed to create issue event\n");
+            goto cleanup;
+        }
+        if (!nostr_event_to_json(&ev, json_buf, sizeof(json_buf))) {
+            fprintf(stderr, "Error: failed to serialize event\n");
+            goto cleanup;
+        }
+        printf("%s\n", json_buf);
+        ret = 1;
+    }
+    else {
+        print_nostr_help(stderr);
+        goto cleanup;
+    }
+
+    fprintf(stderr, "Secret key (save to sign future events): %s\n", seckey_hex);
+
+cleanup:
+    nostr_context_free(ctx);
+    return ret;
+}

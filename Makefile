@@ -26,6 +26,7 @@ all:
 	cd namesys; make all;
 	cd path; make all;
 	cd util; make all;
+	cd nostr; make all;
 	cd main; make all;
 	cd test; make all;
 

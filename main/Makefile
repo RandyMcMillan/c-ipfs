@@ -1,6 +1,9 @@
 CC = gcc
-CFLAGS = -O0 -I../include -I../c-libp2p/include -I../c-libp2p/c-multihash/include -I../c-libp2p/c-multiaddr/include -I../c-libp2p/c-protobuf -g3 -Wall -std=gnu99
-LFLAGS = -L../c-libp2p -L../c-libp2p/c-multihash -L../c-libp2p/c-multiaddr -lp2p -lm -lmultihash -lmultiaddr -lpthread -lresolv -lcurl
+CFLAGS = -O0 -I../include -I../c-libp2p/include -I../c-libp2p/c-multihash/include -I../c-libp2p/c-multiaddr/include -I../c-libp2p/c-protobuf -I../nostril -I../nostril/deps/secp256k1/include -g3 -Wall -std=gnu99
+LFLAGS = -L../c-libp2p -L../c-libp2p/c-multihash -L../c-libp2p/c-multiaddr -lp2p -lm -lmultihash -lmultiaddr -lpthread -lresolv -lcurl -L../nostril/deps/secp256k1/.libs -lsecp256k1
+ifeq ($(shell uname -s),Darwin)
+LFLAGS += -Wl,-rpath,@loader_path/../c-libp2p
+endif
 ifeq ($(shell uname -s),Darwin)
 LFLAGS += -Wl,-rpath,@loader_path/../c-libp2p
 endif
@@ -10,6 +13,7 @@ OBJS = main.o \
 	../cid/cid.o \
 	../cmd/ipfs/init.o \
 	../cmd/ipfs/id.o \
+	../cmd/ipfs/nostr.o \
 	../cmd/*.o \
 	../commands/argument.o ../commands/command_option.o ../commands/command.o ../commands/cli/parse.o \
 	../core/*.o \
@@ -34,7 +38,9 @@ OBJS = main.o \
 	../c-libp2p/c-protobuf/protobuf.o ../c-libp2p/c-protobuf/varint.o \
 	../util/errs.o \
 	../util/time.o \
-	../util/thread_pool.o
+	../util/thread_pool.o \
+	../nostr/event.o ../nostr/tag.o ../nostr/git.o ../nostr/kind.o \
+	../nostril/sha256.o
 
 %.o: %.c $(DEPS)
 	$(CC) -c -o $@ $< $(CFLAGS)

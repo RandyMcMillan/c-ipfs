@@ -26,14 +26,21 @@ jobs:
       - name: Install dependencies (macOS)
         if: runner.os == 'macOS'
         run: |
-          brew install libtool
+          brew install libtool autoconf automake
           echo "/opt/homebrew/opt/libtool/libexec/gnubin" >> "$GITHUB_PATH"
 
       - name: Install dependencies (Ubuntu)
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential libcurl4-openssl-dev
+          sudo apt-get install -y build-essential libcurl4-openssl-dev autoconf automake libtool
+
+      - name: Build secp256k1
+        run: |
+          cd nostril/deps/secp256k1
+          ./autogen.sh
+          ./configure --disable-shared --enable-module-ecdh --enable-module-schnorrsig --enable-module-extrakeys
+          make -j libsecp256k1.la
 
       - name: Build c-libp2p
         run: cd c-libp2p && make all
@@ -52,6 +59,18 @@ jobs:
           cd main
           IPFS_PATH=/tmp/ipfs_test ./ipfs init
           IPFS_PATH=/tmp/ipfs_test ./ipfs id
+
+      - name: Smoke test — nostr publish
+        run: |
+          cd main
+          ./ipfs nostr publish --cid QmSmokeTest --content "CI smoke test"
+
+      - name: Smoke test — nostr repo + patch + issue
+        run: |
+          cd main
+          ./ipfs nostr repo --id ci-repo --name "CI Repo" --cid QmRepoCID
+          ./ipfs nostr patch --repo 0000000000000000000000000000000000000000000000000000000000000000:ci-repo --subject "ci patch" --body "patch body"
+          ./ipfs nostr issue --repo 0000000000000000000000000000000000000000000000000000000000000000:ci-repo --subject "ci issue" --body "issue body"
 
       - name: Smoke test — test binary runs
         run: |

@@ -11,6 +11,7 @@
 #include "ipfs/core/swarm.h"
 #include "ipfs/cmd/cli.h"
 #include "ipfs/cmd/ipfs/id.h"
+#include "ipfs/cmd/ipfs/nostr.h"
 #include "ipfs/namesys/name.h"
 
 static void print_help(FILE* out) {
@@ -28,6 +29,7 @@ static void print_help(FILE* out) {
 	fprintf(out, "  swarm         Swarm management\n");
 	fprintf(out, "  name          Publish and resolve IPNS names\n");
 	fprintf(out, "  dns <domain>  DNS link resolution\n");
+	fprintf(out, "  nostr         Nostr hybrid protocol (publish, repo, patch, issue)\n");
 	fprintf(out, "  help          Show this help text\n\n");
 	fprintf(out, "OPTIONS:\n");
 	fprintf(out, "  -c, --config  Path to the configuration directory\n");
@@ -96,6 +98,7 @@ void strip_quotes(int argc, char** argv) {
 #define SWARM 10
 #define ID 11
 #define HELP 12
+#define NOSTR 13
 
 /**
  * Find out if this command line argument is part of a switch
@@ -186,6 +189,9 @@ int parse_arguments(int argc, char** argv) {
 	if (strcmp("id", argv[index]) == 0) {
 		return ID;
 	}
+	if (strcmp("nostr", argv[index]) == 0) {
+		return NOSTR;
+	}
 	return -1;
 }
 
@@ -237,6 +243,9 @@ int main(int argc, char** argv) {
 				break;
 			case (ID):
 				retVal = ipfs_id(argc, argv);
+				break;
+			case (NOSTR):
+				retVal = ipfs_nostr(argc, argv);
 				break;
 			default:
 				fprintf(stderr, "Error: unknown command.\n\n");
