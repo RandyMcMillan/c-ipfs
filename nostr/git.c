@@ -108,6 +108,23 @@ int nostr_git_grasp_publish(void *ctx, struct NostrKey *key,
     return nostr_event_sign(ctx, key, ev);
 }
 
+int nostr_git_status_publish(void *ctx, struct NostrKey *key,
+                              const char *event_id_hex,
+                              int status_kind,
+                              struct NostrEvent *ev)
+{
+    unsigned char buf[65536];
+    nostr_event_init(ev);
+    ev->kind = status_kind;
+    nostr_event_set_content(ev, "");
+
+    if (!nostr_tags_add_event_ref(&ev->tags, event_id_hex)) return 0;
+
+    memcpy(ev->pubkey, key->pubkey, 32);
+    if (!nostr_event_commit(ev, buf, sizeof(buf))) return 0;
+    return nostr_event_sign(ctx, key, ev);
+}
+
 int nostr_git_repo_announce_ipfs(void *ctx, struct NostrKey *key,
                                   const char *repo_id,
                                   const char *name,

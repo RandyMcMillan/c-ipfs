@@ -21,6 +21,7 @@ static void print_nostr_help(FILE *out) {
     fprintf(out, "  state --repo <pubkey:id> [--refs <file>]  Publish repo state with RBSR (kind 30618)\n");
     fprintf(out, "  grasp --relay <url> [--relay <url>...]    Publish grasp relay list (kind 10317)\n");
     fprintf(out, "  verify --event <json>                     Weak-verify event signature\n");
+    fprintf(out, "  status --event <id> --status <s>          Set status: open/merged/closed/draft\n");
     fprintf(out, "  patch --repo <pubkey:id> --subject <s>    Publish a git patch (kind 1617)\n");
     fprintf(out, "          --body <text> [--euc <commit>]\n");
     fprintf(out, "  issue --repo <pubkey:id> --subject <s>    Publish an issue (kind 1621)\n");
@@ -243,6 +244,33 @@ int ipfs_nostr(int argc, char** argv) {
         } else {
             printf("signature invalid\n");
         }
+    }
+    else if (strcmp(subcmd, "status") == 0) {
+        const char *event_id = get_arg(argc, argv, "--event");
+        const char *status = get_arg(argc, argv, "--status");
+        if (!event_id || !status) {
+            fprintf(stderr, "Error: --event and --status required\n");
+            goto cleanup;
+        }
+        int status_kind = 0;
+        if (strcmp(status, "open") == 0) status_kind = NOSTR_KIND_GIT_STATUS_OPEN;
+        else if (strcmp(status, "merged") == 0) status_kind = NOSTR_KIND_GIT_STATUS_MERGED;
+        else if (strcmp(status, "closed") == 0) status_kind = NOSTR_KIND_GIT_STATUS_CLOSED;
+        else if (strcmp(status, "draft") == 0) status_kind = NOSTR_KIND_GIT_STATUS_DRAFT;
+        else {
+            fprintf(stderr, "Error: status must be open/merged/closed/draft\n");
+            goto cleanup;
+        }
+        if (!nostr_git_status_publish(ctx, &key, event_id, status_kind, &ev)) {
+            fprintf(stderr, "Error: failed to create status event\n");
+            goto cleanup;
+        }
+        if (!nostr_event_to_json(&ev, json_buf, sizeof(json_buf))) {
+            fprintf(stderr, "Error: failed to serialize event\n");
+            goto cleanup;
+        }
+        printf("%s\n", json_buf);
+        ret = 1;
     }
     else if (strcmp(subcmd, "patch") == 0) {
         const char *repo = get_arg(argc, argv, "--repo");

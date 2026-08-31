@@ -55,6 +55,12 @@ int nostr_git_grasp_publish(void *ctx, struct NostrKey *key,
                              const char **relays, int num_relays,
                              struct NostrEvent *ev);
 
+/* Create a NIP-34 status event (kind 1630-1633) referencing an event */
+int nostr_git_status_publish(void *ctx, struct NostrKey *key,
+                              const char *event_id_hex,
+                              int status_kind,
+                              struct NostrEvent *ev);
+
 /* Create a hybrid IPFS+git repo announcement (clone via /ipfs/Qm...) */
 int nostr_git_repo_announce_ipfs(void *ctx, struct NostrKey *key,
                                   const char *repo_id,
