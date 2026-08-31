@@ -13,6 +13,7 @@ int test_compat_go_join_swarm() {
 	char* ipfs_path1 = "/tmp/ipfs_1";
 	char* config_file1 = "config.test1.wo_journal";
 	pthread_t daemon_thread;
+	int daemon_started = 0;
 	struct FSRepo* fs_repo = NULL;
 
 	/*
@@ -39,6 +40,7 @@ int test_compat_go_join_swarm() {
 	ipfs_repo_fsrepo_free(fs_repo);
 	// start daemon
 	pthread_create(&daemon_thread, NULL, test_daemon_start, (void*)ipfs_path1);
+	daemon_started = 1;
 	sleep(3);
 
 	// try to connect to a remote swarm
@@ -55,6 +57,7 @@ int test_compat_go_join_swarm() {
 	retVal = 1;
 	exit:
 	ipfs_daemon_stop();
-	pthread_join(daemon_thread, NULL);
+	if (daemon_started)
+		pthread_join(daemon_thread, NULL);
 	return retVal;
 }
