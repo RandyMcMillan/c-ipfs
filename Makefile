@@ -4,7 +4,7 @@ export DEBUG
 
 all:
 	cd c-libp2p; make all;
-	cd lmdb/libraries/liblmdb; make all;
+	cd lmdb/libraries/liblmdb; make all XCFLAGS="-fno-unwind-tables";
 	cd blocks; make all;
 	cd cid; make all;
 	cd cmd; make all;

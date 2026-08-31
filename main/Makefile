@@ -4,9 +4,6 @@ LFLAGS = -L../c-libp2p -L../c-libp2p/c-multihash -L../c-libp2p/c-multiaddr -lp2p
 ifeq ($(shell uname -s),Darwin)
 LFLAGS += -Wl,-rpath,@loader_path/../c-libp2p
 endif
-ifeq ($(shell uname -s),Darwin)
-LFLAGS += -Wl,-rpath,@loader_path/../c-libp2p
-endif
 DEPS = cmd/ipfs/test_init.h repo/test_repo_bootstrap_peers.h repo/test_repo_config.h repo/test_repo_identity.h cid/test_cid.h
 OBJS = main.o \
 	../blocks/block.o ../blocks/blockstore.o \
