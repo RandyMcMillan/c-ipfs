@@ -27,8 +27,8 @@ all:
 	cd path; make all;
 	cd util; make all;
 	cd rbsr; make all;
-	cd nostr; make all;
 	cd nostril; make config.h;
+	cd nostr; make all;
 	cd main; make all;
 	cd test; make all;
 
