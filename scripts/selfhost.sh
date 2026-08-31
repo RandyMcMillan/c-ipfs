@@ -17,21 +17,24 @@ if [ ! -d "$IPFS_PATH" ]; then
     IPFS_PATH="$IPFS_PATH" "$REPO_ROOT/main/ipfs" init
 fi
 
-# Add the repository recursively
-echo "Adding repository to IPFS (this may take a while)..."
-ROOT_CID=$(IPFS_PATH="$IPFS_PATH" "$REPO_ROOT/main/ipfs" add -r "$REPO_ROOT" 2>&1 | tail -1 | awk '{print $2}')
+# Build a clean tarball of tracked source files (no build artifacts)
+ARCHIVE="/tmp/c-ipfs-source.tar.gz"
+echo "Archiving tracked source files to $ARCHIVE..."
+cd "$REPO_ROOT"
+git ls-files --recurse-submodules | tar -czf "$ARCHIVE" -T -
 
-echo "Root CID: $ROOT_CID"
+# Add the archive to IPFS
+echo "Adding archive to IPFS..."
+CID=$(IPFS_PATH="$IPFS_PATH" "$REPO_ROOT/main/ipfs" add "$ARCHIVE" 2>&1 | awk '{print $2}')
 
-# Pin it
-echo "Pinning $ROOT_CID..."
-# Note: pin command may not be fully implemented; we at least have the CID
+echo "Archive CID: $CID"
+echo ""
 
 # Create a nostr event announcing the self-hosted CID
-echo ""
 echo "Nostr announcement event:"
-"$REPO_ROOT/main/ipfs" nostr publish --cid "$ROOT_CID" --content "c-ipfs source self-hosted"
+"$REPO_ROOT/main/ipfs" nostr publish --cid "$CID" --content "c-ipfs source archive self-hosted"
 
 echo ""
-echo "To retrieve: ipfs cat $ROOT_CID"
-echo "Gateway: https://ipfs.io/ipfs/$ROOT_CID"
+echo "To retrieve:"
+echo "  ipfs cat $CID | tar -xzf -"
+echo "Gateway: https://ipfs.io/ipfs/$CID"
