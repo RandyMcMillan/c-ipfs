@@ -149,4 +149,4 @@ jobs:
       - name: Smoke test — test binary runs
         run: |
           cd test
-          ./test_ipfs || true
+          timeout 60 ./test_ipfs || true
