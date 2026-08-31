@@ -5,6 +5,13 @@
 !Makefile
 !**/
 
+!nostr/**
+!rbsr/**
+!scripts/**
+!include/**
+!cmd/**
+!README.md
+
 *.o
 .settings/language.settings.xml
 test/test_ipfs
