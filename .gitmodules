@@ -5,3 +5,6 @@
 	path = lmdb
 	url = git@github.com:RandyMcMillan/lmdb.git
 	branch = mdb.master
+[submodule "nostril"]
+	path = nostril
+	url = git@github.com:RandyMcMillan/nostril.git
