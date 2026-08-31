@@ -3,6 +3,8 @@ CFLAGS = -O0 -I../include -I../c-libp2p/include -I../c-libp2p/c-multihash/includ
 LFLAGS = -L../c-libp2p -L../c-libp2p/c-multihash -L../c-libp2p/c-multiaddr -lp2p -lm -lmultihash -lmultiaddr -lpthread -lcurl
 ifeq ($(shell uname -s),Darwin)
 LFLAGS += -Wl,-rpath,@loader_path/../c-libp2p
+else
+LFLAGS += -Wl,-rpath,'$$ORIGIN/../c-libp2p'
 endif
 DEPS = cmd/ipfs/test_init.h repo/test_repo_bootstrap_peers.h repo/test_repo_config.h repo/test_repo_identity.h cid/test_cid.h
 OBJS = testit.o test_helper.o \
