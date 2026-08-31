@@ -1,4 +1,7 @@
 #include <stdio.h>
+#include "ipfs/util/errs.h"
+
+enum ErrsEnum ErrsIdx;
 
 char *Err[] = {
     NULL,

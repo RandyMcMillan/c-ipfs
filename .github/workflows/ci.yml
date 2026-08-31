@@ -45,6 +45,7 @@ jobs:
           ./autogen.sh
           ./configure --disable-shared --enable-module-ecdh --enable-module-schnorrsig --enable-module-extrakeys
           make -j libsecp256k1.la
+          cp .libs/libsecp256k1.a ../../libsecp256k1.a || true
 
       - name: Build c-libp2p
         run: cd c-libp2p && make all

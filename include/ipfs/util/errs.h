@@ -3,7 +3,7 @@
 
     extern char *Err[];
 
-    enum {
+    enum ErrsEnum {
         ErrAllocFailed = 1,
         ErrNULLPointer,
         ErrUnknow,
@@ -29,5 +29,6 @@
         ErrNoRecord,
         ErrCidDecodeFailed,
         ErrOffline
-    } ErrsIdx;
+    };
+    extern enum ErrsEnum ErrsIdx;
 #endif // IPFS_ERRS_H
