@@ -11,6 +11,7 @@
 #include "ipfs/core/swarm.h"
 #include "ipfs/cmd/cli.h"
 #include "ipfs/cmd/ipfs/id.h"
+#include "ipfs/cmd/ipfs/get.h"
 #include "ipfs/cmd/ipfs/nostr.h"
 #include "ipfs/namesys/name.h"
 
@@ -221,8 +222,8 @@ int main(int argc, char** argv) {
 				retVal = ipfs_exporter_object_get(argc, argv);
 				break;
 			case(GET):
-				//ipfs_exporter_get(argc, argv);
-				//break;
+				retVal = ipfs_get(argc, argv);
+				break;
 			case (CAT):
 				retVal = ipfs_exporter_object_cat(args, stdout);
 				break;

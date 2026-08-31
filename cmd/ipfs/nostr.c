@@ -9,8 +9,10 @@
 #include "ipfs/nostr/event.h"
 #include "ipfs/nostr/git.h"
 #include "ipfs/nostr/kind.h"
+#include "ipfs/nostr/pip.h"
 #include "ipfs/rbsr.h"
 #include "hex.h"
+#include "sha256.h"
 
 static void print_nostr_help(FILE *out) {
     fprintf(out, "USAGE:\n");
@@ -18,6 +20,11 @@ static void print_nostr_help(FILE *out) {
     fprintf(out, "SUBCOMMANDS:\n");
     fprintf(out, "  note --content <text>                     Publish a text note (kind 1)\n");
     fprintf(out, "  publish --cid <cid> [--content <text>]    Publish IPFS content (kind 1064)\n");
+    fprintf(out, "  manifest --cid <cid> --sha256 <h> --size <n>  PIP manifest (kind 39078)\n");
+    fprintf(out, "            [--path <name>] [--encoding <e>]\n");
+    fprintf(out, "  attest --manifest <id> --sha256 <h> --cid <c> PIP attestation (kind 39080)\n");
+    fprintf(out, "  sync --cid <cid> [--sha256 <h>]           Fetch CID via gateway and verify\n");
+    fprintf(out, "       [--gateway <url>] [--output <path>]\n");
     fprintf(out, "  repo --id <id> --name <name> --cid <cid>  Announce git repo over IPFS (kind 30617)\n");
     fprintf(out, "  state --repo <pubkey:id> [--refs <file>]  Publish repo state with RBSR (kind 30618)\n");
     fprintf(out, "  grasp --relay <url> [--relay <url>...]    Publish grasp relay list (kind 10317)\n");
@@ -395,6 +402,136 @@ int ipfs_nostr(int argc, char** argv) {
         }
         printf("%s\n", json_buf);
         ret = 1;
+    }
+    else if (strcmp(subcmd, "manifest") == 0) {
+        const char *cid = get_arg(argc, argv, "--cid");
+        const char *sha256_hex = get_arg(argc, argv, "--sha256");
+        const char *size_str = get_arg(argc, argv, "--size");
+        const char *path = get_arg(argc, argv, "--path");
+        const char *encoding = get_arg(argc, argv, "--encoding");
+        if (!cid || !sha256_hex || !size_str) {
+            fprintf(stderr, "Error: --cid, --sha256, and --size required\n");
+            goto cleanup;
+        }
+        struct NostrPipManifest m = {0};
+        strncpy(m.root, cid, sizeof(m.root) - 1);
+        strncpy(m.sha256, sha256_hex, sizeof(m.sha256) - 1);
+        m.size = strtoull(size_str, NULL, 10);
+        m.packets = 1;
+        m.depth = 0;
+        m.mtu = 0;
+        strncpy(m.encoding, encoding ? encoding : "tar.gz", sizeof(m.encoding) - 1);
+        strncpy(m.path, path ? path : "", sizeof(m.path) - 1);
+        if (!nostr_pip_manifest_create(ctx, &key, &m, &ev)) {
+            fprintf(stderr, "Error: failed to create manifest event\n");
+            goto cleanup;
+        }
+        if (!nostr_event_to_json(&ev, json_buf, sizeof(json_buf))) {
+            fprintf(stderr, "Error: failed to serialize event\n");
+            goto cleanup;
+        }
+        printf("%s\n", json_buf);
+        ret = 1;
+    }
+    else if (strcmp(subcmd, "attest") == 0) {
+        const char *manifest_id = get_arg(argc, argv, "--manifest");
+        const char *sha256_hex = get_arg(argc, argv, "--sha256");
+        const char *root_id = get_arg(argc, argv, "--cid");
+        if (!manifest_id || !sha256_hex || !root_id) {
+            fprintf(stderr, "Error: --manifest, --sha256, and --cid required\n");
+            goto cleanup;
+        }
+        if (!nostr_pip_attest_create(ctx, &key, root_id, sha256_hex, manifest_id, &ev)) {
+            fprintf(stderr, "Error: failed to create attest event\n");
+            goto cleanup;
+        }
+        if (!nostr_event_to_json(&ev, json_buf, sizeof(json_buf))) {
+            fprintf(stderr, "Error: failed to serialize event\n");
+            goto cleanup;
+        }
+        printf("%s\n", json_buf);
+        ret = 1;
+    }
+    else if (strcmp(subcmd, "sync") == 0) {
+        const char *cid = get_arg(argc, argv, "--cid");
+        const char *sha256_expected = get_arg(argc, argv, "--sha256");
+        const char *gateway = get_arg(argc, argv, "--gateway");
+        const char *output = get_arg(argc, argv, "--output");
+        if (!cid) {
+            fprintf(stderr, "Error: --cid required\n");
+            goto cleanup;
+        }
+        char url[1024];
+        snprintf(url, sizeof(url), "%s/ipfs/%s",
+                 gateway ? gateway : "http://127.0.0.1:8080", cid);
+
+        char outpath[512];
+        if (output) {
+            strncpy(outpath, output, sizeof(outpath) - 1);
+            outpath[sizeof(outpath) - 1] = '\0';
+        } else {
+            snprintf(outpath, sizeof(outpath), "/tmp/c-ipfs-sync-%s.tar.gz", cid);
+        }
+
+        FILE *fp = fopen(outpath, "wb");
+        if (!fp) {
+            fprintf(stderr, "Error: cannot open %s for writing\n", outpath);
+            goto cleanup;
+        }
+
+        char cmd[2048];
+        snprintf(cmd, sizeof(cmd), "curl -sL \"%s\"", url);
+        FILE *pipe = popen(cmd, "r");
+        if (!pipe) {
+            fprintf(stderr, "Error: failed to run curl\n");
+            fclose(fp);
+            goto cleanup;
+        }
+
+        struct sha256_ctx sha_ctx;
+        sha256_init(&sha_ctx);
+        char dlbuf[8192];
+        size_t total = 0;
+        size_t n;
+        while ((n = fread(dlbuf, 1, sizeof(dlbuf), pipe)) > 0) {
+            fwrite(dlbuf, 1, n, fp);
+            sha256_update(&sha_ctx, dlbuf, n);
+            total += n;
+        }
+        int curl_status = pclose(pipe);
+        fclose(fp);
+
+        if (curl_status != 0) {
+            fprintf(stderr, "Error: curl failed (exit %d)\n", curl_status);
+            goto cleanup;
+        }
+
+        struct sha256 hash;
+        sha256_done(&sha_ctx, &hash);
+        char hash_hex[65];
+        hex_encode(hash.u.u8, 32, hash_hex, sizeof(hash_hex));
+
+        printf("Downloaded %zu bytes to %s\n", total, outpath);
+        printf("SHA-256: %s\n", hash_hex);
+
+        if (sha256_expected) {
+            int match = 1;
+            for (int i = 0; i < 64; i++) {
+                char a = hash_hex[i];
+                char b = sha256_expected[i];
+                if (a >= 'A' && a <= 'F') a = a - 'A' + 'a';
+                if (b >= 'A' && b <= 'F') b = b - 'A' + 'a';
+                if (a != b) { match = 0; break; }
+            }
+            if (match) {
+                printf("VERIFIED: SHA-256 matches expected hash\n");
+                ret = 1;
+            } else {
+                printf("MISMATCH: expected %s\n", sha256_expected);
+            }
+        } else {
+            ret = 1;
+        }
     }
     else {
         print_nostr_help(stderr);

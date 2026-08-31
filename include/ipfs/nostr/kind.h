@@ -33,6 +33,15 @@
 #define NOSTR_KIND_IPFS_PIN_REQUEST  1066  /* Request pin for CID */
 #define NOSTR_KIND_IPFS_PIN_CONFIRM  1067  /* Confirm pin for CID */
 
+/* PIP / NIP-PIP transfer kinds (39076-39082) */
+#define NOSTR_KIND_PIP_ACK           39076 /* Transfer ACK / NAK */
+#define NOSTR_KIND_PIP_REQUEST       39077 /* Transfer request */
+#define NOSTR_KIND_PIP_MANIFEST      39078 /* Transfer manifest */
+#define NOSTR_KIND_PIP_SLICE         39079 /* Transfer slice */
+#define NOSTR_KIND_PIP_ATTEST        39080 /* Blob attestation */
+#define NOSTR_KIND_PIP_SEAL          39081 /* Quorum seal */
+#define NOSTR_KIND_PIP_JOIN          39082 /* Quorum membership */
+
 /* NIP-34 git stuff kinds */
 #define NOSTR_KIND_GIT_REPO          30617 /* Repository announcement */
 #define NOSTR_KIND_GIT_STATE         30618 /* Repository state (refs) */

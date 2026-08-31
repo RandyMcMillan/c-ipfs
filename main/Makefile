@@ -10,6 +10,7 @@ OBJS = main.o \
 	../cid/cid.o \
 	../cmd/ipfs/init.o \
 	../cmd/ipfs/id.o \
+	../cmd/ipfs/get.o \
 	../cmd/ipfs/nostr.o \
 	../cmd/*.o \
 	../commands/argument.o ../commands/command_option.o ../commands/command.o ../commands/cli/parse.o \
@@ -36,7 +37,7 @@ OBJS = main.o \
 	../util/errs.o \
 	../util/time.o \
 	../util/thread_pool.o \
-	../nostr/event.o ../nostr/tag.o ../nostr/git.o ../nostr/kind.o \
+	../nostr/event.o ../nostr/tag.o ../nostr/git.o ../nostr/kind.o ../nostr/pip.o \
 	../rbsr/rbsr.o \
 	../nostril/sha256.o
 
