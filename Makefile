@@ -26,6 +26,7 @@ all:
 	cd namesys; make all;
 	cd path; make all;
 	cd util; make all;
+	cd rbsr; make all;
 	cd nostr; make all;
 	cd main; make all;
 	cd test; make all;
@@ -55,6 +56,7 @@ clean:
 	cd namesys; make clean;
 	cd path; make clean;
 	cd util; make clean;
+	cd rbsr; make clean;
 	cd test; make clean;
 
 rebuild: clean all

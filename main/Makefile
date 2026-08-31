@@ -40,6 +40,7 @@ OBJS = main.o \
 	../util/time.o \
 	../util/thread_pool.o \
 	../nostr/event.o ../nostr/tag.o ../nostr/git.o ../nostr/kind.o \
+	../rbsr/rbsr.o \
 	../nostril/sha256.o
 
 %.o: %.c $(DEPS)

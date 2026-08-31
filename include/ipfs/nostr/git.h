@@ -43,6 +43,13 @@ int nostr_git_issue_publish(void *ctx, struct NostrKey *key,
                              struct NostrGitPatch *issue,
                              struct NostrEvent *ev);
 
+/* Create a NIP-34 repo state event (kind 30618) with RBSR fingerprint JSON in content */
+int nostr_git_state_publish(void *ctx, struct NostrKey *key,
+                             const char *repo_pubkey,
+                             const char *repo_id,
+                             const char *rbsr_json,
+                             struct NostrEvent *ev);
+
 /* Create a hybrid IPFS+git repo announcement (clone via /ipfs/Qm...) */
 int nostr_git_repo_announce_ipfs(void *ctx, struct NostrKey *key,
                                   const char *repo_id,

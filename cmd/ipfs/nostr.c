@@ -6,6 +6,7 @@
 #include "ipfs/nostr/event.h"
 #include "ipfs/nostr/git.h"
 #include "ipfs/nostr/kind.h"
+#include "ipfs/rbsr.h"
 #include "hex.h"
 
 static void print_nostr_help(FILE *out) {
@@ -14,6 +15,7 @@ static void print_nostr_help(FILE *out) {
     fprintf(out, "SUBCOMMANDS:\n");
     fprintf(out, "  publish --cid <cid> [--content <text>]    Publish IPFS content (kind 1064)\n");
     fprintf(out, "  repo --id <id> --name <name> --cid <cid>  Announce git repo over IPFS (kind 30617)\n");
+    fprintf(out, "  state --repo <pubkey:id> [--refs <file>]  Publish repo state with RBSR (kind 30618)\n");
     fprintf(out, "  patch --repo <pubkey:id> --subject <s>    Publish a git patch (kind 1617)\n");
     fprintf(out, "          --body <text> [--euc <commit>]\n");
     fprintf(out, "  issue --repo <pubkey:id> --subject <s>    Publish an issue (kind 1621)\n");
@@ -94,6 +96,75 @@ int ipfs_nostr(int argc, char** argv) {
         }
         if (!nostr_git_repo_announce_ipfs(ctx, &key, id, name, cid, euc, &ev)) {
             fprintf(stderr, "Error: failed to create repo event\n");
+            goto cleanup;
+        }
+        if (!nostr_event_to_json(&ev, json_buf, sizeof(json_buf))) {
+            fprintf(stderr, "Error: failed to serialize event\n");
+            goto cleanup;
+        }
+        printf("%s\n", json_buf);
+        ret = 1;
+    }
+    else if (strcmp(subcmd, "state") == 0) {
+        const char *repo = get_arg(argc, argv, "--repo");
+        const char *refs_file = get_arg(argc, argv, "--refs");
+        if (!repo) {
+            fprintf(stderr, "Error: --repo required\n");
+            goto cleanup;
+        }
+        const char *colon = strchr(repo, ':');
+        if (!colon || (colon - repo) != 64) {
+            fprintf(stderr, "Error: --repo must be <64-char-pubkey>:<repo_id>\n");
+            goto cleanup;
+        }
+        char repo_pubkey[65];
+        char repo_id[128];
+        memcpy(repo_pubkey, repo, 64);
+        repo_pubkey[64] = '\0';
+        strncpy(repo_id, colon + 1, sizeof(repo_id) - 1);
+
+        char rbsr_json[4096] = "{}";
+        if (refs_file) {
+            FILE *fp = fopen(refs_file, "r");
+            if (!fp) {
+                fprintf(stderr, "Error: cannot open %s\n", refs_file);
+                goto cleanup;
+            }
+            struct RbsrSet set;
+            rbsr_set_init(&set);
+            char line[512];
+            while (fgets(line, sizeof(line), fp)) {
+                char refname[256];
+                char hashhex[128];
+                if (sscanf(line, "%255s %127s", refname, hashhex) == 2) {
+                    uint64_t hash = 0;
+                    size_t hexlen = strlen(hashhex);
+                    if (hexlen >= 16) {
+                        /* Take first 16 hex chars as 64-bit hash */
+                        char tmp[17];
+                        memcpy(tmp, hashhex, 16);
+                        tmp[16] = '\0';
+                        unsigned char bytes[8];
+                        if (hex_decode(tmp, 16, bytes, 8)) {
+                            for (int i = 0; i < 8; i++) {
+                                hash = (hash << 8) | bytes[i];
+                            }
+                        }
+                    }
+                    rbsr_set_add(&set, refname, hash);
+                }
+            }
+            fclose(fp);
+            rbsr_set_sort(&set);
+            struct RbsrFingerprint fp_root = rbsr_fingerprint(&set, 0, UINT64_MAX);
+            snprintf(rbsr_json, sizeof(rbsr_json),
+                     "{\"rbsr\":{\"count\":%zu,\"xor_sum\":\"%016llx\"}}",
+                     fp_root.count, (unsigned long long)fp_root.xor_sum);
+            rbsr_set_free(&set);
+        }
+
+        if (!nostr_git_state_publish(ctx, &key, repo_pubkey, repo_id, rbsr_json, &ev)) {
+            fprintf(stderr, "Error: failed to create state event\n");
             goto cleanup;
         }
         if (!nostr_event_to_json(&ev, json_buf, sizeof(json_buf))) {
