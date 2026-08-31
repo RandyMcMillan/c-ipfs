@@ -105,6 +105,11 @@ jobs:
           ./ipfs nostr status --event 0000000000000000000000000000000000000000000000000000000000000000 --status closed
           ./ipfs nostr status --event 0000000000000000000000000000000000000000000000000000000000000000 --status draft
 
+      - name: Smoke test — nostr self-test
+        run: |
+          cd main
+          ./ipfs nostr test
+
       - name: Smoke test — test binary runs
         run: |
           cd test

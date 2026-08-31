@@ -22,6 +22,7 @@ static void print_nostr_help(FILE *out) {
     fprintf(out, "  grasp --relay <url> [--relay <url>...]    Publish grasp relay list (kind 10317)\n");
     fprintf(out, "  verify --event <json>                     Weak-verify event signature\n");
     fprintf(out, "  status --event <id> --status <s>          Set status: open/merged/closed/draft\n");
+    fprintf(out, "  test                                      Self-test signing + verification\n");
     fprintf(out, "  patch --repo <pubkey:id> --subject <s>    Publish a git patch (kind 1617)\n");
     fprintf(out, "          --body <text> [--euc <commit>]\n");
     fprintf(out, "  issue --repo <pubkey:id> --subject <s>    Publish an issue (kind 1621)\n");
@@ -271,6 +272,40 @@ int ipfs_nostr(int argc, char** argv) {
         }
         printf("%s\n", json_buf);
         ret = 1;
+    }
+    else if (strcmp(subcmd, "test") == 0) {
+        int pass = 1;
+        printf("=== nostr self-test ===\n");
+
+        /* Test 1: generate key, sign, verify */
+        struct NostrKey tkey;
+        struct NostrEvent tev;
+        if (!nostr_key_generate(ctx, &tkey)) { printf("FAIL: keygen\n"); pass = 0; }
+        else {
+            nostr_event_init(&tev);
+            tev.kind = NOSTR_KIND_TEXT_NOTE;
+            strncpy(tev.content, "test", sizeof(tev.content));
+            memcpy(tev.pubkey, tkey.pubkey, 32);
+            unsigned char tbuf[4096];
+            if (!nostr_event_commit(&tev, tbuf, sizeof(tbuf))) { printf("FAIL: commit\n"); pass = 0; }
+            else if (!nostr_event_sign(ctx, &tkey, &tev)) { printf("FAIL: sign\n"); pass = 0; }
+            else if (!nostr_event_verify(ctx, &tev)) { printf("FAIL: verify\n"); pass = 0; }
+            else printf("PASS: sign/verify\n");
+        }
+
+        /* Test 2: RBSR fingerprint */
+        struct RbsrSet tset;
+        rbsr_set_init(&tset);
+        rbsr_set_add(&tset, "refs/heads/main", 0xdeadbeef);
+        rbsr_set_add(&tset, "refs/heads/dev", 0xcafebabe);
+        rbsr_set_sort(&tset);
+        struct RbsrFingerprint tfp = rbsr_fingerprint(&tset, 0, UINT64_MAX);
+        if (tfp.count == 2) printf("PASS: RBSR fingerprint\n");
+        else { printf("FAIL: RBSR fingerprint\n"); pass = 0; }
+        rbsr_set_free(&tset);
+
+        printf("=== %s ===\n", pass ? "ALL PASSED" : "SOME FAILED");
+        ret = pass;
     }
     else if (strcmp(subcmd, "patch") == 0) {
         const char *repo = get_arg(argc, argv, "--repo");
