@@ -16,6 +16,7 @@ static void print_nostr_help(FILE *out) {
     fprintf(out, "USAGE:\n");
     fprintf(out, "  ipfs nostr <subcommand> [options]\n\n");
     fprintf(out, "SUBCOMMANDS:\n");
+    fprintf(out, "  note --content <text>                     Publish a text note (kind 1)\n");
     fprintf(out, "  publish --cid <cid> [--content <text>]    Publish IPFS content (kind 1064)\n");
     fprintf(out, "  repo --id <id> --name <name> --cid <cid>  Announce git repo over IPFS (kind 30617)\n");
     fprintf(out, "  state --repo <pubkey:id> [--refs <file>]  Publish repo state with RBSR (kind 30618)\n");
@@ -103,7 +104,33 @@ int ipfs_nostr(int argc, char** argv) {
 
     const char *subcmd = argv[2];
 
-    if (strcmp(subcmd, "publish") == 0) {
+    if (strcmp(subcmd, "note") == 0) {
+        const char *content = get_arg(argc, argv, "--content");
+        if (!content) {
+            fprintf(stderr, "Error: --content required\n");
+            goto cleanup;
+        }
+        nostr_event_init(&ev);
+        ev.kind = NOSTR_KIND_TEXT_NOTE;
+        nostr_event_set_content(&ev, content);
+        memcpy(ev.pubkey, key.pubkey, 32);
+        unsigned char nbuf[4096];
+        if (!nostr_event_commit(&ev, nbuf, sizeof(nbuf))) {
+            fprintf(stderr, "Error: failed to commit event\n");
+            goto cleanup;
+        }
+        if (!nostr_event_sign(ctx, &key, &ev)) {
+            fprintf(stderr, "Error: failed to sign event\n");
+            goto cleanup;
+        }
+        if (!nostr_event_to_json(&ev, json_buf, sizeof(json_buf))) {
+            fprintf(stderr, "Error: failed to serialize event\n");
+            goto cleanup;
+        }
+        printf("%s\n", json_buf);
+        ret = 1;
+    }
+    else if (strcmp(subcmd, "publish") == 0) {
         const char *cid = get_arg(argc, argv, "--cid");
         const char *content = get_arg(argc, argv, "--content");
         if (!cid) {
