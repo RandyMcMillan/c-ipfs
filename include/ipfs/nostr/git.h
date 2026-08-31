@@ -50,6 +50,11 @@ int nostr_git_state_publish(void *ctx, struct NostrKey *key,
                              const char *rbsr_json,
                              struct NostrEvent *ev);
 
+/* Create a NIP-34 grasp list event (kind 10317) — relay recommendations for git */
+int nostr_git_grasp_publish(void *ctx, struct NostrKey *key,
+                             const char **relays, int num_relays,
+                             struct NostrEvent *ev);
+
 /* Create a hybrid IPFS+git repo announcement (clone via /ipfs/Qm...) */
 int nostr_git_repo_announce_ipfs(void *ctx, struct NostrKey *key,
                                   const char *repo_id,

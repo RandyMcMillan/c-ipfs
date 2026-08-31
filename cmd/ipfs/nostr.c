@@ -16,6 +16,7 @@ static void print_nostr_help(FILE *out) {
     fprintf(out, "  publish --cid <cid> [--content <text>]    Publish IPFS content (kind 1064)\n");
     fprintf(out, "  repo --id <id> --name <name> --cid <cid>  Announce git repo over IPFS (kind 30617)\n");
     fprintf(out, "  state --repo <pubkey:id> [--refs <file>]  Publish repo state with RBSR (kind 30618)\n");
+    fprintf(out, "  grasp --relay <url> [--relay <url>...]    Publish grasp relay list (kind 10317)\n");
     fprintf(out, "  patch --repo <pubkey:id> --subject <s>    Publish a git patch (kind 1617)\n");
     fprintf(out, "          --body <text> [--euc <commit>]\n");
     fprintf(out, "  issue --repo <pubkey:id> --subject <s>    Publish an issue (kind 1621)\n");
@@ -165,6 +166,29 @@ int ipfs_nostr(int argc, char** argv) {
 
         if (!nostr_git_state_publish(ctx, &key, repo_pubkey, repo_id, rbsr_json, &ev)) {
             fprintf(stderr, "Error: failed to create state event\n");
+            goto cleanup;
+        }
+        if (!nostr_event_to_json(&ev, json_buf, sizeof(json_buf))) {
+            fprintf(stderr, "Error: failed to serialize event\n");
+            goto cleanup;
+        }
+        printf("%s\n", json_buf);
+        ret = 1;
+    }
+    else if (strcmp(subcmd, "grasp") == 0) {
+        const char *relays[4];
+        int num_relays = 0;
+        for (int i = 2; i < argc - 1 && num_relays < 4; i++) {
+            if (strcmp(argv[i], "--relay") == 0) {
+                relays[num_relays++] = argv[i + 1];
+            }
+        }
+        if (num_relays == 0) {
+            fprintf(stderr, "Error: at least one --relay required\n");
+            goto cleanup;
+        }
+        if (!nostr_git_grasp_publish(ctx, &key, relays, num_relays, &ev)) {
+            fprintf(stderr, "Error: failed to create grasp event\n");
             goto cleanup;
         }
         if (!nostr_event_to_json(&ev, json_buf, sizeof(json_buf))) {
