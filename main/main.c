@@ -9,6 +9,7 @@
 #include "ipfs/core/daemon.h"
 #include "ipfs/core/swarm.h"
 #include "ipfs/cmd/cli.h"
+#include "ipfs/cmd/ipfs/id.h"
 #include "ipfs/namesys/name.h"
 
 #ifdef __MINGW32__
@@ -71,6 +72,7 @@ void strip_quotes(int argc, char** argv) {
 #define GET 8
 #define NAME 9
 #define SWARM 10
+#define ID 11
 
 /**
  * Find out if this command line argument is part of a switch
@@ -151,6 +153,9 @@ int parse_arguments(int argc, char** argv) {
 	if (strcmp("swarm", argv[index]) == 0) {
 		return SWARM;
 	}
+	if (strcmp("id", argv[index]) == 0) {
+		return ID;
+	}
 	return -1;
 }
 
@@ -195,6 +200,9 @@ int main(int argc, char** argv) {
 				break;
 			case (SWARM):
 				retVal = ipfs_swarm(args);
+				break;
+			case (ID):
+				retVal = ipfs_id(argc, argv);
 				break;
 			default:
 				libp2p_logger_error("main", "Invalid command line arguments.\n");

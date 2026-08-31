@@ -29,6 +29,13 @@ struct FSRepo {
 int ipfs_repo_fsrepo_open(struct FSRepo* repo);
 
 /***
+ * Opens the config file and puts the data into the FSRepo struct
+ * @param repo the FSRepo struct
+ * @returns 0 on failure, otherwise 1
+ */
+int fs_repo_open_config(struct FSRepo* repo);
+
+/***
  * checks to see if the repo is initialized
  * @param repo_path the path to the repo
  * @returns true(1) if it is initialized, otherwise false(0)

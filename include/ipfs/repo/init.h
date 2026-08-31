@@ -28,5 +28,15 @@ int ipfs_repo_init(int argc, char** argv);
  * @param repo_dir the results. This will point to the [IPFS_PATH]/.ipfs directory
  * @returns true(1) if the directory is there, false(0) if it is not.
  */
+/**
+ * Get the correct repo home directory. This first looks at the
+ * command line, then the IPFS_PATH environment variable,
+ * then the user's home directory.
+ * @param argc number of command line parameters
+ * @param argv command line parameters
+ * @returns the repo home directory
+ */
+char* ipfs_repo_get_home_directory(int argc, char** argv);
+
 int ipfs_repo_get_directory(int argc, char** argv, char** repo_dir);
 

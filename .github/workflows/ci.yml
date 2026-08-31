@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install dependencies
+        run: |
+          brew install libtool
+
+      - name: Build c-libp2p
+        run: |
+          export PATH="/opt/homebrew/opt/libtool/libexec/gnubin:$PATH"
+          cd c-libp2p && make all
+
+      - name: Build LMDB
+        run: cd lmdb/libraries/liblmdb && make all
+
+      - name: Build c-ipfs
+        run: make all
+
+      - name: Smoke test
+        run: |
+          cd main
+          IPFS_PATH=/tmp/ipfs_test ./ipfs init
+          IPFS_PATH=/tmp/ipfs_test ./ipfs id
+
+  build-ubuntu:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential libcurl4-openssl-dev
+
+      - name: Build c-libp2p
+        run: cd c-libp2p && make all
+
+      - name: Build LMDB
+        run: cd lmdb/libraries/liblmdb && make all
+
+      - name: Build c-ipfs
+        run: make all
+
+      - name: Smoke test
+        run: |
+          cd main
+          IPFS_PATH=/tmp/ipfs_test ./ipfs init
+          IPFS_PATH=/tmp/ipfs_test ./ipfs id
