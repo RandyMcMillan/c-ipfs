@@ -60,6 +60,18 @@ ipfs nostr issue --repo <pubkey>:myrepo --subject "found bug" --body "..."
 
 # Publish relay recommendations
 ipfs nostr grasp --relay wss://relay.damus.io --relay wss://relay.nostr.info
+
+# Set status on an issue/patch
+ipfs nostr status --event <event_id> --status open
+ipfs nostr status --event <event_id> --status merged
+ipfs nostr status --event <event_id> --status closed
+ipfs nostr status --event <event_id> --status draft
+
+# Verify a nostr event signature
+ipfs nostr verify --event '{"id":"...","pubkey":"...","sig":"..."}'
+
+# Reuse an existing secret key
+ipfs nostr publish --cid Qm... --seckey 0000...0001
 ```
 
 ## Self-Hosting
