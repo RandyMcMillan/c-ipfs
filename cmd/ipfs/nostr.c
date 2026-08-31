@@ -2,6 +2,9 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <secp256k1.h>
+#include <secp256k1_schnorrsig.h>
+
 #include "ipfs/cmd/ipfs/nostr.h"
 #include "ipfs/nostr/event.h"
 #include "ipfs/nostr/git.h"
@@ -17,6 +20,7 @@ static void print_nostr_help(FILE *out) {
     fprintf(out, "  repo --id <id> --name <name> --cid <cid>  Announce git repo over IPFS (kind 30617)\n");
     fprintf(out, "  state --repo <pubkey:id> [--refs <file>]  Publish repo state with RBSR (kind 30618)\n");
     fprintf(out, "  grasp --relay <url> [--relay <url>...]    Publish grasp relay list (kind 10317)\n");
+    fprintf(out, "  verify --event <json>                     Weak-verify event signature\n");
     fprintf(out, "  patch --repo <pubkey:id> --subject <s>    Publish a git patch (kind 1617)\n");
     fprintf(out, "          --body <text> [--euc <commit>]\n");
     fprintf(out, "  issue --repo <pubkey:id> --subject <s>    Publish an issue (kind 1621)\n");
@@ -39,6 +43,24 @@ static int has_flag(int argc, char** argv, const char *flag) {
         if (strcmp(argv[i], flag) == 0) return 1;
     }
     return 0;
+}
+
+/* Weak verify: extract id/pubkey/sig from JSON and check schnorr signature */
+static int weak_verify_json(void *ctx, const char *json)
+{
+    const char *id_p = strstr(json, "\"id\":\"");
+    const char *pk_p = strstr(json, "\"pubkey\":\"");
+    const char *sig_p = strstr(json, "\"sig\":\"");
+    if (!id_p || !pk_p || !sig_p) return 0;
+
+    unsigned char id[32], pubkey[32], sig[64];
+    if (!hex_decode(id_p + 6, 64, id, 32)) return 0;
+    if (!hex_decode(pk_p + 10, 64, pubkey, 32)) return 0;
+    if (!hex_decode(sig_p + 7, 128, sig, 64)) return 0;
+
+    secp256k1_xonly_pubkey xonly;
+    if (!secp256k1_xonly_pubkey_parse((secp256k1_context*)ctx, &xonly, pubkey)) return 0;
+    return secp256k1_schnorrsig_verify((secp256k1_context*)ctx, sig, id, 32, &xonly);
 }
 
 int ipfs_nostr(int argc, char** argv) {
@@ -208,6 +230,19 @@ int ipfs_nostr(int argc, char** argv) {
         }
         printf("%s\n", json_buf);
         ret = 1;
+    }
+    else if (strcmp(subcmd, "verify") == 0) {
+        const char *event_json = get_arg(argc, argv, "--event");
+        if (!event_json) {
+            fprintf(stderr, "Error: --event required\n");
+            goto cleanup;
+        }
+        if (weak_verify_json(ctx, event_json)) {
+            printf("signature valid\n");
+            ret = 1;
+        } else {
+            printf("signature invalid\n");
+        }
     }
     else if (strcmp(subcmd, "patch") == 0) {
         const char *repo = get_arg(argc, argv, "--repo");

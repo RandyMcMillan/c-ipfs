@@ -91,6 +91,12 @@ jobs:
           cd main
           ./ipfs nostr publish --cid QmSeckeyTest --content "signed with fixed key" --seckey 0000000000000000000000000000000000000000000000000000000000000001
 
+      - name: Smoke test — nostr verify signature
+        run: |
+          cd main
+          EVENT='{"id":"17015d6f0de59ec364b88a52f40f9719933a6cf00f5b0184404d635d7efa615b","pubkey":"50b5819ffe86a19b25203532653c64dc44cfdfdd1212a37fe54c92fdcd2364f3","created_at":1788206885,"kind":1064,"tags":[["ipfs","QmbDxg7kwRh5mxqCKy1ZjcbiNRH9qfcFj1vzkxPgubQN5j"]],"content":"c-ipfs source archive self-hosted","sig":"a161087ea9095369e581198f13ce619a26e777a672d70e3a18b4f1f61497665f21dbbafc1b31590e42cab0be2103746dee039932e3dab05dd2c66d0278c68661"}'
+          ./ipfs nostr verify --event "$EVENT" | grep -q "signature valid"
+
       - name: Smoke test — test binary runs
         run: |
           cd test
