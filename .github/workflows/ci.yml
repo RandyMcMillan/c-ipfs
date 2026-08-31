@@ -65,12 +65,14 @@ jobs:
           cd main
           ./ipfs nostr publish --cid QmSmokeTest --content "CI smoke test"
 
-      - name: Smoke test — nostr repo + patch + issue
+      - name: Smoke test — nostr repo + patch + issue + state
         run: |
           cd main
           ./ipfs nostr repo --id ci-repo --name "CI Repo" --cid QmRepoCID
           ./ipfs nostr patch --repo 0000000000000000000000000000000000000000000000000000000000000000:ci-repo --subject "ci patch" --body "patch body"
           ./ipfs nostr issue --repo 0000000000000000000000000000000000000000000000000000000000000000:ci-repo --subject "ci issue" --body "issue body"
+          printf 'refs/heads/main abcdef1234567890abcdef1234567890abcdef12\nrefs/heads/dev 1234567890abcdef1234567890abcdef12345678\n' > /tmp/ci_refs.txt
+          ./ipfs nostr state --repo 0000000000000000000000000000000000000000000000000000000000000000:ci-repo --refs /tmp/ci_refs.txt
 
       - name: Smoke test — test binary runs
         run: |
