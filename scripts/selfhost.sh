@@ -4,7 +4,7 @@
 
 set -e
 
-IPFS_PATH="${1:-$HOME/.ipfs}"
+IPFS_PATH="${1:-${IPFS_PATH:-$HOME/.ipfs}}"
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
 echo "=== c-ipfs Self-Host ==="
@@ -32,7 +32,14 @@ echo "Archive size:    $SIZE bytes"
 
 # Add the archive to IPFS
 echo "Adding archive to IPFS..."
-CID=$(IPFS_PATH="$IPFS_PATH" "$REPO_ROOT/main/ipfs" add "$ARCHIVE" 2>&1 | tail -1 | awk '{print $2}')
+ADD_OUTPUT=$(IPFS_PATH="$IPFS_PATH" "$REPO_ROOT/main/ipfs" add "$ARCHIVE" 2>&1)
+CID=$(echo "$ADD_OUTPUT" | tail -1 | awk '{print $2}')
+
+if [ -z "$CID" ] || [ "$CID" = "Unable" ] || [ "$CID" = "unable" ]; then
+    echo "Error: failed to add archive to IPFS"
+    echo "$ADD_OUTPUT"
+    exit 1
+fi
 
 echo "Archive CID: $CID"
 echo ""

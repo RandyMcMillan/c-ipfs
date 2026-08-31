@@ -397,7 +397,10 @@ int ipfs_import_files(struct CliArguments* args) {
 		fprintf(stderr, "Repo does not exist: %s\n", repo_path);
 		goto exit;
 	}
-	ipfs_node_offline_new(repo_path, &local_node);
+	if (!ipfs_node_offline_new(repo_path, &local_node)) {
+		fprintf(stderr, "Error: unable to open IPFS repo at %s\n", repo_path);
+		goto exit;
+	}
 
 	/** disabling for the time being
 	if (local_node->mode == MODE_API_AVAILABLE) {
