@@ -60,3 +60,6 @@ clean:
 	cd test; make clean;
 
 rebuild: clean all
+
+selfhost: all
+	./scripts/selfhost.sh
