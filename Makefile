@@ -28,6 +28,7 @@ all:
 	cd util; make all;
 	cd rbsr; make all;
 	cd nostr; make all;
+	cd nostril; make config.h;
 	cd main; make all;
 	cd test; make all;
 
