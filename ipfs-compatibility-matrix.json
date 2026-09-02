@@ -63,9 +63,9 @@
       "phase": 7,
       "status": "partial",
       "specifications": ["https://specs.ipfs.tech/http-gateways/", "https://docs.ipfs.tech/reference/kubo/rpc/"],
-      "source_evidence": ["core/daemon.c", "core/api.c", "cmd/cli.c", "cmd/ipfs/main.c"],
+      "source_evidence": ["core/daemon.c", "core/api.c", "core/http_request.c", "cmd/cli.c", "cmd/ipfs/main.c"],
       "test_evidence": ["test/core/test_api.h", "test/core/test_daemon.h"],
-      "gaps": ["gateway behavior", "selected current RPC compatibility", "stable CLI output", "authentication and origin policy"]
+      "gaps": ["gateway behavior", "Kubo v0.43.0 interoperability tests for HTTP API", "stable CLI output", "authentication and origin policy"]
     },
     {
       "id": "security-verification",

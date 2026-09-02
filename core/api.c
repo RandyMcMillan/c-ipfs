@@ -18,6 +18,7 @@
 #include "libp2p/utils/logger.h"
 #include "libp2p/utils/urlencode.h"
 #include "ipfs/core/api.h"
+#include "ipfs/cid/cid.h"
 #include "ipfs/importer/exporter.h"
 #include "ipfs/core/http_request.h"
 
@@ -276,6 +277,51 @@ struct ApiConnectionParam {
 	struct IpfsNode* this_node;
 };
 
+/**
+ * Serve gateway requests for /ipfs/<cid> paths.
+ * @param fd the client socket
+ * @param path the HTTP path (e.g. "/ipfs/Qm...")
+ * @param local_node the IPFS node context
+ * @returns 1 on success, 0 on failure
+ */
+static int api_serve_gateway(int fd, const char* path, struct IpfsNode* local_node) {
+	if (strncmp(path, "/ipfs/", 6) != 0)
+		return 0;
+
+	const char* hash = path + 6;
+	if (!hash || strlen(hash) == 0)
+		return 0;
+
+	struct Cid* cid = NULL;
+	if (!ipfs_cid_decode_hash_from_base58((unsigned char*)hash, strlen(hash), &cid)) {
+		return 0;
+	}
+
+	char* content = NULL;
+	size_t content_size = 0;
+	FILE* mem = open_memstream(&content, &content_size);
+	int ret = ipfs_exporter_object_cat_to_file(local_node, cid->hash, cid->hash_length, mem);
+	ipfs_cid_free(cid);
+	fclose(mem);
+
+	if (!ret) {
+		if (content) free(content);
+		return 0;
+	}
+
+	char header[256];
+	snprintf(header, sizeof(header),
+		"HTTP/1.1 200 OK\r\n"
+		"Content-Type: application/octet-stream\r\n"
+		"Content-Length: %zu\r\n"
+		"Connection: close\r\n"
+		"\r\n", content_size);
+	write_str(fd, header);
+	write(fd, content, content_size);
+	free(content);
+	return 1;
+}
+
 /***
  * Take an s_request and turn it into an HttpRequest
  * @param req the incoming s_request
@@ -492,9 +538,12 @@ void *api_connection_thread (void *ptr)
 				} else {
 					write_cstr (s, HTTP_500);
 				}
+			} else if (cstrstart(req.buf + req.path, "/ipfs/")) {
+				if (!api_serve_gateway(s, req.buf + req.path, params->this_node)) {
+					write_cstr(s, HTTP_404);
+				}
 			} else if (!cstrstart(req.buf + req.path, API_V0_START)) {
-				// TODO: handle download file here.
-				// move out of the if to do further processing
+				write_cstr(s, HTTP_404);
 			}
 			// end of GET
 		} else if (strncmp(req.buf + req.method, "POST", 4)==0) {
