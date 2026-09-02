@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <sys/time.h>
 #include <pthread.h>
 #include "libp2p/routing/dht_protocol.h"
 #include "libp2p/crypto/rsa.h"
@@ -143,7 +144,10 @@ int ipns_validate_ipns_record (char *k, char *val)
             return err;
         }
         if (clock_gettime(CLOCK_REALTIME, &now) != 0) {
-            timespec_get(&now, TIME_UTC);
+            struct timeval tv;
+            gettimeofday(&tv, NULL);
+            now.tv_sec = tv.tv_sec;
+            now.tv_nsec = tv.tv_usec * 1000;
         }
         if (now.tv_sec > ts.tv_sec || (now.tv_sec == ts.tv_sec && now.tv_nsec > ts.tv_nsec)) {
             ipfs_namesys_ipnsentry_reset(entry);
@@ -222,7 +226,10 @@ int ipfs_namesys_publisher_publish(struct IpfsNode* local_node, char* path) {
 	// validity = current time + 24 hours, RFC3339 formatted
 	struct timespec now;
 	if (clock_gettime(CLOCK_REALTIME, &now) != 0) {
-		timespec_get(&now, TIME_UTC);
+		struct timeval tv;
+		gettimeofday(&tv, NULL);
+		now.tv_sec = tv.tv_sec;
+		now.tv_nsec = tv.tv_usec * 1000;
 	}
 	now.tv_sec += 24 * 60 * 60; // 24 hours
 	entry->validity = ipfs_util_time_format_RFC3339(&now);
