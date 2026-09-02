@@ -322,6 +322,20 @@ struct HttpRequest* api_build_http_request(struct s_request* req) {
 				}
 			}
 		}
+		// Copy multipart boundary content or raw body into request->data
+		if (req->boundary > 0 && req->boundary_size > 0) {
+			request->data = (uint8_t*)malloc(req->boundary_size);
+			if (request->data) {
+				memcpy(request->data, req->buf + req->boundary, req->boundary_size);
+				request->data_size = req->boundary_size;
+			}
+		} else if (req->body_size > 0) {
+			request->data = (uint8_t*)malloc(req->body_size);
+			if (request->data) {
+				memcpy(request->data, req->buf + req->body, req->body_size);
+				request->data_size = req->body_size;
+			}
+		}
 	}
 	return request;
 }

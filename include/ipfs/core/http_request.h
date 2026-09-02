@@ -18,6 +18,8 @@ struct HttpRequest {
 	char* sub_command; // the sub command
 	struct Libp2pVector* params; // a collection of HttpParam structs
 	struct Libp2pVector* arguments; // a collection of chars that are arguments
+	uint8_t* data; // POST body or multipart file data
+	size_t data_size;
 };
 
 /***

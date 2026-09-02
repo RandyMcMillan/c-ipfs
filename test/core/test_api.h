@@ -700,3 +700,47 @@ exit:
 	if (peer_id) free(peer_id);
 	return retVal;
 }
+
+int test_core_api_block_put() {
+	int retVal = 0;
+	struct IpfsNode* local_node = NULL;
+	char* repo_path = "/tmp/ipfs_api_block_put";
+	char* peer_id = NULL;
+
+	if (!drop_and_build_repository(repo_path, 4001, NULL, &peer_id))
+		goto exit;
+	if (!ipfs_node_offline_new(repo_path, &local_node))
+		goto exit;
+
+	const char* block_data = "hello block put";
+
+	// Build HTTP request for block/put
+	struct HttpRequest* req = ipfs_core_http_request_new();
+	if (!req) goto exit;
+	req->command = strdup("block");
+	req->sub_command = strdup("put");
+	req->data = (uint8_t*)malloc(strlen(block_data));
+	if (!req->data) {
+		ipfs_core_http_request_free(req);
+		goto exit;
+	}
+	memcpy(req->data, block_data, strlen(block_data));
+	req->data_size = strlen(block_data);
+
+	struct HttpResponse* resp = NULL;
+	if (!ipfs_core_http_request_process(local_node, req, &resp) || !resp) {
+		ipfs_core_http_request_free(req);
+		goto exit;
+	}
+
+	if (strstr((char*)resp->bytes, "Key") != NULL && strstr((char*)resp->bytes, "Size") != NULL) {
+		retVal = 1;
+	}
+
+	ipfs_core_http_response_free(resp);
+	ipfs_core_http_request_free(req);
+exit:
+	ipfs_node_free(local_node);
+	if (peer_id) free(peer_id);
+	return retVal;
+}
