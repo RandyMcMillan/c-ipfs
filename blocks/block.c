@@ -152,6 +152,47 @@ int ipfs_blocks_block_add_data(const unsigned char* data, size_t data_size, stru
 	return 1;
 }
 
+struct Block* ipfs_block_new_raw(const unsigned char* data, size_t data_size) {
+	struct Block* block = ipfs_block_new();
+	if (block == NULL)
+		return NULL;
+
+	unsigned char hash[32];
+	if (libp2p_crypto_hashing_sha256(data, data_size, hash) == 0) {
+		ipfs_block_free(block);
+		return NULL;
+	}
+
+	block->cid = ipfs_cid_new(1, hash, 32, CID_RAW);
+	if (block->cid == NULL) {
+		ipfs_block_free(block);
+		return NULL;
+	}
+
+	block->data = malloc(data_size);
+	if (block->data == NULL) {
+		ipfs_block_free(block);
+		return NULL;
+	}
+	memcpy(block->data, data, data_size);
+	block->data_length = data_size;
+	return block;
+}
+
+int ipfs_block_validate(const struct Block* block) {
+	if (block == NULL || block->cid == NULL || block->data == NULL)
+		return 0;
+
+	unsigned char hash[32];
+	if (libp2p_crypto_hashing_sha256(block->data, block->data_length, hash) == 0)
+		return 0;
+
+	if (block->cid->hash_length != 32)
+		return 0;
+
+	return memcmp(block->cid->hash, hash, 32) == 0;
+}
+
 /***
  * Free resources used by the creation of a block
  * @param block the block to free

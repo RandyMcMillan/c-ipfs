@@ -86,6 +86,7 @@ int ipfs_routing_online_free(ipfs_routing*);
 int ipfs_routing_offline_free(ipfs_routing* incoming);
 // online using DHT/kademlia, the recommended router
 ipfs_routing* ipfs_routing_new_kademlia(struct IpfsNode* local_node, struct RsaPrivateKey* private_key);
+int ipfs_routing_kademlia_free(ipfs_routing* incoming);
 // generic routines
 int ipfs_routing_generic_put_value (ipfs_routing* offlineRouting, const unsigned char *key, size_t key_size, const void *val, size_t vlen);
 int ipfs_routing_generic_get_value (ipfs_routing* offlineRouting, const unsigned char *key, size_t key_size, void **val, size_t *vlen);

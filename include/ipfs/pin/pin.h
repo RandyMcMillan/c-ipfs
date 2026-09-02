@@ -44,4 +44,40 @@
     int ipfs_pin_has_child (struct FSRepo *ds,
                             unsigned char *hash,  size_t hash_size,
                             unsigned char *child, size_t child_size);
+
+    struct PinEntry {
+        unsigned char* hash;
+        size_t hash_size;
+        PinMode mode;
+        struct PinEntry* next;
+    };
+
+    /**
+     * Add a pin to the pin set and persist it to the datastore.
+     */
+    int ipfs_pin_add(struct FSRepo* fs_repo, const unsigned char* hash, size_t hash_size, PinMode mode);
+
+    /**
+     * Remove a pin from the pin set.
+     */
+    int ipfs_pin_rm(struct FSRepo* fs_repo, const unsigned char* hash, size_t hash_size);
+
+    /**
+     * Load the pin set from the datastore.
+     */
+    struct PinEntry* ipfs_pin_load(struct FSRepo* fs_repo);
+
+    /**
+     * Free a linked list of PinEntry.
+     */
+    void ipfs_pin_entry_free(struct PinEntry* entries);
+
+    /**
+     * Run garbage collection: delete unreferenced blocks from the blockstore.
+     * @param fs_repo the repository
+     * @param bytes_reclaimed number of bytes reclaimed
+     * @returns 1 on success, 0 on failure
+     */
+    int ipfs_gc_collect(struct FSRepo* fs_repo, size_t* bytes_reclaimed);
+
 #endif // IPFS_PIN_H

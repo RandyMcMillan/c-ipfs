@@ -9,6 +9,7 @@
 #include "libp2p/net/stream.h"
 #include "libp2p/conn/session.h"
 #include "libp2p/routing/dht_protocol.h"
+#include "libp2p/routing/dht_utils.h"
 #include "libp2p/utils/logger.h"
 #include "libp2p/conn/dialer.h"
 #include "ipfs/core/null.h"
@@ -39,7 +40,22 @@ struct KademliaMessage* ipfs_routing_online_send_receive_message(struct SessionC
 }
 
 /***
- * Ask the network for anyone that can provide a hash
+ * Helper: check if a peer id is already in a vector of Libp2pPeer*
+ */
+static int peer_id_in_vector(struct Libp2pVector* vec, const unsigned char* peer_id, size_t peer_id_size) {
+	if (vec == NULL) return 0;
+	for (int i = 0; i < vec->total; i++) {
+		struct Libp2pPeer* p = (struct Libp2pPeer*)libp2p_utils_vector_get(vec, i);
+		if (p != NULL && p->id_size == peer_id_size && memcmp(p->id, peer_id, peer_id_size) == 0)
+			return 1;
+	}
+	return 0;
+}
+
+/***
+ * Ask the network for anyone that can provide a hash.
+ * Uses iterative Kademlia-style lookup: queries connected peers,
+ * accumulates providers, and follows closer peers one round.
  * @param routing the context
  * @param key the hash to look for
  * @param key_size the size of the hash
@@ -48,6 +64,10 @@ struct KademliaMessage* ipfs_routing_online_send_receive_message(struct SessionC
  */
 int ipfs_routing_online_find_remote_providers(struct IpfsRouting* routing, const unsigned char* key, size_t key_size, struct Libp2pVector** peers) {
 	int found = 0;
+	struct Libp2pVector* result_peers = libp2p_utils_vector_new(1);
+	struct Libp2pVector* queried = libp2p_utils_vector_new(1);
+	struct Libp2pVector* candidates = libp2p_utils_vector_new(1);
+
 	// build the message to be transmitted
 	struct KademliaMessage* message = libp2p_message_new();
 	message->message_type = MESSAGE_TYPE_GET_PROVIDERS;
@@ -55,59 +75,84 @@ int ipfs_routing_online_find_remote_providers(struct IpfsRouting* routing, const
 	message->key = malloc(message->key_size);
 	if (message->key == NULL) {
 		libp2p_message_free(message);
+		libp2p_utils_vector_free(result_peers);
+		libp2p_utils_vector_free(queried);
+		libp2p_utils_vector_free(candidates);
 		return 0;
 	}
 	memcpy(message->key, key, message->key_size);
-	if (libp2p_logger_watching_class("online")) {
-		size_t b58size = 100;
-		uint8_t *b58key = (uint8_t *) malloc(b58size);
-		if (b58key != NULL) {
-			libp2p_crypto_encoding_base58_encode((unsigned char*)message->key, message->key_size, (unsigned char**) &b58key, &b58size);
-			libp2p_logger_debug("online", "find_remote_providers looking for key %s.\n", b58key);
-			free(b58key);
-		}
-	}
-	// loop through the connected peers, asking for the hash
+
+	// Seed candidates with all connected peers
 	struct Libp2pLinkedList* current_entry = routing->local_node->peerstore->head_entry;
 	while (current_entry != NULL) {
-		struct Libp2pPeer* peer = ((struct PeerEntry*)current_entry->item)->peer;
-		if (peer->connection_type == CONNECTION_TYPE_CONNECTED) {
-			// Ask for hash, if it has it, break out of the loop and stop looking
-			libp2p_logger_debug("online", "FindRemoteProviders: Asking for who can provide\n");
+		struct PeerEntry* entry = (struct PeerEntry*)current_entry->item;
+		if (entry != NULL && entry->peer != NULL && entry->peer->connection_type == CONNECTION_TYPE_CONNECTED) {
+			libp2p_utils_vector_add(candidates, entry->peer);
+		}
+		current_entry = current_entry->next;
+	}
+
+	int rounds = 0;
+	while (candidates->total > 0 && rounds < 2) {
+		struct Libp2pVector* next_candidates = libp2p_utils_vector_new(1);
+		for (int i = 0; i < candidates->total; i++) {
+			struct Libp2pPeer* peer = (struct Libp2pPeer*)libp2p_utils_vector_get(candidates, i);
+			if (peer == NULL || peer_id_in_vector(queried, (unsigned char*)peer->id, peer->id_size))
+				continue;
+			libp2p_utils_vector_add(queried, peer);
+
+			libp2p_logger_debug("online", "FindRemoteProviders: Asking peer %s for providers\n", libp2p_peer_id_to_string(peer));
 			struct KademliaMessage* return_message = ipfs_routing_online_send_receive_message(peer->sessionContext, message);
-			if (return_message != NULL && return_message->provider_peer_head != NULL) {
-				libp2p_logger_debug("online", "FindRemoteProviders: Return value is not null\n");
-				found = 1;
-				*peers = libp2p_utils_vector_new(1);
-				struct Libp2pLinkedList * current_provider_peer_list_item = return_message->provider_peer_head;
-				while (current_provider_peer_list_item != NULL) {
-					struct Libp2pPeer *current_peer = current_provider_peer_list_item->item;
-					// if we can find the peer in the peerstore, use that one instead
+			if (return_message == NULL)
+				continue;
+
+			// Collect providers
+			struct Libp2pLinkedList* prov = return_message->provider_peer_head;
+			while (prov != NULL) {
+				struct Libp2pPeer* current_peer = (struct Libp2pPeer*)prov->item;
+				if (current_peer != NULL && !peer_id_in_vector(result_peers, (unsigned char*)current_peer->id, current_peer->id_size)) {
 					struct Libp2pPeer* peerstorePeer = libp2p_peerstore_get_peer(routing->local_node->peerstore, (unsigned char*)current_peer->id, current_peer->id_size);
 					if (peerstorePeer == NULL) {
-						// add it to the peerstore
 						libp2p_peerstore_add_peer(routing->local_node->peerstore, current_peer);
 						peerstorePeer = libp2p_peerstore_get_peer(routing->local_node->peerstore, (unsigned char*)current_peer->id, current_peer->id_size);
 					}
-					current_peer = peerstorePeer;
-					libp2p_utils_vector_add(*peers, current_peer);
-					current_provider_peer_list_item = current_provider_peer_list_item->next;
+					if (peerstorePeer != NULL) {
+						libp2p_utils_vector_add(result_peers, peerstorePeer);
+						found = 1;
+					}
 				}
-				libp2p_message_free(return_message);
-				break;
-			} else {
-				libp2p_logger_debug("online", "FindRemoteProviders: Return value is null or providers are empty.\n");
+				prov = prov->next;
+			}
+
+			// Collect closer peers for next round
+			struct Libp2pLinkedList* closer = return_message->closer_peer_head;
+			while (closer != NULL) {
+				struct Libp2pPeer* closer_peer = (struct Libp2pPeer*)closer->item;
+				if (closer_peer != NULL && !peer_id_in_vector(queried, (unsigned char*)closer_peer->id, closer_peer->id_size)) {
+					libp2p_peerstore_add_peer(routing->local_node->peerstore, closer_peer);
+					struct Libp2pPeer* stored = libp2p_peerstore_get_peer(routing->local_node->peerstore, (unsigned char*)closer_peer->id, closer_peer->id_size);
+					if (stored != NULL)
+						libp2p_utils_vector_add(next_candidates, stored);
+				}
+				closer = closer->next;
 			}
 			libp2p_message_free(return_message);
-			// TODO: Make this multithreaded
 		}
-		if (found)
-			current_entry = NULL;
-		else
-			current_entry = current_entry->next;
+		libp2p_utils_vector_free(candidates);
+		candidates = next_candidates;
+		rounds++;
 	}
-	// clean up
+
 	libp2p_message_free(message);
+	libp2p_utils_vector_free(candidates);
+	libp2p_utils_vector_free(queried);
+
+	if (found) {
+		*peers = result_peers;
+	} else {
+		libp2p_utils_vector_free(result_peers);
+		*peers = NULL;
+	}
 	return found;
 }
 
@@ -196,7 +241,7 @@ int ipfs_routing_online_ask_peer_for_peer(struct Libp2pPeer* whoToAsk, const uns
 }
 
 /**
- * Find a peer
+ * Find a peer using iterative Kademlia-style lookup.
  * @param routing the context
  * @param peer_id the id to look for
  * @param peer_id_size the size of the id
@@ -210,16 +255,84 @@ int ipfs_routing_online_find_peer(struct IpfsRouting* routing, const unsigned ch
 	if (*result != NULL) {
 		return 1;
 	}
-	//ask the swarm to find the peer
-	// TODO: Multithread
+
+	struct Libp2pVector* queried = libp2p_utils_vector_new(1);
+	struct Libp2pVector* candidates = libp2p_utils_vector_new(1);
+
+	// Seed candidates with all connected peers
 	struct Libp2pLinkedList *current = peerstore->head_entry;
 	while(current != NULL) {
-		struct Libp2pPeer *current_peer = ((struct PeerEntry*)current->item)->peer;
-		ipfs_routing_online_ask_peer_for_peer(current_peer, peer_id, peer_id_size, result);
-		if (*result != NULL)
-			return 1;
+		struct PeerEntry* entry = (struct PeerEntry*)current->item;
+		if (entry != NULL && entry->peer != NULL && entry->peer->connection_type == CONNECTION_TYPE_CONNECTED) {
+			libp2p_utils_vector_add(candidates, entry->peer);
+		}
 		current = current->next;
 	}
+
+	struct KademliaMessage* message = libp2p_message_new();
+	message->message_type = MESSAGE_TYPE_FIND_NODE;
+	message->key_size = peer_id_size;
+	message->key = malloc(peer_id_size);
+	if (message->key == NULL) {
+		libp2p_message_free(message);
+		libp2p_utils_vector_free(queried);
+		libp2p_utils_vector_free(candidates);
+		return 0;
+	}
+	memcpy(message->key, peer_id, peer_id_size);
+
+	int rounds = 0;
+	while (candidates->total > 0 && rounds < 2) {
+		struct Libp2pVector* next_candidates = libp2p_utils_vector_new(1);
+		for (int i = 0; i < candidates->total; i++) {
+			struct Libp2pPeer* peer = (struct Libp2pPeer*)libp2p_utils_vector_get(candidates, i);
+			if (peer == NULL || peer_id_in_vector(queried, (unsigned char*)peer->id, peer->id_size))
+				continue;
+			libp2p_utils_vector_add(queried, peer);
+
+			if (peer->connection_type != CONNECTION_TYPE_CONNECTED)
+				continue;
+
+			struct KademliaMessage* ret = ipfs_routing_online_send_receive_message(peer->sessionContext, message);
+			if (ret == NULL)
+				continue;
+
+			// Check if this peer knows the target directly
+			if (ret->provider_peer_head != NULL && ret->provider_peer_head->item != NULL) {
+				struct Libp2pPeer* found_peer = (struct Libp2pPeer*)ret->provider_peer_head->item;
+				if (found_peer->id_size == peer_id_size && memcmp(found_peer->id, peer_id, peer_id_size) == 0) {
+					*result = libp2p_peer_copy(found_peer);
+					libp2p_message_free(ret);
+					libp2p_utils_vector_free(next_candidates);
+					libp2p_utils_vector_free(candidates);
+					libp2p_utils_vector_free(queried);
+					libp2p_message_free(message);
+					return 1;
+				}
+			}
+
+			// Collect closer peers for next round
+			struct Libp2pLinkedList* closer = ret->closer_peer_head;
+			while (closer != NULL) {
+				struct Libp2pPeer* closer_peer = (struct Libp2pPeer*)closer->item;
+				if (closer_peer != NULL && !peer_id_in_vector(queried, (unsigned char*)closer_peer->id, closer_peer->id_size)) {
+					libp2p_peerstore_add_peer(routing->local_node->peerstore, closer_peer);
+					struct Libp2pPeer* stored = libp2p_peerstore_get_peer(routing->local_node->peerstore, (unsigned char*)closer_peer->id, closer_peer->id_size);
+					if (stored != NULL)
+						libp2p_utils_vector_add(next_candidates, stored);
+				}
+				closer = closer->next;
+			}
+			libp2p_message_free(ret);
+		}
+		libp2p_utils_vector_free(candidates);
+		candidates = next_candidates;
+		rounds++;
+	}
+
+	libp2p_utils_vector_free(candidates);
+	libp2p_utils_vector_free(queried);
+	libp2p_message_free(message);
 	return 0;
 }
 

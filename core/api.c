@@ -313,7 +313,7 @@ struct HttpRequest* api_build_http_request(struct s_request* req) {
 							struct HttpParam *hp = ipfs_core_http_param_new();
 							if (hp) {
 								hp->name = strdup(name);
-								hp->value = strdup(value); // maybe null ?
+								hp->value = value ? strdup(value) : NULL;
 								libp2p_utils_vector_add(request->params, hp);
 							}
 						}

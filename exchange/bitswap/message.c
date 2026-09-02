@@ -123,6 +123,86 @@ int ipfs_bitswap_message_block_protobuf_decode(uint8_t* buffer, size_t buffer_le
 }
 
 /***
+ * Bitswap BlockPresence (1.2.0)
+ */
+
+struct BitswapBlockPresence* ipfs_bitswap_block_presence_new() {
+	struct BitswapBlockPresence* presence = (struct BitswapBlockPresence*) malloc(sizeof(struct BitswapBlockPresence));
+	if (presence != NULL) {
+		presence->cid = NULL;
+		presence->cid_size = 0;
+		presence->type = BLOCK_PRESENCE_HAVE;
+	}
+	return presence;
+}
+
+int ipfs_bitswap_block_presence_free(struct BitswapBlockPresence* presence) {
+	if (presence != NULL) {
+		if (presence->cid != NULL)
+			free(presence->cid);
+		free(presence);
+	}
+	return 1;
+}
+
+size_t ipfs_bitswap_block_presence_protobuf_encode_size(struct BitswapBlockPresence* presence) {
+	return 22 + presence->cid_size;
+}
+
+int ipfs_bitswap_block_presence_protobuf_encode(struct BitswapBlockPresence* presence, unsigned char* buffer, size_t buffer_length, size_t* bytes_written) {
+	size_t bytes_used;
+	*bytes_written = 0;
+	if (presence != NULL) {
+		if (!protobuf_encode_length_delimited(1, WIRETYPE_LENGTH_DELIMITED, (char*)presence->cid, presence->cid_size, &buffer[*bytes_written], buffer_length - (*bytes_written), &bytes_used))
+			return 0;
+		*bytes_written += bytes_used;
+		if (!protobuf_encode_varint(2, WIRETYPE_VARINT, presence->type, &buffer[*bytes_written], buffer_length - (*bytes_written), &bytes_used))
+			return 0;
+		*bytes_written += bytes_used;
+	}
+	return 1;
+}
+
+int ipfs_bitswap_block_presence_protobuf_decode(unsigned char* buffer, size_t buffer_length, struct BitswapBlockPresence** output) {
+	size_t pos = 0;
+	int retVal = 0;
+	*output = NULL;
+	if (buffer_length == 0)
+		return 1;
+	*output = ipfs_bitswap_block_presence_new();
+	if (*output == NULL)
+		goto exit;
+	struct BitswapBlockPresence* presence = *output;
+	while(pos < buffer_length) {
+		size_t bytes_read = 0;
+		int field_no;
+		enum WireType field_type;
+		if (protobuf_decode_field_and_type(&buffer[pos], buffer_length, &field_no, &field_type, &bytes_read) == 0)
+			goto exit;
+		pos += bytes_read;
+		switch(field_no) {
+			case (1):
+				if (!protobuf_decode_length_delimited(&buffer[pos], buffer_length - pos, (char**)&presence->cid, &presence->cid_size, &bytes_read))
+					goto exit;
+				pos += bytes_read;
+				break;
+			case (2):
+				presence->type = (enum BitswapBlockPresenceType) varint_decode(&buffer[pos], buffer_length - pos, &bytes_read);
+				pos += bytes_read;
+				break;
+		}
+	}
+	retVal = 1;
+	exit:
+	if (retVal == 0) {
+		if (*output != NULL)
+			ipfs_bitswap_block_presence_free(*output);
+		*output = NULL;
+	}
+	return retVal;
+}
+
+/***
  * Allocate memory for a new WantlistEntry
  * @returns the newly allocated WantlistEntry
  */
@@ -135,6 +215,8 @@ struct WantlistEntry* ipfs_bitswap_wantlist_entry_new() {
 	entry->block_size = 0;
 	entry->cancel = 0;
 	entry->priority = 1;
+	entry->want_type = WANT_TYPE_BLOCK;
+	entry->send_dont_have = 0;
 
 	return entry;
 }
@@ -160,8 +242,8 @@ int ipfs_bitswap_wantlist_entry_free(struct WantlistEntry* entry) {
  * @returns the approximate (maximum actually) size of a protobuf'd WantlistEntry
  */
 size_t ipfs_bitswap_wantlist_entry_protobuf_encode_size(struct WantlistEntry* entry) {
-	// protobuf prefix + block + cancel + priority
-	return 33 + entry->block_size;
+	// protobuf prefix + block + cancel + priority + wantType + sendDontHave
+	return 44 + entry->block_size;
 }
 
 /***
@@ -184,6 +266,12 @@ int ipfs_bitswap_wantlist_entry_protobuf_encode(struct WantlistEntry* entry, uns
 			return 0;
 		*bytes_written += bytes_used;
 		if (!protobuf_encode_varint(3, WIRETYPE_VARINT, entry->priority, &buffer[*bytes_written], buffer_length - (*bytes_written), &bytes_used))
+			return 0;
+		*bytes_written += bytes_used;
+		if (!protobuf_encode_varint(4, WIRETYPE_VARINT, entry->want_type, &buffer[*bytes_written], buffer_length - (*bytes_written), &bytes_used))
+			return 0;
+		*bytes_written += bytes_used;
+		if (!protobuf_encode_varint(5, WIRETYPE_VARINT, entry->send_dont_have, &buffer[*bytes_written], buffer_length - (*bytes_written), &bytes_used))
 			return 0;
 		*bytes_written += bytes_used;
 	}
@@ -234,6 +322,14 @@ int ipfs_bitswap_wantlist_entry_protobuf_decode(unsigned char* buffer, size_t bu
 				break;
 			case (3):
 				entry->priority = varint_decode(&buffer[pos], buffer_length - pos, &bytes_read);
+				pos += bytes_read;
+				break;
+			case (4):
+				entry->want_type = (enum BitswapWantType) varint_decode(&buffer[pos], buffer_length - pos, &bytes_read);
+				pos += bytes_read;
+				break;
+			case (5):
+				entry->send_dont_have = varint_decode(&buffer[pos], buffer_length - pos, &bytes_read);
 				pos += bytes_read;
 				break;
 		}
@@ -422,6 +518,8 @@ struct BitswapMessage* ipfs_bitswap_message_new() {
 		message->blocks = NULL;
 		message->payload = NULL;
 		message->wantlist = NULL;
+		message->block_presences = NULL;
+		message->pending_bytes = 0;
 	}
 
 	return message;
@@ -455,6 +553,13 @@ int ipfs_bitswap_message_free(struct BitswapMessage* message) {
 		if (message->wantlist != NULL) {
 			ipfs_bitswap_wantlist_free(message->wantlist);
 		}
+		if (message->block_presences != NULL) {
+			for(int i = 0; i < message->block_presences->total; i++) {
+				struct BitswapBlockPresence* entry = (struct BitswapBlockPresence*) libp2p_utils_vector_get(message->block_presences, i);
+				ipfs_bitswap_block_presence_free(entry);
+			}
+			libp2p_utils_vector_free(message->block_presences);
+		}
 		free(message);
 	}
 	return 1;
@@ -482,6 +587,12 @@ size_t ipfs_bitswap_message_protobuf_encode_size(const struct BitswapMessage* me
 		}
 		if (message->wantlist != NULL) {
 			total += ipfs_bitswap_wantlist_protobuf_encode_size(message->wantlist);
+		}
+		if (message->block_presences != NULL) {
+			for(int i = 0; i < message->block_presences->total; i++) {
+				struct BitswapBlockPresence* entry = (struct BitswapBlockPresence*) libp2p_utils_vector_get(message->block_presences, i);
+				total += 11 + ipfs_bitswap_block_presence_protobuf_encode_size(entry);
+			}
 		}
 		total += 11 + 12 + 11;
 	}
@@ -553,6 +664,32 @@ int ipfs_bitswap_message_protobuf_encode(const struct BitswapMessage* message, u
 			}
 			*bytes_written += bytes_used;
 			free(temp);
+		}
+		// block presences (bitswap 1.2.0)
+		if (message->block_presences != NULL) {
+			for(int i = 0; i < message->block_presences->total; i++) {
+				struct BitswapBlockPresence* entry = (struct BitswapBlockPresence*) libp2p_utils_vector_get(message->block_presences, i);
+				size_t temp_size = ipfs_bitswap_block_presence_protobuf_encode_size(entry);
+				uint8_t* temp = (uint8_t*) malloc(temp_size);
+				if (temp == NULL)
+					return 0;
+				if (!ipfs_bitswap_block_presence_protobuf_encode(entry, temp, temp_size, &temp_size)) {
+					free(temp);
+					return 0;
+				}
+				if (!protobuf_encode_length_delimited(4, WIRETYPE_LENGTH_DELIMITED, (char*)temp, temp_size, &buffer[*bytes_written], buffer_length - (*bytes_written), &bytes_used)) {
+					free(temp);
+					return 0;
+				}
+				*bytes_written += bytes_used;
+				free(temp);
+			}
+		}
+		// pending bytes (bitswap 1.2.0)
+		if (message->pending_bytes != 0) {
+			if (!protobuf_encode_varint(5, WIRETYPE_VARINT, message->pending_bytes, &buffer[*bytes_written], buffer_length - (*bytes_written), &bytes_used))
+				return 0;
+			*bytes_written += bytes_used;
 		}
 
 	}
@@ -637,6 +774,32 @@ int ipfs_bitswap_message_protobuf_decode(const uint8_t* buffer, size_t buffer_le
 					return 0;
 				}
 				free(temp);
+				pos += bytes_read;
+				break;
+			}
+			case(4): {
+				// a BlockPresence (bitswap 1.2.0)
+				size_t temp_size = 0;
+				uint8_t* temp = NULL;
+				if (!protobuf_decode_length_delimited(&buffer[pos], buffer_length - pos, (char**)&temp, &temp_size, &bytes_read)) {
+					return 0;
+				}
+				struct BitswapBlockPresence* presence = NULL;
+				if (!ipfs_bitswap_block_presence_protobuf_decode(temp, temp_size, &presence)) {
+					free(temp);
+					return 0;
+				}
+				free(temp);
+				if (message->block_presences == NULL) {
+					message->block_presences = libp2p_utils_vector_new(1);
+				}
+				libp2p_utils_vector_add(message->block_presences, (void*)presence);
+				pos += bytes_read;
+				break;
+			}
+			case(5): {
+				// pendingBytes (bitswap 1.2.0)
+				message->pending_bytes = (int32_t) varint_decode(&buffer[pos], buffer_length - pos, &bytes_read);
 				pos += bytes_read;
 				break;
 			}

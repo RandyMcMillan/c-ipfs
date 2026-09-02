@@ -5,6 +5,11 @@
 #include "ipfs/merkledag/node.h"
 #include "ipfs/core/ipfs_node.h"
 
+enum UnixFSLayout {
+	UNIXFS_LAYOUT_BALANCED,
+	UNIXFS_LAYOUT_TRICKLE
+};
+
 /**
  * Creates a node based on an incoming file or directory
  * NOTE: this can be called recursively for directories
@@ -21,6 +26,19 @@
  * @returns true(1) on success
  */
 int ipfs_import_file(const char* root, const char* fileName, struct HashtableNode** parent_node, struct IpfsNode *local_node, size_t* bytes_written, int recursive);
+
+/**
+ * Import a file with a specific chunking layout (balanced or trickle)
+ * @param root_dir the directory for where to look for the file
+ * @param file_name the file (or directory) to import
+ * @param parent_node the root node
+ * @param local_node the ipfs node
+ * @param bytes_written number of bytes written to disk
+ * @param recursive true if we should navigate directories
+ * @param layout the layout strategy (balanced or trickle)
+ * @returns true(1) on success
+ */
+int ipfs_import_file_with_layout(const char* root, const char* fileName, struct HashtableNode** parent_node, struct IpfsNode *local_node, size_t* bytes_written, int recursive, enum UnixFSLayout layout);
 
 /**
  * called from the command line

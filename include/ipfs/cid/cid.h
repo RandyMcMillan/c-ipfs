@@ -81,7 +81,7 @@ size_t ipfs_cid_protobuf_encode_size(const struct Cid* incoming);
  * @param codec the codec to be used (NOTE: For version 0, this should be CID_DAG_PROTOBUF)
  * @returns the Cid, or NULL if there was a problem
  */
-struct Cid* ipfs_cid_new(int version, const unsigned char* hash, size_t hash_length, const char codec);
+struct Cid* ipfs_cid_new(int version, const unsigned char* hash, size_t hash_length, int codec);
 
 /***
  * Free the resources from a Cid

@@ -145,6 +145,84 @@ int test_import_large_file() {
 
 }
 
+int test_import_trickle_file() {
+	size_t bytes_size = 1000000; //1mb
+	unsigned char file_bytes[bytes_size];
+	const char* fileName = "/tmp/test_import_trickle.tmp";
+	const char* repo_dir = "/tmp/ipfs_trickle";
+	struct IpfsNode* local_node = NULL;
+	int retVal = 0;
+	struct HashtableNode* write_node = NULL;
+	size_t bytes_written = 0;
+	size_t bytes_read1 = 1;
+	size_t bytes_read2 = 1;
+	unsigned char buf1[100];
+	unsigned char buf2[100];
+	unsigned char base58[55];
+	size_t base58_size = 55;
+
+	create_bytes(file_bytes, bytes_size);
+	create_file(fileName, file_bytes, bytes_size);
+
+	if (!drop_and_build_repository(repo_dir, 4002, NULL, NULL)) {
+		fprintf(stderr, "Unable to drop and build test repository at %s\n", repo_dir);
+		goto exit;
+	}
+
+	if (!ipfs_node_offline_new(repo_dir, &local_node)) {
+		fprintf(stderr, "Unable to create new IpfsNode\n");
+		goto exit;
+	}
+
+	if (ipfs_import_file_with_layout(NULL, fileName, &write_node, local_node, &bytes_written, 1, UNIXFS_LAYOUT_TRICKLE) == 0) {
+		goto exit;
+	}
+
+	// export via base58 hash
+	if (ipfs_cid_hash_to_base58(write_node->hash, write_node->hash_size, base58, base58_size) == 0) {
+		goto exit;
+	}
+
+	if (ipfs_exporter_to_file(base58, "/tmp/test_import_trickle.rsl", local_node) == 0) {
+		goto exit;
+	}
+
+	size_t new_file_size = os_utils_file_size("/tmp/test_import_trickle.rsl");
+	if (new_file_size != bytes_size) {
+		printf("Trickle file sizes are different. Should be %lu but the new one is %lu\n", bytes_size, new_file_size);
+		goto exit;
+	}
+
+	FILE* f1 = fopen("/tmp/test_import_trickle.tmp", "rb");
+	FILE* f2 = fopen("/tmp/test_import_trickle.rsl", "rb");
+	while (bytes_read1 != 0 && bytes_read2 != 0) {
+		bytes_read1 = fread(buf1, 1, 100, f1);
+		bytes_read2 = fread(buf2, 1, 100, f2);
+		if (bytes_read1 != bytes_read2) {
+			printf("Error reading files for comparison.\n");
+			fclose(f1);
+			fclose(f2);
+			goto exit;
+		}
+		if (memcmp(buf1, buf2, bytes_read1) != 0) {
+			printf("The bytes between the trickle files are different\n");
+			fclose(f1);
+			fclose(f2);
+			goto exit;
+		}
+	}
+	fclose(f1);
+	fclose(f2);
+
+	retVal = 1;
+exit:
+	if (local_node != NULL)
+		ipfs_node_free(local_node);
+	if (write_node != NULL)
+		ipfs_hashtable_node_free(write_node);
+	return retVal;
+}
+
 int test_import_small_file() {
 	size_t bytes_size = 1000;
 	unsigned char file_bytes[bytes_size];

@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0",
   "profile": "ipfs-compatibility-profile.json",
-  "last_audited_commit": "e94e3bf",
+  "last_audited_commit": "8d7c224",
   "evidence_policy": "Source evidence shows only that an implementation exists. Interoperability evidence is required before a feature becomes conformant.",
   "features": [
     {
@@ -9,9 +9,9 @@
       "phase": 1,
       "status": "partial",
       "specifications": ["https://github.com/multiformats/multiformats"],
-      "source_evidence": ["cid/cid.c", "multibase/multibase.c", "c-libp2p/c-multihash"],
-      "test_evidence": ["test/cid/test_cid.h"],
-      "gaps": ["canonical varints", "CIDv1 and identity vectors", "content-codec validation", "cross-language vectors"]
+      "source_evidence": ["cid/cid.c", "multibase/multibase.c", "c-libp2p/c-multihash/src/multihash.c"],
+      "test_evidence": ["test/cid/test_cid.h", "c-libp2p/c-multihash/tests/c/test_multihash_new.c", "c-libp2p/c-multihash/tests/c/test_multihash_decoding.c"],
+      "gaps": ["Kubo v0.43.0 interoperability tests for multiformats"]
     },
     {
       "id": "ipld",
@@ -20,16 +20,16 @@
       "specifications": ["https://ipld.io/specs/"],
       "source_evidence": ["blocks/block.c", "blocks/blockstore.c", "merkledag/merkledag.c", "merkledag/node.c"],
       "test_evidence": ["test/blocks/test_block.h", "test/merkledag/test_merkledag.h"],
-      "gaps": ["raw and DAG-CBOR codecs", "CID verification on all storage operations", "selectors", "bounded streaming traversal"]
+      "gaps": ["DAG-CBOR codec", "selectors", "Kubo v0.43.0 interoperability tests for IPLD"]
     },
     {
       "id": "unixfs-storage",
       "phase": 3,
       "status": "partial",
       "specifications": ["https://specs.ipfs.tech/unixfs/", "https://github.com/ipfs/kubo/tree/v0.43.0/docs/specifications"],
-      "source_evidence": ["unixfs/unixfs.c", "importer/importer.c", "importer/exporter.c", "flatfs/flatfs.c", "repo/fsrepo/fs_repo.c", "pin/pin.c"],
-      "test_evidence": ["test/node/test_importer.h", "test/flatfs/test_flatfs.h"],
-      "gaps": ["HAMT directories", "metadata", "trickle layout", "transactional metadata", "garbage collection", "crash-safe storage"]
+      "source_evidence": ["unixfs/unixfs.c", "unixfs/hamt.c", "importer/importer.c", "importer/exporter.c", "flatfs/flatfs.c", "repo/fsrepo/fs_repo.c", "pin/pin.c", "blocks/blockstore.c"],
+      "test_evidence": ["test/node/test_importer.h", "test/flatfs/test_flatfs.h", "test/pin/test_pin.h", "test/storage/test_unixfs.h", "test/repo/test_repo_config.h"],
+      "gaps": ["Kubo v0.43.0 interoperability tests for UnixFS storage"]
     },
     {
       "id": "libp2p",

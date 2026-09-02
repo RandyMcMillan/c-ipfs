@@ -15,6 +15,72 @@
 
 enum WireType ipfs_cid_message_fields[] = { WIRETYPE_VARINT, WIRETYPE_VARINT, WIRETYPE_LENGTH_DELIMITED };
 
+static int ipfs_cid_codec_valid(int codec) {
+	switch (codec) {
+	case CID_RAW:
+	case CID_DAG_PROTOBUF:
+	case CID_DAG_CBOR:
+	case CID_GIT_RAW:
+	case CID_ETHEREUM_BLOCK:
+	case CID_ETHEREUM_BLOCKLIST:
+	case CID_ETHEREUM_TRIE:
+	case CID_ETHEREUM_TX:
+	case CID_ETHEREUM_TX_RECEIPT_TRIE:
+	case CID_ETHEREUM_TX_RECEIPT:
+	case CID_ETHEREUM_STATE_TRIE:
+	case CID_ETHEREUM_ACCOUNT_SNAPSHOT:
+	case CID_ETHEREUM_STORAGE_TRIE:
+	case CID_BITCOIN_BLOCK:
+	case CID_BITCOIN_TX:
+	case CID_ZCASH_BLOCK:
+	case CID_ZCASH_TX:
+		return 1;
+	default:
+		return 0;
+	}
+}
+
+static int ipfs_cid_codec_supported(int version, int codec) {
+	if (version == 0)
+		return codec == CID_DAG_PROTOBUF;
+
+	if (version == 1)
+		return ipfs_cid_codec_valid(codec);
+
+	return 0;
+}
+
+static int ipfs_cid_from_bytes(const unsigned char* incoming, size_t incoming_size, struct Cid** cid) {
+	if (incoming == NULL || incoming_size == 0)
+		return 0;
+
+	// CIDv0 is a bare multihash.
+	if (incoming_size == 34 && incoming[0] == 18 && incoming[1] == 32) {
+		*cid = ipfs_cid_new(0, &incoming[2], incoming_size - 2, CID_DAG_PROTOBUF);
+		return *cid != NULL;
+	}
+
+	size_t pos = 0;
+	size_t num_bytes = 0;
+	unsigned long long version = varint_decode(&incoming[pos], incoming_size - pos, &num_bytes);
+	if (num_bytes == 0 || version > 1)
+		return 0;
+	pos += num_bytes;
+
+	unsigned long long codec = varint_decode(&incoming[pos], incoming_size - pos, &num_bytes);
+	if (num_bytes == 0 || codec > 255)
+		return 0;
+	pos += num_bytes;
+	if (pos >= incoming_size)
+		return 0;
+
+	if (!ipfs_cid_codec_supported((int)version, (int)codec))
+		return 0;
+
+	*cid = ipfs_cid_new((int)version, &incoming[pos], incoming_size - pos, (int)codec);
+	return *cid != NULL;
+}
+
 
 size_t ipfs_cid_protobuf_encode_size(const struct Cid* cid) {
 	if (cid != NULL)
@@ -54,7 +120,7 @@ int ipfs_cid_protobuf_decode(unsigned char* buffer, size_t buffer_length, struct
 	int version = 0;
 	unsigned char* hash;
 	size_t hash_length;
-	char codec = 0;
+	int codec = 0;
 	int retVal = 0;
 
 	while(pos < buffer_length) {
@@ -98,7 +164,7 @@ int ipfs_cid_protobuf_decode(unsigned char* buffer, size_t buffer_length, struct
  * @param codec the codec to be used (NOTE: For version 0, this should be CID_DAG_PROTOBUF)
  * @returns the new Cid or NULL if there was a problem
  */
-struct Cid* ipfs_cid_new(int version, const unsigned char* hash, size_t hash_length, const char codec) {
+struct Cid* ipfs_cid_new(int version, const unsigned char* hash, size_t hash_length, int codec) {
 	struct Cid* cid = (struct Cid*) malloc(sizeof(struct Cid));
 	if (cid != NULL) {
 		cid->hash_length = hash_length;
@@ -165,13 +231,19 @@ struct Cid* ipfs_cid_copy(const struct Cid* original) {
 int ipfs_cid_decode_hash_from_ipfs_ipns_string(const char* incoming, struct Cid** cid) {
 	if (incoming == NULL)
 		return 0;
-	if (strstr(incoming, "/ipfs/") != incoming && strstr(incoming, "/ipns/") != incoming)
+
+	const char* cid_start = NULL;
+	if (strncmp(incoming, "/ipfs/", 6) == 0) {
+		cid_start = &incoming[6];
+	} else if (strncmp(incoming, "/ipns/", 6) == 0) {
+		cid_start = &incoming[6];
+	} else {
 		return 0;
-	const char* base58 = &incoming[6];
-	char* slash = strstr(incoming, "/");
-	if (slash != NULL)
-		slash[0] = '\0';
-	return ipfs_cid_decode_hash_from_base58((unsigned char*)base58, strlen(base58), cid);
+	}
+
+	const char* slash = strchr(cid_start, '/');
+	size_t cid_length = slash == NULL ? strlen(cid_start) : (size_t)(slash - cid_start);
+	return ipfs_cid_decode_hash_from_base58((const unsigned char*)cid_start, cid_length, cid);
 }
 
 /***
@@ -184,8 +256,29 @@ int ipfs_cid_decode_hash_from_ipfs_ipns_string(const char* incoming, struct Cid*
 int ipfs_cid_decode_hash_from_base58(const unsigned char* incoming, size_t incoming_length, struct Cid** cid) {
 	int retVal = 0;
 
-	if (incoming_length < 2)
+	if (incoming == NULL || incoming_length < 2)
 		return 0;
+
+	if (incoming[0] == MULTIBASE_BASE58_BTC || incoming[0] == MULTIBASE_BASE32 || incoming[0] == MULTIBASE_BASE16) {
+		size_t buffer_size = multibase_decode_size(incoming[0], incoming, incoming_length);
+		if (buffer_size == 0)
+			return 0;
+
+		unsigned char* buffer = (unsigned char*) malloc(buffer_size);
+		if (buffer == NULL)
+			return 0;
+
+		size_t decoded_length = buffer_size;
+		retVal = multibase_decode(incoming, incoming_length, buffer, buffer_size, &decoded_length);
+		if (retVal == 0) {
+			free(buffer);
+			return 0;
+		}
+
+		retVal = ipfs_cid_from_bytes(buffer, decoded_length, cid);
+		free(buffer);
+		return retVal;
+	}
 
 	// is this a sha_256 multihash?
 	if (incoming_length == 46 && incoming[0] == 'Q' && incoming[1] == 'm') {
@@ -255,15 +348,68 @@ int ipfs_cid_hash_to_base58(const unsigned char* hash, size_t hash_length, unsig
  * @returns a pointer to the string (*result) or NULL if there was a problem
  */
 char* ipfs_cid_to_string(const struct Cid* cid, char **result) {
-	size_t str_len = libp2p_crypto_encoding_base58_encode_size(cid->hash_length) + 1;
-	char *str = (char*) malloc(str_len);
-	*result = str;
-	if (str != NULL) {
-		if (!libp2p_crypto_encoding_base58_encode(cid->hash, cid->hash_length, (unsigned char**)&str, &str_len)) {
-			free(str);
-			str = NULL;
-		}
+	if (cid == NULL) {
+		*result = NULL;
+		return NULL;
 	}
+
+	if (cid->version == 0) {
+		if (!ipfs_cid_codec_supported(cid->version, cid->codec)) {
+			*result = NULL;
+			return NULL;
+		}
+
+		size_t str_len = libp2p_crypto_encoding_base58_encode_size(cid->hash_length) + 1;
+		char *str = (char*) malloc(str_len);
+		*result = str;
+		if (str != NULL) {
+			if (!libp2p_crypto_encoding_base58_encode(cid->hash, cid->hash_length, (unsigned char**)&str, &str_len)) {
+				free(str);
+				str = NULL;
+			}
+		}
+		return str;
+	}
+
+	if (!ipfs_cid_codec_supported(cid->version, cid->codec)) {
+		*result = NULL;
+		return NULL;
+	}
+
+	size_t version_size = varint_encoding_length(cid->version);
+	size_t codec_size = varint_encoding_length(cid->codec);
+	size_t cid_bytes_length = version_size + codec_size + cid->hash_length;
+	unsigned char* cid_bytes = (unsigned char*) malloc(cid_bytes_length);
+	if (cid_bytes == NULL) {
+		*result = NULL;
+		return NULL;
+	}
+
+	size_t bytes_written = 0;
+	varint_encode(cid->version, cid_bytes, cid_bytes_length, &bytes_written);
+	size_t codec_written = 0;
+	varint_encode(cid->codec, &cid_bytes[bytes_written], cid_bytes_length - bytes_written, &codec_written);
+	bytes_written += codec_written;
+	memcpy(&cid_bytes[bytes_written], cid->hash, cid->hash_length);
+
+	size_t str_len = multibase_encode_size(MULTIBASE_BASE32, cid_bytes, cid_bytes_length);
+	char* str = (char*) malloc(str_len);
+	if (str == NULL) {
+		free(cid_bytes);
+		*result = NULL;
+		return NULL;
+	}
+
+	size_t encoded_length = str_len;
+	if (!multibase_encode(MULTIBASE_BASE32, cid_bytes, cid_bytes_length, (unsigned char*)str, str_len, &encoded_length)) {
+		free(cid_bytes);
+		free(str);
+		*result = NULL;
+		return NULL;
+	}
+
+	free(cid_bytes);
+	*result = str;
 	return str;
 }
 

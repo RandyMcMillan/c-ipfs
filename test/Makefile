@@ -9,12 +9,12 @@ endif
 DEPS = cmd/ipfs/test_init.h repo/test_repo_bootstrap_peers.h repo/test_repo_config.h repo/test_repo_identity.h cid/test_cid.h
 OBJS = testit.o test_helper.o \
 	../blocks/block.o ../blocks/blockstore.o \
-	../cid/cid.o \
+	../cid/cid.o ../cid/set.o \
 	../cmd/cli.o \
 	../cmd/ipfs/init.o \
 	../commands/argument.o ../commands/command_option.o ../commands/command.o ../commands/cli/parse.o \
 	../core/*.o \
-	../datastore/ds_helper.o \
+	../datastore/ds_helper.o ../datastore/key.o \
 	../exchange/bitswap/*.o \
 	../flatfs/flatfs.o \
 	../importer/importer.o ../importer/exporter.o ../importer/resolver.o \
@@ -25,6 +25,7 @@ OBJS = testit.o test_helper.o \
 	../namesys/publisher.o \
 	../namesys/resolver.o \
 	../namesys/name.o \
+	../pin/pin.o \
 	../repo/init.o \
 	../repo/fsrepo/*.o \
 	../repo/config/*.o \
@@ -33,8 +34,8 @@ OBJS = testit.o test_helper.o \
 	../routing/k_routing.o \
 	../routing/supernode.o \
 	../thirdparty/ipfsaddr/ipfs_addr.o \
-	../unixfs/unixfs.o \
-	../util/thread_pool.o \
+	../unixfs/unixfs.o ../unixfs/hamt.o \
+	../util/thread_pool.o ../util/time.o \
 	../c-libp2p/c-protobuf/protobuf.o ../c-libp2p/c-protobuf/varint.o
 
 %.o: %.c $(DEPS)

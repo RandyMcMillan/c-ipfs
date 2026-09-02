@@ -1,8 +1,15 @@
 
 DEBUG = true
 export DEBUG
+.DEFAULT_GOAL := all
 
-all:
+prepare:
+	@if [ "$$(uname -s)" = "Darwin" ] && find . -type f -name '*.o' -exec file {} + 2>/dev/null | grep -vq 'Mach-O'; then \
+		echo "  CLEAN stale non-Mach-O build outputs"; \
+		find . -type f \( -name '*.o' -o -name '*.a' -o -name '*.so' -o -name '*.so.*' -o -name '*.dylib' \) -delete; \
+	fi
+
+all: prepare
 	cd c-libp2p; make all;
 	cd lmdb/libraries/liblmdb; make all XCFLAGS="-fno-unwind-tables";
 	cd blocks; make all;

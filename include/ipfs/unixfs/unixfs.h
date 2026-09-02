@@ -1,37 +1,45 @@
 /***
  * A unix-like file system over IPFS blocks
- */
-
-#pragma once
-
-/**
- * The protobuf info:
+ *
+ * Protobuf schema (go-unixfs / Kubo v0.43.0 compatible):
  * message Data {
  *  enum DataType {
- *		Raw = 0;
- *		Directory = 1;
- *		File = 2;
- *		Metadata = 3;
- *		Symlink = 4;
- *	}
- *
- *	required DataType Type = 1;
- *	optional bytes Data = 2;
- *	optional uint64 filesize = 3;
- *	repeated uint64 blocksizes = 4;
+ *    Raw = 0;
+ *    Directory = 1;
+ *    File = 2;
+ *    Metadata = 3;
+ *    Symlink = 4;
+ *    HAMTShard = 5;
+ *  }
+ *  required DataType Type = 1;
+ *  optional bytes Data = 2;
+ *  optional uint64 filesize = 3;
+ *  repeated uint64 blocksizes = 4;
+ *  optional uint64 hashType = 5;   // for HAMT: multicodec of hash function (default murmur3 = 0x22)
+ *  optional uint64 fanout = 6;     // for HAMT: arity (default 256)
+ *  optional uint32 mode = 7;       // POSIX mode bits
+ *  optional Timestamp mtime = 8;   // modification time
  * }
  *
  * message Metadata {
- *	optional string MimeType = 1;
+ *  optional string MimeType = 1;
+ * }
+ *
+ * message Timestamp {
+ *  required int64 Seconds = 1;
+ *  optional fixed32 FractionalNanoseconds = 2;
  * }
  */
+
+#pragma once
 
 enum UnixFSDataType {
 	UNIXFS_RAW,
 	UNIXFS_DIRECTORY,
 	UNIXFS_FILE,
 	UNIXFS_METADATA,
-	UNIXFS_SYMLINK
+	UNIXFS_SYMLINK,
+	UNIXFS_HAMT_SHARD
 };
 
 struct UnixFSBlockSizeNode {
@@ -39,14 +47,26 @@ struct UnixFSBlockSizeNode {
 	struct UnixFSBlockSizeNode* next;
 };
 
+struct UnixFSTimestamp {
+	long long seconds;
+	unsigned int fractional_nanoseconds;
+	int has_fractional_nanoseconds;
+};
+
 struct UnixFS {
 	enum UnixFSDataType data_type;
-	size_t bytes_size; // the size of the bytes array
-	unsigned char* bytes; // an array of bytes
-	size_t file_size; // when saving files that have been chunked
-	struct UnixFSBlockSizeNode* block_size_head; // a linked list of block sizes
+	size_t bytes_size;
+	unsigned char* bytes;
+	size_t file_size;
+	struct UnixFSBlockSizeNode* block_size_head;
 	unsigned char* hash; // not saved
 	size_t hash_length; // not saved
+	// Extended metadata (Kubo-compatible)
+	unsigned long long hash_type;   // field 5: HAMT hash function multicodec (0 = unset)
+	unsigned long long fanout;      // field 6: HAMT fanout (0 = unset)
+	unsigned long long mode;        // field 7: POSIX mode bits (0 = unset)
+	struct UnixFSTimestamp* mtime;  // field 8: modification time (NULL = unset)
+	int has_mode;                   // flag: mode was explicitly set
 };
 
 struct UnixFSMetaData {
@@ -77,6 +97,26 @@ int ipfs_unixfs_free(struct UnixFS* obj);
 int ipfs_unixfs_add_data(unsigned char* data, size_t data_length, struct UnixFS* unix_fs);
 
 int ipfs_unixfs_add_blocksize(const struct UnixFSBlockSizeNode* blocksize, struct UnixFS* unix_fs);
+
+/**
+ * Set the POSIX mode bits on a UnixFS struct
+ */
+int ipfs_unixfs_set_mode(struct UnixFS* unix_fs, unsigned long long mode);
+
+/**
+ * Set the modification time on a UnixFS struct
+ */
+int ipfs_unixfs_set_mtime(struct UnixFS* unix_fs, long long seconds, unsigned int fractional_nanoseconds);
+
+/**
+ * Clear the modification time
+ */
+int ipfs_unixfs_clear_mtime(struct UnixFS* unix_fs);
+
+/**
+ * Set HAMT parameters (hashType and fanout)
+ */
+int ipfs_unixfs_set_hamt_params(struct UnixFS* unix_fs, unsigned long long hash_type, unsigned long long fanout);
 
 /**
  * Protobuf functions

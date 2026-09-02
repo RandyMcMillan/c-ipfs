@@ -233,6 +233,36 @@ exit:
 	return retVal;
 }
 
+static int node_link_compare(const void* a, const void* b)
+{
+	const struct NodeLink* link_a = *(const struct NodeLink**)a;
+	const struct NodeLink* link_b = *(const struct NodeLink**)b;
+
+	const char* name_a = link_a->name != NULL ? link_a->name : "";
+	const char* name_b = link_b->name != NULL ? link_b->name : "";
+	int name_cmp = strcmp(name_a, name_b);
+	if (name_cmp != 0)
+		return name_cmp;
+
+	size_t min_len = link_a->hash_size < link_b->hash_size ? link_a->hash_size : link_b->hash_size;
+	int hash_cmp = memcmp(link_a->hash, link_b->hash, min_len);
+	if (hash_cmp != 0)
+		return hash_cmp;
+
+	return (int)(link_a->hash_size - link_b->hash_size);
+}
+
+static size_t ipfs_hashtable_node_link_count(const struct HashtableNode* node)
+{
+	size_t count = 0;
+	struct NodeLink* current = node->head_link;
+	while (current != NULL) {
+		count++;
+		current = current->next;
+	}
+	return count;
+}
+
 /***
  * return an approximate size of the encoded node
  */
@@ -263,20 +293,41 @@ int ipfs_hashtable_node_protobuf_encode(const struct HashtableNode* node, unsign
 	size_t bytes_used = 0;
 	*bytes_written = 0;
 	int retVal = 0;
-	// links
-	struct NodeLink* current = node->head_link;
-	while (current != NULL) {
-		size_t temp_size = ipfs_node_link_protobuf_encode_size(current);
-		unsigned char temp[temp_size];
-		retVal = ipfs_node_link_protobuf_encode(current, temp, temp_size, &bytes_used);
-		if (retVal == 0)
+
+	// Collect and sort links for deterministic encoding
+	size_t link_count = ipfs_hashtable_node_link_count(node);
+	struct NodeLink** sorted_links = NULL;
+	if (link_count > 0) {
+		sorted_links = (struct NodeLink**)malloc(link_count * sizeof(struct NodeLink*));
+		if (sorted_links == NULL)
 			return 0;
-		retVal = protobuf_encode_length_delimited(2, ipfs_node_message_fields[1], (char*)temp, bytes_used, &buffer[*bytes_written], max_buffer_length - *bytes_written, &bytes_used);
-		if (retVal == 0)
-			return 0;
-		*bytes_written += bytes_used;
-		current = current->next;
+		struct NodeLink* current = node->head_link;
+		for (size_t i = 0; i < link_count && current != NULL; i++) {
+			sorted_links[i] = current;
+			current = current->next;
+		}
+		qsort(sorted_links, link_count, sizeof(struct NodeLink*), node_link_compare);
 	}
+
+	// encode sorted links
+	for (size_t i = 0; i < link_count; i++) {
+		size_t temp_size = ipfs_node_link_protobuf_encode_size(sorted_links[i]);
+		unsigned char temp[temp_size];
+		retVal = ipfs_node_link_protobuf_encode(sorted_links[i], temp, temp_size, &bytes_used);
+		if (retVal == 0) {
+			free(sorted_links);
+			return 0;
+		}
+		retVal = protobuf_encode_length_delimited(2, ipfs_node_message_fields[1], (char*)temp, bytes_used, &buffer[*bytes_written], max_buffer_length - *bytes_written, &bytes_used);
+		if (retVal == 0) {
+			free(sorted_links);
+			return 0;
+		}
+		*bytes_written += bytes_used;
+	}
+	if (sorted_links != NULL)
+		free(sorted_links);
+
 	// data
 	if (node->data_size > 0) {
 		retVal = protobuf_encode_length_delimited(1, ipfs_node_message_fields[0], (char*)node->data, node->data_size, &buffer[*bytes_written], max_buffer_length - *bytes_written, &bytes_used);

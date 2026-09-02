@@ -8,6 +8,7 @@
 #define MULTIBASE_BASE2 '0'
 #define MULTIBASE_BASE8 '7'
 #define MULTIBASE_BASE10 '9'
+#define MULTIBASE_BASE32 'b'
 #define MULTIBASE_BASE16 'f'
 #define MULTIBASE_BASE58_FLICKR 'Z'
 #define MULTIBASE_BASE58_BTC 'z'
@@ -43,5 +44,14 @@ int multibase_encode_size(const char base, const unsigned char* incoming, size_t
  * @returns true(1) on success
  */
 int multibase_decode(const unsigned char* incoming, size_t incoming_length, unsigned char* results, size_t results_max_length, size_t* results_length);
+
+/***
+ * Calculates the size of the buffer neccessary to decode the incoming byte array
+ * @param base the encoding to use
+ * @param incoming the incoming array of bytes
+ * @param incoming_length the length of the array in bytes
+ * @returns the appropriate size of the buffer
+ */
+int multibase_decode_size(const char base, const unsigned char* incoming, size_t incoming_length);
 
 #endif
