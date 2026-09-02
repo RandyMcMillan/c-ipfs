@@ -597,7 +597,7 @@ void api_connections_cleanup (struct IpfsNode* local_node)
 	pthread_mutex_lock(&local_node->api_context->conns_lock);
 	if (local_node->api_context->conns_count > 0 && local_node->api_context->conns) {
 		for (i = 0 ; i < local_node->api_context->max_conns ; i++) {
-			if (local_node->api_context->conns[i]->pthread) {
+			if (local_node->api_context->conns[i] && local_node->api_context->conns[i]->pthread) {
 				pthread_cancel (local_node->api_context->conns[i]->pthread);
 				close (local_node->api_context->conns[i]->socket);
 				free (local_node->api_context->conns[i]);
