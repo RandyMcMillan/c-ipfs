@@ -1,8 +1,12 @@
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #include "libp2p/utils/logger.h"
+#include "libp2p/crypto/rsa.h"
+#include "ipfs/util/time.h"
 #include "ipfs/namesys/resolver.h"
+#include "ipfs/namesys/pb.h"
 
 /**
  * The opposite of publisher.c
@@ -32,6 +36,15 @@ int is_ipns_string(char* path) {
  */
 int ipfs_namesys_resolver_resolve_once(struct IpfsNode* local_node, const char* path, char** results) {
 	struct Cid* cid = NULL;
+	struct ipns_entry* entry = NULL;
+	char* sig_data = NULL;
+	struct timespec ts, now;
+	int retVal = 0;
+
+	if (!local_node || !path || !results) {
+		return 0;
+	}
+
 	if (!ipfs_cid_decode_hash_from_ipfs_ipns_string(path, &cid)) {
 		return 0;
 	}
@@ -39,16 +52,66 @@ int ipfs_namesys_resolver_resolve_once(struct IpfsNode* local_node, const char* 
 	// look locally
 	struct DatastoreRecord* record;
 	if (local_node->repo->config->datastore->datastore_get(cid->hash, cid->hash_length, &record, local_node->repo->config->datastore)) {
-		// we are able to handle this locally... return the results
-		*results = (char*) malloc(record->value_size + 1);
-		if (*results == NULL) {
-			ipfs_cid_free(cid);
-			return 0;
+		// Decode the IPNS entry from protobuf
+		if (!ipfs_namesys_pb_ipns_entry_decode(record->value, record->value_size, &entry)) {
+			libp2p_logger_error("resolver", "Failed to decode IPNS entry for %s.\n", path);
+			goto local_cleanup;
 		}
-		memset(*results, 0, record->value_size + 1);
-		memcpy(*results, record->value, record->value_size);
+
+		// Validate signature using local node's public key
+		if (entry->signature && entry->signature_size > 0 && local_node->identity) {
+			sig_data = ipns_entry_data_for_sig(entry);
+			if (sig_data) {
+				struct RsaPublicKey pub_key;
+				pub_key.der = (unsigned char*)local_node->identity->private_key.public_key_der;
+				pub_key.der_length = local_node->identity->private_key.public_key_length;
+				if (!libp2p_crypto_rsa_verify(&pub_key, (unsigned char*)sig_data, strlen(sig_data), (unsigned char*)entry->signature)) {
+					libp2p_logger_error("resolver", "IPNS signature verification failed for %s.\n", path);
+					goto local_cleanup;
+				}
+			}
+		}
+
+		// Check EOL
+		if (entry->validityType && *entry->validityType == IpnsEntry_EOL && entry->validity) {
+			if (ipfs_util_time_parse_RFC3339(&ts, entry->validity) != 0) {
+				libp2p_logger_error("resolver", "Failed to parse IPNS validity for %s.\n", path);
+				goto local_cleanup;
+			}
+			if (clock_gettime(CLOCK_REALTIME, &now) != 0) {
+				timespec_get(&now, TIME_UTC);
+			}
+			if (now.tv_sec > ts.tv_sec || (now.tv_sec == ts.tv_sec && now.tv_nsec > ts.tv_nsec)) {
+				libp2p_logger_error("resolver", "IPNS record expired for %s.\n", path);
+				goto local_cleanup;
+			}
+		}
+
+		if (!entry->value) {
+			libp2p_logger_error("resolver", "IPNS entry has no value for %s.\n", path);
+			goto local_cleanup;
+		}
+
+		*results = (char*) malloc(strlen(entry->value) + 1);
+		if (*results == NULL) {
+			goto local_cleanup;
+		}
+		strcpy(*results, entry->value);
+		retVal = 1;
+
+	local_cleanup:
+		if (record) {
+			libp2p_datastore_record_free(record);
+		}
+		if (entry) {
+			ipfs_namesys_ipnsentry_reset(entry);
+			free(entry);
+		}
+		if (sig_data) {
+			free(sig_data);
+		}
 		ipfs_cid_free(cid);
-		return 1;
+		return retVal;
 	}
 
 	//TODO: ask the network

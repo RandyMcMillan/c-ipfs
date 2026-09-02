@@ -35,7 +35,7 @@ OBJS = testit.o test_helper.o \
 	../routing/supernode.o \
 	../thirdparty/ipfsaddr/ipfs_addr.o \
 	../unixfs/unixfs.o ../unixfs/hamt.o \
-	../util/thread_pool.o \
+	../util/thread_pool.o ../util/time.o \
 	../c-libp2p/c-protobuf/protobuf.o ../c-libp2p/c-protobuf/varint.o
 
 %.o: %.c $(DEPS)
