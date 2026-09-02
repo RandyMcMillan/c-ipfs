@@ -6,6 +6,7 @@
 #include "ipfs/cid/cid.h"
 #include "ipfs/multibase/multibase.h"
 
+#include "varint.h"
 #include "libp2p/crypto/sha256.h"
 
 int test_cid_new_free() {
@@ -153,4 +154,87 @@ int test_cid_protobuf_encode_decode() {
 
 	ipfs_cid_free(results);
 	return 1;
+}
+
+int test_cid_v1_multibase_roundtrip() {
+	char* string_to_hash = "Hello, CIDv1!";
+	unsigned char hashed[32];
+	memset(hashed, 0, 32);
+	libp2p_crypto_hashing_sha256((unsigned char*)string_to_hash, strlen(string_to_hash), hashed);
+
+	size_t multihash_size = mh_new_length(MH_H_SHA2_256, 32);
+	unsigned char multihash[multihash_size];
+	memset(multihash, 0, multihash_size);
+	if (mh_new(multihash, MH_H_SHA2_256, hashed, 32) < 0)
+		return 0;
+
+	size_t cid_bytes_size = varint_encoding_length(1) + varint_encoding_length(CID_RAW) + multihash_size;
+	unsigned char cid_bytes[cid_bytes_size];
+	size_t bytes_written = 0;
+	varint_encode(1, cid_bytes, cid_bytes_size, &bytes_written);
+	size_t codec_written = 0;
+	varint_encode(CID_RAW, &cid_bytes[bytes_written], cid_bytes_size - bytes_written, &codec_written);
+	bytes_written += codec_written;
+	memcpy(&cid_bytes[bytes_written], multihash, multihash_size);
+	bytes_written += multihash_size;
+
+	size_t encoded_size = multibase_encode_size(MULTIBASE_BASE32, cid_bytes, bytes_written);
+	unsigned char encoded[encoded_size];
+	memset(encoded, 0, encoded_size);
+	size_t encoded_length = encoded_size;
+	if (!multibase_encode(MULTIBASE_BASE32, cid_bytes, bytes_written, encoded, encoded_size, &encoded_length))
+		return 0;
+
+	if (encoded[0] != MULTIBASE_BASE32)
+		return 0;
+
+	struct Cid* decoded = NULL;
+	if (!ipfs_cid_decode_hash_from_base58(encoded, encoded_length - 1, &decoded))
+		return 0;
+
+	if (decoded->version != 1 || decoded->codec != CID_RAW || decoded->hash_length != multihash_size) {
+		ipfs_cid_free(decoded);
+		return 0;
+	}
+
+	if (memcmp(decoded->hash, multihash, multihash_size) != 0) {
+		ipfs_cid_free(decoded);
+		return 0;
+	}
+
+	char path[256];
+	snprintf(path, sizeof(path), "/ipfs/%s/sub/path", encoded);
+	char original_path[256];
+	memcpy(original_path, path, sizeof(path));
+
+	struct Cid* path_cid = NULL;
+	if (!ipfs_cid_decode_hash_from_ipfs_ipns_string(path, &path_cid)) {
+		ipfs_cid_free(decoded);
+		return 0;
+	}
+
+	if (strcmp(path, original_path) != 0) {
+		ipfs_cid_free(decoded);
+		ipfs_cid_free(path_cid);
+		return 0;
+	}
+
+	if (path_cid->version != decoded->version || path_cid->codec != decoded->codec || path_cid->hash_length != decoded->hash_length || memcmp(path_cid->hash, decoded->hash, decoded->hash_length) != 0) {
+		ipfs_cid_free(decoded);
+		ipfs_cid_free(path_cid);
+		return 0;
+	}
+
+	char* rendered = NULL;
+	if (ipfs_cid_to_string(decoded, &rendered) == NULL || rendered == NULL) {
+		ipfs_cid_free(decoded);
+		ipfs_cid_free(path_cid);
+		return 0;
+	}
+
+	int retVal = strcmp(rendered, (char*)encoded) == 0;
+	free(rendered);
+	ipfs_cid_free(decoded);
+	ipfs_cid_free(path_cid);
+	return retVal;
 }

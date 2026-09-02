@@ -84,6 +84,7 @@ int build_test_collection() {
 	add_test("test_cid_cast_multihash", test_cid_cast_multihash, 1);
 	add_test("test_cid_cast_non_multihash", test_cid_cast_non_multihash, 1);
 	add_test("test_cid_protobuf_encode_decode", test_cid_protobuf_encode_decode, 1);
+	add_test("test_cid_v1_multibase_roundtrip", test_cid_v1_multibase_roundtrip, 1);
 	add_test("test_core_api_startup_shutdown", test_core_api_startup_shutdown, 1);
 	add_test("test_core_api_object_cat", test_core_api_object_cat, 1);
 	add_test("test_core_api_object_cat_binary", test_core_api_object_cat_binary, 1);
