@@ -4,6 +4,7 @@
  * of the multihash key if the file exists on disk.
  */
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <sys/stat.h>
 #include <errno.h>
@@ -233,13 +234,25 @@ int repo_fsrepo_lmdb_put(struct DatastoreRecord* datastore_record, const struct 
 	// Put in the timestamp if it isn't there already (or is newer)
 	unsigned long long now = os_utils_gmtime();
 	if (datastore_record->timestamp == 0 || datastore_record->timestamp > now) {
-		//we need to update the timestamp. Be sure to update the journal too. (done further down)
-		//old_timestamp = datastore_record->timestamp;
 		datastore_record->timestamp = now;
 	}
 
-	// convert it into a byte array
+	// If an identical record already exists, skip the rewrite
+	if (existingRecord != NULL) {
+		if (existingRecord->timestamp == datastore_record->timestamp &&
+		    existingRecord->value_size == datastore_record->value_size &&
+		    memcmp(existingRecord->value, datastore_record->value, existingRecord->value_size) == 0) {
+			mdb_txn_commit(child_transaction);
+			libp2p_datastore_record_free(existingRecord);
+			lmdb_journalstore_cursor_close(journalstore_cursor, 0);
+			if (journalstore_record != NULL) {
+				lmdb_journal_record_free(journalstore_record);
+			}
+			return 1;
+		}
+	}
 
+	// convert it into a byte array
 	size_t record_size = 0;
 	uint8_t *record;
 	repo_fsrepo_lmdb_encode_record(datastore_record, &record, &record_size);
@@ -248,11 +261,14 @@ int repo_fsrepo_lmdb_put(struct DatastoreRecord* datastore_record, const struct 
 	datastore_key.mv_size = datastore_record->key_size;
 	datastore_key.mv_data = (char*)datastore_record->key;
 
+	// delete any existing value(s) for this key before writing
+	mdb_del(child_transaction, *db_context->datastore_db, &datastore_key, NULL);
+
 	// write
 	datastore_value.mv_size = record_size;
 	datastore_value.mv_data = record;
 
-	retVal = mdb_put(child_transaction, *db_context->datastore_db, &datastore_key, &datastore_value, MDB_NODUPDATA);
+	retVal = mdb_put(child_transaction, *db_context->datastore_db, &datastore_key, &datastore_value, 0);
 
 	if (retVal == 0) {
 		// Successfully added the datastore record. Now work with the journalstore.

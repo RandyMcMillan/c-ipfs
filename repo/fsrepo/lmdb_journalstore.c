@@ -32,9 +32,12 @@ int lmdb_journal_record_free(struct JournalRecord* rec) {
 
 int lmdb_journalstore_generate_key(const struct JournalRecord* journal_record, struct MDB_val *db_key) {
 	// build the key
-	uint8_t time_varint[8];
+	uint8_t *time_varint = (uint8_t*) malloc(8);
+	if (time_varint == NULL) {
+		return 0;
+	}
 	size_t time_varint_size = 0;
-	varint_encode(journal_record->timestamp, &time_varint[0], 8, &time_varint_size);
+	varint_encode(journal_record->timestamp, time_varint, 8, &time_varint_size);
 
 	db_key->mv_size = time_varint_size;
 	db_key->mv_data = time_varint;
@@ -51,11 +54,17 @@ int lmdb_journalstore_build_key_value_pair(const struct JournalRecord* journal_r
 	// build the record, which is a timestamp as a key
 
 	// build the key
-	lmdb_journalstore_generate_key(journal_record, db_key);
+	if (!lmdb_journalstore_generate_key(journal_record, db_key)) {
+		return 0;
+	}
 
 	// build the value
 	size_t record_size = journal_record->hash_size + 2;
-	uint8_t record[record_size];
+	uint8_t *record = (uint8_t*) malloc(record_size);
+	if (record == NULL) {
+		free(db_key->mv_data);
+		return 0;
+	}
 	// Field 1: pin flag
 	record[0] = journal_record->pin;
 	// Field 2: pending flag
@@ -136,7 +145,12 @@ int lmdb_journalstore_journal_add(struct lmdb_trans_cursor *journalstore_cursor,
 		createdTransaction = 1;
 	}
 
-	if (mdb_put(journalstore_cursor->transaction, *journalstore_cursor->database, &journalstore_key, &journalstore_value, 0) != 0) {
+	int retVal = mdb_put(journalstore_cursor->transaction, *journalstore_cursor->database, &journalstore_key, &journalstore_value, 0);
+
+	free(journalstore_key.mv_data);
+	free(journalstore_value.mv_data);
+
+	if (retVal != 0) {
 		libp2p_logger_error("lmdb_journalstore", "Unable to add to JOURNALSTORE database.\n");
 		return 0;
 	}
@@ -287,10 +301,6 @@ int lmdb_journalstore_cursor_get(struct lmdb_trans_cursor *tc, enum DatastoreCur
 		else if (op == CURSOR_PREVIOUS)
 			co = MDB_PREV;
 
-		if (*record != NULL) {
-			lmdb_journalstore_generate_key(*record, &mdb_key);
-		}
-
 		int retVal = mdb_cursor_get(tc->cursor, &mdb_key, &mdb_value, co);
 		if (retVal != 0) {
 			if (retVal == MDB_NOTFOUND) {
@@ -326,7 +336,13 @@ int lmdb_journalstore_cursor_get(struct lmdb_trans_cursor *tc, enum DatastoreCur
 				// we did not find the exact record. Skip to the next one
 				lmdb_journal_record_free(curr_record);
 				curr_record = NULL;
-				mdb_cursor_get(tc->cursor, &mdb_key, &mdb_value, MDB_NEXT);
+				retVal = mdb_cursor_get(tc->cursor, &mdb_key, &mdb_value, MDB_NEXT);
+				if (retVal != 0) {
+					if (retVal == MDB_NOTFOUND) {
+						libp2p_logger_debug("lmdb_journalstore", "cursor_get: Reached end of records without finding match.\n");
+					}
+					break;
+				}
 				if (!lmdb_journalstore_build_record(&mdb_key, &mdb_value, &curr_record)) {
 					libp2p_logger_error("lmdb_journalstore", "Unable to convert journalstore record into a JournalRecord struct.\n");
 					return 0;
@@ -363,6 +379,10 @@ int lmdb_journalstore_cursor_put(struct lmdb_trans_cursor *crsr, struct JournalR
 		return 0;
 	}
 	int retVal = mdb_cursor_put(cursor, &db_key, &db_value, 0);
+
+	free(db_key.mv_data);
+	free(db_value.mv_data);
+
 	if (retVal != 0) {
 		char* result = "";
 		switch (retVal) {
