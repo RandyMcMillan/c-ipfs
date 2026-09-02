@@ -238,3 +238,30 @@ int test_cid_v1_multibase_roundtrip() {
 	ipfs_cid_free(path_cid);
 	return retVal;
 }
+
+int test_cid_v1_rejects_unsupported_codec() {
+	char* string_to_hash = "Hello, unsupported CID!";
+	unsigned char hashed[32];
+	memset(hashed, 0, 32);
+	libp2p_crypto_hashing_sha256((unsigned char*)string_to_hash, strlen(string_to_hash), hashed);
+
+	size_t multihash_size = mh_new_length(MH_H_SHA2_256, 32);
+	unsigned char multihash[multihash_size];
+	memset(multihash, 0, multihash_size);
+	if (mh_new(multihash, MH_H_SHA2_256, hashed, 32) < 0)
+		return 0;
+
+	struct Cid* cid = ipfs_cid_new(1, multihash, multihash_size, CID_ETHEREUM_BLOCK);
+	if (cid == NULL)
+		return 0;
+
+	char* rendered = NULL;
+	if (ipfs_cid_to_string(cid, &rendered) != NULL || rendered != NULL) {
+		free(rendered);
+		ipfs_cid_free(cid);
+		return 0;
+	}
+
+	ipfs_cid_free(cid);
+	return 1;
+}

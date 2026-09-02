@@ -15,6 +15,17 @@
 
 enum WireType ipfs_cid_message_fields[] = { WIRETYPE_VARINT, WIRETYPE_VARINT, WIRETYPE_LENGTH_DELIMITED };
 
+static int ipfs_cid_codec_supported(int version, int codec) {
+	if (version == 0)
+		return codec == CID_DAG_PROTOBUF;
+
+	if (version == 1) {
+		return codec == CID_RAW || codec == CID_DAG_PROTOBUF || codec == CID_DAG_CBOR;
+	}
+
+	return 0;
+}
+
 static int ipfs_cid_from_bytes(const unsigned char* incoming, size_t incoming_size, struct Cid** cid) {
 	if (incoming == NULL || incoming_size == 0)
 		return 0;
@@ -37,6 +48,9 @@ static int ipfs_cid_from_bytes(const unsigned char* incoming, size_t incoming_si
 		return 0;
 	pos += num_bytes;
 	if (pos >= incoming_size)
+		return 0;
+
+	if (!ipfs_cid_codec_supported((int)version, (int)codec))
 		return 0;
 
 	*cid = ipfs_cid_new((int)version, &incoming[pos], incoming_size - pos, (char)codec);
@@ -316,6 +330,11 @@ char* ipfs_cid_to_string(const struct Cid* cid, char **result) {
 	}
 
 	if (cid->version == 0) {
+		if (!ipfs_cid_codec_supported(cid->version, cid->codec)) {
+			*result = NULL;
+			return NULL;
+		}
+
 		size_t str_len = libp2p_crypto_encoding_base58_encode_size(cid->hash_length) + 1;
 		char *str = (char*) malloc(str_len);
 		*result = str;
@@ -326,6 +345,11 @@ char* ipfs_cid_to_string(const struct Cid* cid, char **result) {
 			}
 		}
 		return str;
+	}
+
+	if (!ipfs_cid_codec_supported(cid->version, cid->codec)) {
+		*result = NULL;
+		return NULL;
 	}
 
 	size_t version_size = varint_encoding_length(cid->version);
