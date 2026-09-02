@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0",
   "profile": "ipfs-compatibility-profile.json",
-  "last_audited_commit": "e94e3bf",
+  "last_audited_commit": "a8837d5",
   "evidence_policy": "Source evidence shows only that an implementation exists. Interoperability evidence is required before a feature becomes conformant.",
   "features": [
     {
@@ -9,9 +9,9 @@
       "phase": 1,
       "status": "partial",
       "specifications": ["https://github.com/multiformats/multiformats"],
-      "source_evidence": ["cid/cid.c", "multibase/multibase.c", "c-libp2p/c-multihash"],
-      "test_evidence": ["test/cid/test_cid.h"],
-      "gaps": ["canonical varints", "CIDv1 and identity vectors", "content-codec validation", "cross-language vectors"]
+      "source_evidence": ["cid/cid.c", "multibase/multibase.c", "c-libp2p/c-multihash/src/multihash.c"],
+      "test_evidence": ["test/cid/test_cid.h", "c-libp2p/c-multihash/tests/c/test_multihash_new.c", "c-libp2p/c-multihash/tests/c/test_multihash_decoding.c"],
+      "gaps": ["Kubo v0.43.0 interoperability tests for multiformats"]
     },
     {
       "id": "ipld",
