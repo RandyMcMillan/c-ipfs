@@ -3,72 +3,109 @@ DEBUG = true
 export DEBUG
 .DEFAULT_GOAL := all
 
+# Modules that are part of the main project
+MODULES := blocks cid cmd commands core exchange importer journal merkledag multibase pin repo flatfs datastore thirdparty unixfs routing dnslink namesys path util rbsr nostr main test
+
+# External submodules
+SUBMODULES := c-libp2p lmdb nostril
+
 prepare:
 	@if [ "$$(uname -s)" = "Darwin" ] && find . -type f -name '*.o' -exec file {} + 2>/dev/null | grep -vq 'Mach-O'; then \
 		echo "  CLEAN stale non-Mach-O build outputs"; \
 		find . -type f \( -name '*.o' -o -name '*.a' -o -name '*.so' -o -name '*.so.*' -o -name '*.dylib' \) -delete; \
 	fi
 
-all: prepare
-	cd c-libp2p; make all;
-	cd lmdb/libraries/liblmdb; make all XCFLAGS="-fno-unwind-tables";
-	cd blocks; make all;
-	cd cid; make all;
-	cd cmd; make all;
-	cd commands; make all;
-	cd core; make all;
-	cd exchange; make all;
-	cd importer; make all;
-	cd journal; make all;
-	cd merkledag; make all;
-	cd multibase; make all;
-	cd pin; make all;
-	cd repo; make all;
-	cd flatfs; make all;
-	cd datastore; make all;
-	cd thirdparty; make all;
-	cd unixfs; make all;
-	cd routing; make all;
-	cd dnslink; make all;
-	cd namesys; make all;
-	cd path; make all;
-	cd util; make all;
-	cd rbsr; make all;
-	cd nostril; make config.h libsecp256k1.a;
-	cd nostr; make all;
-	cd main; make all;
-	cd test; make all;
+# ---------------------------------------------------------------------------
+# Top-level aggregates
+# ---------------------------------------------------------------------------
+all: prepare $(SUBMODULES) $(MODULES)
 
-clean:
-	cd c-libp2p; make clean;
-	cd lmdb/libraries/liblmdb; make clean;
-	cd blocks; make clean;
-	cd cid; make clean;
-	cd cmd; make clean;
-	cd commands; make clean;
-	cd core; make clean;
-	cd exchange; make clean;
-	cd importer; make clean;
-	cd journal; make clean;
-	cd merkledag; make clean;
-	cd multibase; make clean;
-	cd pin; make clean;
-	cd repo; make clean;
-	cd flatfs; make clean;
-	cd datastore; make clean;
-	cd thirdparty; make clean;
-	cd unixfs; make clean;
-	cd main; make clean;
-	cd routing; make clean;
-	cd dnslink; make clean;
-	cd namesys; make clean;
-	cd path; make clean;
-	cd util; make clean;
-	cd rbsr; make clean;
-	cd nostril; make clean;
-	cd test; make clean;
+clean: $(addprefix clean-,$(SUBMODULES)) $(addprefix clean-,$(MODULES))
 
 rebuild: clean all
 
 selfhost: all
 	./scripts/selfhost.sh
+
+# ---------------------------------------------------------------------------
+# Submodule builds
+# ---------------------------------------------------------------------------
+c-libp2p:
+	cd c-libp2p && $(MAKE) all
+
+lmdb:
+	cd lmdb/libraries/liblmdb && $(MAKE) all XCFLAGS="-fno-unwind-tables"
+
+nostril:
+	cd nostril && $(MAKE) config.h libsecp256k1.a
+
+# ---------------------------------------------------------------------------
+# Module builds
+# ---------------------------------------------------------------------------
+$(MODULES):
+	cd $@ && $(MAKE) all
+
+# ---------------------------------------------------------------------------
+# Clean targets
+# ---------------------------------------------------------------------------
+clean-c-libp2p:
+	cd c-libp2p && $(MAKE) clean
+
+clean-lmdb:
+	cd lmdb/libraries/liblmdb && $(MAKE) clean
+
+clean-nostril:
+	cd nostril && $(MAKE) clean
+
+clean-%:
+	cd $* && $(MAKE) clean
+
+# ---------------------------------------------------------------------------
+# Testing
+# ---------------------------------------------------------------------------
+TEST_BIN := test/test_ipfs
+TESTS    ?=
+
+test-build: all
+	cd test && $(MAKE) all
+
+test-run:
+	@if [ ! -f $(TEST_BIN) ]; then \
+		echo "  ERROR: $(TEST_BIN) not found. Run 'make test-build' first."; \
+		exit 1; \
+	fi
+	$(TEST_BIN) $(TESTS)
+
+test: test-build test-run
+
+# ---------------------------------------------------------------------------
+# Help
+# ---------------------------------------------------------------------------
+help:
+	@echo "c-ipfs build commands"
+	@echo ""
+	@echo "  make all                Build everything (submodules + modules + tests)"
+	@echo "  make clean              Remove all build artifacts"
+	@echo "  make rebuild            clean + all"
+	@echo "  make selfhost           Build then run self-host script"
+	@echo ""
+	@echo "Submodule targets:"
+	@echo "  make c-libp2p           Build c-libp2p submodule"
+	@echo "  make lmdb               Build LMDB submodule"
+	@echo "  make nostril            Build nostril submodule"
+	@echo ""
+	@echo "Module targets:"
+	@echo "  make <module>           Build a single module (e.g., make namesys)"
+	@echo ""
+	@echo "Test targets:"
+	@echo "  make test               Build and run the full test suite"
+	@echo "  make test-build         Build tests only"
+	@echo "  make test-run           Run tests without rebuilding"
+	@echo "  make test TESTS='t1'    Build and run specific test(s)"
+	@echo ""
+	@echo "Clean targets:"
+	@echo "  make clean-<name>       Clean a specific submodule or module"
+
+.PHONY: all clean rebuild selfhost prepare help test test-build test-run
+.PHONY: $(SUBMODULES) $(MODULES)
+.PHONY: $(addprefix clean-,$(SUBMODULES)) $(addprefix clean-,$(MODULES))
