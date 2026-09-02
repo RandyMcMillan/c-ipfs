@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <sys/time.h>
 
 #include "libp2p/utils/logger.h"
 #include "libp2p/crypto/rsa.h"
@@ -79,7 +80,10 @@ int ipfs_namesys_resolver_resolve_once(struct IpfsNode* local_node, const char* 
 				goto local_cleanup;
 			}
 			if (clock_gettime(CLOCK_REALTIME, &now) != 0) {
-				timespec_get(&now, TIME_UTC);
+				struct timeval tv;
+				gettimeofday(&tv, NULL);
+				now.tv_sec = tv.tv_sec;
+				now.tv_nsec = tv.tv_usec * 1000;
 			}
 			if (now.tv_sec > ts.tv_sec || (now.tv_sec == ts.tv_sec && now.tv_nsec > ts.tv_nsec)) {
 				libp2p_logger_error("resolver", "IPNS record expired for %s.\n", path);
