@@ -114,6 +114,7 @@ int build_test_collection() {
 	add_test("test_get_init_command", test_get_init_command, 1);
 	add_test("test_import_small_file", test_import_small_file, 1);
 	add_test("test_import_large_file", test_import_large_file, 1);
+	add_test("test_import_trickle_file", test_import_trickle_file, 1);
 	add_test("test_repo_fsrepo_open_config", test_repo_fsrepo_open_config, 1);
 	add_test("test_flatfs_get_directory", test_flatfs_get_directory, 1);
 	add_test("test_flatfs_get_filename", test_flatfs_get_filename, 1);
@@ -147,7 +148,10 @@ int build_test_collection() {
 	add_test("test_routing_retrieve_file_third_party", test_routing_retrieve_file_third_party, 1);
 	add_test("test_routing_retrieve_large_file", test_routing_retrieve_large_file, 1);
 	add_test("test_unixfs_encode_decode", test_unixfs_encode_decode, 1);
+	add_test("test_unixfs_encode_decode_extended", test_unixfs_encode_decode_extended, 1);
 	add_test("test_unixfs_encode_smallfile", test_unixfs_encode_smallfile, 1);
+	add_test("test_hamt_basic", test_hamt_basic, 1);
+	add_test("test_hamt_persist", test_hamt_persist, 1);
 	add_test("test_ping", test_ping, 0); // socket connect failed
 	add_test("test_ping_remote", test_ping_remote, 0); // need to test more
 	add_test("test_null_add_provider", test_null_add_provider, 0); // need to test more

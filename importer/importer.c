@@ -58,6 +58,266 @@ int ipfs_importer_add_filesize_to_data_section(struct HashtableNode* node, size_
  * @param node the node to add to
  * @returns number of bytes read
  */
+#define TRICKLE_MAX_LINKS 174
+
+struct LeafInfo {
+	unsigned char* hash;
+	size_t hash_size;
+	size_t t_size;
+	size_t block_size;
+	struct LeafInfo* next;
+};
+
+static void free_leaf_list(struct LeafInfo* head) {
+	while (head != NULL) {
+		struct LeafInfo* next = head->next;
+		if (head->hash != NULL) free(head->hash);
+		free(head);
+		head = next;
+	}
+}
+
+/**
+ * Read a chunk from file, create a leaf node, persist it.
+ * @returns bytes read (>0 on success, 0 on EOF/error)
+ */
+static int ipfs_import_create_leaf(FILE* file, struct FSRepo* fs_repo, struct LeafInfo** leaf) {
+	unsigned char buffer[MAX_DATA_SIZE];
+	size_t bytes_read = fread(buffer, 1, MAX_DATA_SIZE, file);
+	if (bytes_read == 0) {
+		*leaf = NULL;
+		return 0;
+	}
+
+	struct UnixFS* new_unixfs = NULL;
+	if (ipfs_unixfs_new(&new_unixfs) == 0)
+		return 0;
+	new_unixfs->data_type = UNIXFS_FILE;
+	new_unixfs->file_size = bytes_read;
+	if (ipfs_unixfs_add_data(&buffer[0], bytes_read, new_unixfs) == 0) {
+		ipfs_unixfs_free(new_unixfs);
+		return 0;
+	}
+
+	size_t protobuf_size = ipfs_unixfs_protobuf_encode_size(new_unixfs);
+	unsigned char protobuf[protobuf_size];
+	size_t bytes_written = 0;
+	if (ipfs_unixfs_protobuf_encode(new_unixfs, protobuf, protobuf_size, &bytes_written) == 0) {
+		ipfs_unixfs_free(new_unixfs);
+		return 0;
+	}
+	ipfs_unixfs_free(new_unixfs);
+
+	struct HashtableNode* new_node = NULL;
+	if (ipfs_hashtable_node_new_from_data(protobuf, bytes_written, &new_node) == 0) {
+		return 0;
+	}
+
+	size_t size_of_node = 0;
+	if (ipfs_merkledag_add(new_node, fs_repo, &size_of_node) == 0) {
+		ipfs_hashtable_node_free(new_node);
+		return 0;
+	}
+
+	*leaf = (struct LeafInfo*)malloc(sizeof(struct LeafInfo));
+	if (*leaf == NULL) {
+		ipfs_hashtable_node_free(new_node);
+		return 0;
+	}
+	(*leaf)->hash = (unsigned char*)malloc(new_node->hash_size);
+	if ((*leaf)->hash == NULL) {
+		free(*leaf);
+		ipfs_hashtable_node_free(new_node);
+		return 0;
+	}
+	memcpy((*leaf)->hash, new_node->hash, new_node->hash_size);
+	(*leaf)->hash_size = new_node->hash_size;
+	(*leaf)->t_size = size_of_node;
+	(*leaf)->block_size = bytes_read;
+	(*leaf)->next = NULL;
+
+	ipfs_hashtable_node_free(new_node);
+	return (int)bytes_read;
+}
+
+/**
+ * Build an empty UnixFS File protobuf for intermediate nodes
+ */
+static int ipfs_import_set_empty_unixfs(struct HashtableNode* node) {
+	struct UnixFS* ufs = NULL;
+	if (!ipfs_unixfs_new(&ufs))
+		return 0;
+	ufs->data_type = UNIXFS_FILE;
+	size_t sz = ipfs_unixfs_protobuf_encode_size(ufs);
+	unsigned char pb[sz];
+	size_t wr = 0;
+	ipfs_unixfs_protobuf_encode(ufs, pb, sz, &wr);
+	ipfs_unixfs_free(ufs);
+	ipfs_hashtable_node_set_data(node, pb, wr);
+	return 1;
+}
+
+/**
+ * Import a file using trickle layout
+ */
+static int ipfs_import_file_trickle(const char* fileName, struct HashtableNode** parent_node, struct FSRepo* fs_repo, size_t* bytes_written, size_t* total_size) {
+	FILE* file = fopen(fileName, "rb");
+	if (file == NULL)
+		return 0;
+
+	struct LeafInfo* first_leaf = NULL;
+	struct LeafInfo* last_leaf = NULL;
+	int bytes_read = 1;
+	size_t file_size = 0;
+
+	while (bytes_read > 0) {
+		struct LeafInfo* leaf = NULL;
+		bytes_read = ipfs_import_create_leaf(file, fs_repo, &leaf);
+		if (bytes_read > 0) {
+			if (first_leaf == NULL)
+				first_leaf = leaf;
+			else
+				last_leaf->next = leaf;
+			last_leaf = leaf;
+			file_size += leaf->block_size;
+		} else if (leaf != NULL) {
+			free_leaf_list(leaf);
+		}
+	}
+	fclose(file);
+
+	if (first_leaf == NULL) {
+		// empty file
+		struct UnixFS* empty_unixfs = NULL;
+		ipfs_unixfs_new(&empty_unixfs);
+		empty_unixfs->data_type = UNIXFS_FILE;
+		size_t pb_size = ipfs_unixfs_protobuf_encode_size(empty_unixfs);
+		unsigned char pb[pb_size];
+		size_t pb_written = 0;
+		ipfs_unixfs_protobuf_encode(empty_unixfs, pb, pb_size, &pb_written);
+		ipfs_unixfs_free(empty_unixfs);
+		ipfs_hashtable_node_new_from_data(pb, pb_written, parent_node);
+		ipfs_merkledag_add(*parent_node, fs_repo, bytes_written);
+		*total_size = 0;
+		return 1;
+	}
+
+	if (first_leaf->next == NULL) {
+		// single chunk
+		struct HashtableNode* leaf_node = NULL;
+		if (!ipfs_merkledag_get(first_leaf->hash, first_leaf->hash_size, &leaf_node, fs_repo)) {
+			free_leaf_list(first_leaf);
+			return 0;
+		}
+		*parent_node = leaf_node;
+		*bytes_written = first_leaf->t_size;
+		*total_size = first_leaf->block_size;
+		free_leaf_list(first_leaf);
+		return 1;
+	}
+
+	const int max_links = TRICKLE_MAX_LINKS;
+	struct HashtableNode* current_node = NULL;
+	if (ipfs_hashtable_node_new(&current_node) == 0) {
+		free_leaf_list(first_leaf);
+		return 0;
+	}
+
+	int link_count = 0;
+	struct LeafInfo* current_leaf = first_leaf;
+
+	while (current_leaf != NULL) {
+		if (link_count < max_links) {
+			struct NodeLink* new_link = NULL;
+			if (ipfs_node_link_create(NULL, current_leaf->hash, current_leaf->hash_size, &new_link) == 0) {
+				ipfs_hashtable_node_free(current_node);
+				free_leaf_list(first_leaf);
+				return 0;
+			}
+			new_link->t_size = current_leaf->t_size;
+			if (ipfs_hashtable_node_add_link(current_node, new_link) == 0) {
+				ipfs_hashtable_node_free(current_node);
+				free_leaf_list(first_leaf);
+				return 0;
+			}
+			link_count++;
+			current_leaf = current_leaf->next;
+		} else {
+			// Persist current node and create a new parent with current as continuation link
+			if (!ipfs_import_set_empty_unixfs(current_node)) {
+				ipfs_hashtable_node_free(current_node);
+				free_leaf_list(first_leaf);
+				return 0;
+			}
+			size_t node_size = 0;
+			if (ipfs_merkledag_add(current_node, fs_repo, &node_size) == 0) {
+				ipfs_hashtable_node_free(current_node);
+				free_leaf_list(first_leaf);
+				return 0;
+			}
+
+			struct HashtableNode* new_parent = NULL;
+			if (ipfs_hashtable_node_new(&new_parent) == 0) {
+				ipfs_hashtable_node_free(current_node);
+				free_leaf_list(first_leaf);
+				return 0;
+			}
+
+			struct NodeLink* cont_link = NULL;
+			if (ipfs_node_link_create(NULL, current_node->hash, current_node->hash_size, &cont_link) == 0) {
+				ipfs_hashtable_node_free(new_parent);
+				ipfs_hashtable_node_free(current_node);
+				free_leaf_list(first_leaf);
+				return 0;
+			}
+			cont_link->t_size = node_size;
+			if (ipfs_hashtable_node_add_link(new_parent, cont_link) == 0) {
+				ipfs_hashtable_node_free(new_parent);
+				ipfs_hashtable_node_free(current_node);
+				free_leaf_list(first_leaf);
+				return 0;
+			}
+
+			ipfs_hashtable_node_free(current_node);
+			current_node = new_parent;
+			link_count = 1;
+		}
+	}
+
+	// Set top node's UnixFS data with file_size and blocksizes
+	struct UnixFS* top_unixfs = NULL;
+	ipfs_unixfs_new(&top_unixfs);
+	top_unixfs->data_type = UNIXFS_FILE;
+	top_unixfs->file_size = file_size;
+	struct LeafInfo* li = first_leaf;
+	while (li != NULL) {
+		struct UnixFSBlockSizeNode bs;
+		bs.block_size = li->block_size;
+		bs.next = NULL;
+		ipfs_unixfs_add_blocksize(&bs, top_unixfs);
+		li = li->next;
+	}
+	size_t top_pb_size = ipfs_unixfs_protobuf_encode_size(top_unixfs);
+	unsigned char top_pb[top_pb_size];
+	size_t top_pb_written = 0;
+	ipfs_unixfs_protobuf_encode(top_unixfs, top_pb, top_pb_size, &top_pb_written);
+	ipfs_unixfs_free(top_unixfs);
+	ipfs_hashtable_node_set_data(current_node, top_pb, top_pb_written);
+
+	size_t final_size = 0;
+	if (ipfs_merkledag_add(current_node, fs_repo, &final_size) == 0) {
+		ipfs_hashtable_node_free(current_node);
+		free_leaf_list(first_leaf);
+		return 0;
+	}
+
+	*parent_node = current_node;
+	*bytes_written = final_size;
+	*total_size = file_size;
+	free_leaf_list(first_leaf);
+	return 1;
+}
+
 size_t ipfs_import_chunk(FILE* file, struct HashtableNode* parent_node, struct FSRepo* fs_repo, size_t* total_size, size_t* bytes_written) {
 	unsigned char buffer[MAX_DATA_SIZE];
 	size_t bytes_read = fread(buffer, 1, MAX_DATA_SIZE, file);
@@ -198,7 +458,7 @@ int ipfs_import_print_node_results(const struct HashtableNode* node, const char*
  * @param recursive true if we should navigate directories
  * @returns true(1) on success
  */
-int ipfs_import_file(const char* root_dir, const char* fileName, struct HashtableNode** parent_node, struct IpfsNode* local_node, size_t* bytes_written, int recursive) {
+int ipfs_import_file_with_layout(const char* root_dir, const char* fileName, struct HashtableNode** parent_node, struct IpfsNode* local_node, size_t* bytes_written, int recursive, enum UnixFSLayout layout) {
 	/**
 	 * NOTE: When this function completes, parent_node will be either:
 	 * 1) the complete file, in the case of a small file (<256k-ish)
@@ -252,7 +512,7 @@ int ipfs_import_file(const char* root_dir, const char* fileName, struct Hashtabl
 				os_utils_filepath_join(fileName, next->file_name, full_file_name, filename_len);
 				// adjust root directory
 
-				if (ipfs_import_file(new_root_dir, full_file_name, &file_node, local_node, bytes_written, recursive) == 0) {
+				if (ipfs_import_file_with_layout(new_root_dir, full_file_name, &file_node, local_node, bytes_written, recursive, layout) == 0) {
 					ipfs_hashtable_node_free(*parent_node);
 					os_utils_free_file_list(first);
 					if (file != NULL)
@@ -280,8 +540,8 @@ int ipfs_import_file(const char* root_dir, const char* fileName, struct Hashtabl
 			} // while going through files
 		}
 		// save the parent_node (the directory)
-		size_t bytes_written;
-		ipfs_merkledag_add(*parent_node, local_node->repo, &bytes_written);
+		size_t dir_bytes_written;
+		ipfs_merkledag_add(*parent_node, local_node->repo, &dir_bytes_written);
 		if (file != NULL)
 			free(file);
 		if (path != NULL)
@@ -289,21 +549,28 @@ int ipfs_import_file(const char* root_dir, const char* fileName, struct Hashtabl
 		os_utils_free_file_list(first);
 	} else {
 		// process this file
-		FILE* file = fopen(fileName, "rb");
-		if (file == 0)
-			return 0;
-		retVal = ipfs_hashtable_node_new(parent_node);
-		if (retVal == 0) {
-			return 0;
-		}
+		if (layout == UNIXFS_LAYOUT_TRICKLE) {
+			if (!ipfs_import_file_trickle(fileName, parent_node, local_node->repo, bytes_written, &total_size)) {
+				return 0;
+			}
+		} else {
+			FILE* file = fopen(fileName, "rb");
+			if (file == 0)
+				return 0;
+			retVal = ipfs_hashtable_node_new(parent_node);
+			if (retVal == 0) {
+				fclose(file);
+				return 0;
+			}
 
-		// add all nodes (will be called multiple times for large files)
-		while ( bytes_read == MAX_DATA_SIZE) {
-			size_t written = 0;
-			bytes_read = ipfs_import_chunk(file, *parent_node, local_node->repo, &total_size, &written);
-			*bytes_written += written;
+			// add all nodes (will be called multiple times for large files)
+			while ( bytes_read == MAX_DATA_SIZE) {
+				size_t written = 0;
+				bytes_read = ipfs_import_chunk(file, *parent_node, local_node->repo, &total_size, &written);
+				*bytes_written += written;
+			}
+			fclose(file);
 		}
-		fclose(file);
 	}
 
 	// notify the network
@@ -317,6 +584,10 @@ int ipfs_import_file(const char* root_dir, const char* fileName, struct Hashtabl
 	}
 
 	return 1;
+}
+
+int ipfs_import_file(const char* root_dir, const char* fileName, struct HashtableNode** parent_node, struct IpfsNode* local_node, size_t* bytes_written, int recursive) {
+	return ipfs_import_file_with_layout(root_dir, fileName, parent_node, local_node, bytes_written, recursive, UNIXFS_LAYOUT_BALANCED);
 }
 
 /**
