@@ -2,10 +2,12 @@ CC = gcc
 CFLAGS = -O0 -I../include -I../c-libp2p/include -I../c-libp2p/c-multihash/include -I../c-libp2p/c-multiaddr/include -I../c-libp2p/c-protobuf -I../lmdb/libraries/liblmdb -g3 -Wall -std=gnu99
 LFLAGS = -L../c-libp2p -L../c-libp2p/c-multihash -L../c-libp2p/c-multiaddr -lp2p -lm -lmultihash -lmultiaddr -lpthread -lcurl
 ifeq ($(shell uname -s),Darwin)
-LFLAGS += -Wl,-rpath,@loader_path/../c-libp2p
+CFLAGS += -I/opt/homebrew/opt/openssl/include
+LFLAGS += -Wl,-rpath,@loader_path/../c-libp2p -L/opt/homebrew/opt/openssl/lib
 else
 LFLAGS += -Wl,-rpath,'$$ORIGIN/../c-libp2p'
 endif
+LFLAGS += -lssl -lcrypto
 DEPS = cmd/ipfs/test_init.h repo/test_repo_bootstrap_peers.h repo/test_repo_config.h repo/test_repo_identity.h cid/test_cid.h
 OBJS = testit.o test_helper.o \
 	../blocks/block.o ../blocks/blockstore.o \
@@ -14,6 +16,7 @@ OBJS = testit.o test_helper.o \
 	../cmd/ipfs/init.o \
 	../commands/argument.o ../commands/command_option.o ../commands/command.o ../commands/cli/parse.o \
 	../core/*.o \
+	../crypto/verify.o \
 	../datastore/ds_helper.o ../datastore/key.o \
 	../exchange/bitswap/*.o \
 	../flatfs/flatfs.o \
@@ -26,6 +29,7 @@ OBJS = testit.o test_helper.o \
 	../namesys/publisher.o \
 	../namesys/resolver.o \
 	../namesys/name.o \
+	../namesys/verify.o \
 	../pin/pin.o \
 	../pubsub/ipns_pubsub.o \
 	../repo/init.o \

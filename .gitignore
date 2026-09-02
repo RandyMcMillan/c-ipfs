@@ -14,6 +14,21 @@
 !TODOs.md
 !TODOs_EASE_OF_IMPLEMENTATION.md
 
+# Module source files
+!crypto/verify.c
+!crypto/Makefile
+!ipld/dag_cbor.c
+!ipld/Makefile
+!namesys/verify.c
+!pubsub/ipns_pubsub.c
+!pubsub/Makefile
+
+# Test files
+!test/crypto/test_crypto_verify.h
+!test/ipld/test_dag_cbor.h
+!test/namesys/test_namesys_verify.h
+!test/pubsub/test_ipns_pubsub.h
+
 *.o
 .settings/language.settings.xml
 test/test_ipfs

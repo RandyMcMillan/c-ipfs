@@ -6,10 +6,12 @@ $(SECP256K1_AR):
 	$(MAKE) -C ../nostril libsecp256k1.a
 
 ifeq ($(shell uname -s),Darwin)
-LFLAGS += -Wl,-rpath,@loader_path/../c-libp2p
+CFLAGS += -I/opt/homebrew/opt/openssl/include
+LFLAGS += -Wl,-rpath,@loader_path/../c-libp2p -L/opt/homebrew/opt/openssl/lib
 else
 LFLAGS += -Wl,-rpath,'$$ORIGIN/../c-libp2p'
 endif
+LFLAGS += -lssl -lcrypto
 DEPS = cmd/ipfs/test_init.h repo/test_repo_bootstrap_peers.h repo/test_repo_config.h repo/test_repo_identity.h cid/test_cid.h
 OBJS = main.o \
 	../blocks/block.o ../blocks/blockstore.o \
@@ -21,6 +23,7 @@ OBJS = main.o \
 	../cmd/*.o \
 	../commands/argument.o ../commands/command_option.o ../commands/command.o ../commands/cli/parse.o \
 	../core/*.o \
+	../crypto/verify.o \
 	../datastore/ds_helper.o \
 	../datastore/key.o \
 	../dnslink/*.o \

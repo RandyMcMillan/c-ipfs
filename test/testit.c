@@ -32,6 +32,8 @@
 #include "pin/test_pin.h"
 #include "ipld/test_dag_cbor.h"
 #include "pubsub/test_ipns_pubsub.h"
+#include "crypto/test_crypto_verify.h"
+#include "namesys/test_namesys_verify.h"
 
 struct test {
 	int index;
@@ -104,6 +106,13 @@ int build_test_collection() {
 	add_test("test_ipns_pubsub_on_message_wrong_topic", test_ipns_pubsub_on_message_wrong_topic, 1);
 	add_test("test_ipns_pubsub_on_message_corrupt_data", test_ipns_pubsub_on_message_corrupt_data, 1);
 	add_test("test_ipns_pubsub_entry_parse_null", test_ipns_pubsub_entry_parse_null, 1);
+	add_test("test_crypto_verify_ed25519_invalid_inputs", test_crypto_verify_ed25519_invalid_inputs, 1);
+	add_test("test_crypto_verify_secp256k1_invalid_inputs", test_crypto_verify_secp256k1_invalid_inputs, 1);
+	add_test("test_crypto_verify_ed25519_roundtrip", test_crypto_verify_ed25519_roundtrip, 1);
+	add_test("test_namesys_verify_entry_parse", test_namesys_verify_entry_parse, 1);
+	add_test("test_namesys_verify_entry_parse_null", test_namesys_verify_entry_parse_null, 1);
+	add_test("test_namesys_verify_entry_signature_invalid", test_namesys_verify_entry_signature_invalid, 1);
+	add_test("test_namesys_verify_entry_signature_null", test_namesys_verify_entry_signature_null, 1);
 	add_test("test_core_api_startup_shutdown", test_core_api_startup_shutdown, 1);
 	add_test("test_core_api_object_cat", test_core_api_object_cat, 0); // timing-sensitive multi-node; often hangs
 	add_test("test_core_api_object_cat_binary", test_core_api_object_cat_binary, 0); // timing-sensitive multi-node; often hangs

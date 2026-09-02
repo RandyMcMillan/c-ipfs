@@ -5,9 +5,14 @@ ifdef DEBUG
 CFLAGS += -g3
 endif
 
-LFLAGS = 
+ifeq ($(shell uname -s),Darwin)
+CFLAGS += -I/opt/homebrew/opt/openssl/include
+LFLAGS += -L/opt/homebrew/opt/openssl/lib
+endif
+
+LFLAGS += -lssl -lcrypto
 DEPS = 
-OBJS = base.o dns.o isdomain.o namesys.o proquint.o publisher.o pb.o name.o resolver.o verify.o
+OBJS = verify.o
 
 %.o: %.c $(DEPS)
 	$(CC) -c -o $@ $< $(CFLAGS)
