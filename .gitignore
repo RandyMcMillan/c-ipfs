@@ -28,6 +28,7 @@
 !test/ipld/test_dag_cbor.h
 !test/namesys/test_namesys_verify.h
 !test/pubsub/test_ipns_pubsub.h
+!test/scripts/test_dag_cbor_vectors.py
 
 *.o
 .settings/language.settings.xml
@@ -39,3 +40,4 @@ test/scripts/hello.bin
 test/scripts/hello2.bin
 test/scripts/testlog.txt
 test/scripts/generate_file
+scripts/dag_cbor_encode

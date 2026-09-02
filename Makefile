@@ -9,6 +9,9 @@ MODULES := blocks cid cmd commands core crypto exchange importer ipld journal me
 # External submodules
 SUBMODULES := c-libp2p lmdb nostril
 
+# Utility scripts
+SCRIPTS := scripts
+
 prepare:
 	@if [ "$$(uname -s)" = "Darwin" ] && find . -type f -name '*.o' -exec file {} + 2>/dev/null | grep -vq 'Mach-O'; then \
 		echo "  CLEAN stale non-Mach-O build outputs"; \
@@ -18,9 +21,9 @@ prepare:
 # ---------------------------------------------------------------------------
 # Top-level aggregates
 # ---------------------------------------------------------------------------
-all: prepare $(SUBMODULES) $(MODULES) build-test-module
+all: prepare $(SUBMODULES) $(MODULES) $(SCRIPTS) build-test-module
 
-clean: $(addprefix clean-,$(SUBMODULES)) $(addprefix clean-,$(MODULES)) clean-build-test-module
+clean: $(addprefix clean-,$(SUBMODULES)) $(addprefix clean-,$(MODULES)) clean-$(SCRIPTS) clean-build-test-module
 
 rebuild: clean all
 
@@ -56,6 +59,12 @@ clean-lmdb:
 
 clean-nostril:
 	cd nostril && $(MAKE) clean
+
+scripts:
+	cd scripts && $(MAKE) all
+
+clean-scripts:
+	cd scripts && $(MAKE) clean
 
 clean-%:
 	cd $* && $(MAKE) clean
@@ -123,5 +132,5 @@ help:
 	@echo "  make clean-<name>       Clean a specific submodule or module"
 
 .PHONY: all clean rebuild selfhost prepare help test test-build test-run build-test-module clean-build-test-module
-.PHONY: $(SUBMODULES) $(MODULES)
-.PHONY: $(addprefix clean-,$(SUBMODULES)) $(addprefix clean-,$(MODULES))
+.PHONY: $(SUBMODULES) $(MODULES) $(SCRIPTS)
+.PHONY: $(addprefix clean-,$(SUBMODULES)) $(addprefix clean-,$(MODULES)) $(addprefix clean-,$(SCRIPTS))
