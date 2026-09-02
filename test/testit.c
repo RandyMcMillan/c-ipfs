@@ -29,6 +29,7 @@
 #include "storage/test_unixfs.h"
 #include "libp2p/utils/logger.h"
 #include "namesys/test_namesys.h"
+#include "pin/test_pin.h"
 
 struct test {
 	int index;
@@ -152,6 +153,9 @@ int build_test_collection() {
 	add_test("test_unixfs_encode_smallfile", test_unixfs_encode_smallfile, 1);
 	add_test("test_hamt_basic", test_hamt_basic, 1);
 	add_test("test_hamt_persist", test_hamt_persist, 1);
+	add_test("test_repo_config_atomic_write", test_repo_config_atomic_write, 1);
+	add_test("test_pin_add_rm_load", test_pin_add_rm_load, 1);
+	add_test("test_gc_collect", test_gc_collect, 1);
 	add_test("test_ping", test_ping, 0); // socket connect failed
 	add_test("test_ping_remote", test_ping_remote, 0); // need to test more
 	add_test("test_null_add_provider", test_null_add_provider, 0); // need to test more

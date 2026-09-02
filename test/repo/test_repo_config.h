@@ -123,4 +123,69 @@ int test_repo_config_write() {
 	return os_utils_file_exists("/tmp/.ipfs/config");
 }
 
+/***
+ * test atomic config write: temp file should not remain after rename
+ */
+int test_repo_config_atomic_write() {
+	const char* config_dir = "/tmp/ipfs_atomic_config_test";
+	char config_path[256];
+	char tmp_path[256];
+	snprintf(config_path, sizeof(config_path), "%s/config", config_dir);
+	snprintf(tmp_path, sizeof(tmp_path), "%s/config.tmp", config_dir);
+
+	// clean slate
+	if (os_utils_file_exists(config_dir))
+		drop_repository(config_dir);
+	mkdir(config_dir, S_IRWXU);
+	unlink(config_path);
+	unlink(tmp_path);
+
+	struct RepoConfig* repoConfig;
+	if (!ipfs_repo_config_new(&repoConfig))
+		return 0;
+	if (!ipfs_repo_config_init(repoConfig, 2048, config_dir, 4001, NULL)) {
+		ipfs_repo_config_free(repoConfig);
+		return 0;
+	}
+
+	if (!fs_repo_write_config_file(config_dir, repoConfig)) {
+		ipfs_repo_config_free(repoConfig);
+		return 0;
+	}
+	ipfs_repo_config_free(repoConfig);
+
+	// config must exist, temp must not
+	int ok = os_utils_file_exists(config_path) && !os_utils_file_exists(tmp_path);
+	if (ok) {
+		// verify config is valid JSON and contains Identity
+		FILE* f = fopen(config_path, "r");
+		if (!f) {
+			ok = 0;
+		} else {
+			fseek(f, 0, SEEK_END);
+			long sz = ftell(f);
+			fseek(f, 0, SEEK_SET);
+			if (sz < 100) {
+				ok = 0;
+			} else {
+				char* buf = malloc(sz + 1);
+				if (buf && fread(buf, 1, sz, f) == (size_t)sz) {
+					buf[sz] = '\0';
+					if (strstr(buf, "\"Identity\"") == NULL ||
+					    strstr(buf, "\"PeerID\"") == NULL ||
+					    strstr(buf, "\"PrivKey\"") == NULL)
+						ok = 0;
+				} else {
+					ok = 0;
+				}
+				if (buf) free(buf);
+			}
+			fclose(f);
+		}
+	}
+
+	drop_repository(config_dir);
+	return ok;
+}
+
 #endif /* test_repo_config_h */
