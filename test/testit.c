@@ -30,6 +30,7 @@
 #include "libp2p/utils/logger.h"
 #include "namesys/test_namesys.h"
 #include "pin/test_pin.h"
+#include "ipld/test_dag_cbor.h"
 
 struct test {
 	int index;
@@ -91,6 +92,11 @@ int build_test_collection() {
 	add_test("test_cid_v1_rejects_unsupported_codec", test_cid_v1_rejects_unsupported_codec, 1);
 	add_test("test_cid_identity_multihash_roundtrip", test_cid_identity_multihash_roundtrip, 1);
 	add_test("test_cid_cross_language_vectors", test_cid_cross_language_vectors, 1);
+	add_test("test_ipld_dag_cbor_link_encode_decode", test_ipld_dag_cbor_link_encode_decode, 1);
+	add_test("test_ipld_dag_cbor_link_small_cid", test_ipld_dag_cbor_link_small_cid, 1);
+	add_test("test_ipld_dag_cbor_link_large_cid", test_ipld_dag_cbor_link_large_cid, 1);
+	add_test("test_ipld_dag_cbor_link_invalid_inputs", test_ipld_dag_cbor_link_invalid_inputs, 1);
+	add_test("test_ipld_dag_cbor_link_decode_corrupt", test_ipld_dag_cbor_link_decode_corrupt, 1);
 	add_test("test_core_api_startup_shutdown", test_core_api_startup_shutdown, 1);
 	add_test("test_core_api_object_cat", test_core_api_object_cat, 0); // timing-sensitive multi-node; often hangs
 	add_test("test_core_api_object_cat_binary", test_core_api_object_cat_binary, 0); // timing-sensitive multi-node; often hangs

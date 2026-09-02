@@ -18,6 +18,7 @@ OBJS = testit.o test_helper.o \
 	../exchange/bitswap/*.o \
 	../flatfs/flatfs.o \
 	../importer/importer.o ../importer/exporter.o ../importer/resolver.o \
+	../ipld/dag_cbor.o \
 	../journal/*.o \
 	../merkledag/merkledag.o ../merkledag/node.o \
 	../multibase/multibase.o \
