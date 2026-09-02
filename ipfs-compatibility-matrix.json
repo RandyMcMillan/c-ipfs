@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0",
   "profile": "ipfs-compatibility-profile.json",
-  "last_audited_commit": "a8837d5",
+  "last_audited_commit": "8d7c224",
   "evidence_policy": "Source evidence shows only that an implementation exists. Interoperability evidence is required before a feature becomes conformant.",
   "features": [
     {
@@ -20,7 +20,7 @@
       "specifications": ["https://ipld.io/specs/"],
       "source_evidence": ["blocks/block.c", "blocks/blockstore.c", "merkledag/merkledag.c", "merkledag/node.c"],
       "test_evidence": ["test/blocks/test_block.h", "test/merkledag/test_merkledag.h"],
-      "gaps": ["raw and DAG-CBOR codecs", "CID verification on all storage operations", "selectors", "bounded streaming traversal"]
+      "gaps": ["DAG-CBOR codec", "selectors", "Kubo v0.43.0 interoperability tests for IPLD"]
     },
     {
       "id": "unixfs-storage",
