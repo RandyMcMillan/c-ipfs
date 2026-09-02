@@ -15,13 +15,37 @@
 
 enum WireType ipfs_cid_message_fields[] = { WIRETYPE_VARINT, WIRETYPE_VARINT, WIRETYPE_LENGTH_DELIMITED };
 
+static int ipfs_cid_codec_valid(int codec) {
+	switch (codec) {
+	case CID_RAW:
+	case CID_DAG_PROTOBUF:
+	case CID_DAG_CBOR:
+	case CID_GIT_RAW:
+	case CID_ETHEREUM_BLOCK:
+	case CID_ETHEREUM_BLOCKLIST:
+	case CID_ETHEREUM_TRIE:
+	case CID_ETHEREUM_TX:
+	case CID_ETHEREUM_TX_RECEIPT_TRIE:
+	case CID_ETHEREUM_TX_RECEIPT:
+	case CID_ETHEREUM_STATE_TRIE:
+	case CID_ETHEREUM_ACCOUNT_SNAPSHOT:
+	case CID_ETHEREUM_STORAGE_TRIE:
+	case CID_BITCOIN_BLOCK:
+	case CID_BITCOIN_TX:
+	case CID_ZCASH_BLOCK:
+	case CID_ZCASH_TX:
+		return 1;
+	default:
+		return 0;
+	}
+}
+
 static int ipfs_cid_codec_supported(int version, int codec) {
 	if (version == 0)
 		return codec == CID_DAG_PROTOBUF;
 
-	if (version == 1) {
-		return codec == CID_RAW || codec == CID_DAG_PROTOBUF || codec == CID_DAG_CBOR;
-	}
+	if (version == 1)
+		return ipfs_cid_codec_valid(codec);
 
 	return 0;
 }
@@ -53,7 +77,7 @@ static int ipfs_cid_from_bytes(const unsigned char* incoming, size_t incoming_si
 	if (!ipfs_cid_codec_supported((int)version, (int)codec))
 		return 0;
 
-	*cid = ipfs_cid_new((int)version, &incoming[pos], incoming_size - pos, (char)codec);
+	*cid = ipfs_cid_new((int)version, &incoming[pos], incoming_size - pos, (int)codec);
 	return *cid != NULL;
 }
 
@@ -96,7 +120,7 @@ int ipfs_cid_protobuf_decode(unsigned char* buffer, size_t buffer_length, struct
 	int version = 0;
 	unsigned char* hash;
 	size_t hash_length;
-	char codec = 0;
+	int codec = 0;
 	int retVal = 0;
 
 	while(pos < buffer_length) {
@@ -140,7 +164,7 @@ int ipfs_cid_protobuf_decode(unsigned char* buffer, size_t buffer_length, struct
  * @param codec the codec to be used (NOTE: For version 0, this should be CID_DAG_PROTOBUF)
  * @returns the new Cid or NULL if there was a problem
  */
-struct Cid* ipfs_cid_new(int version, const unsigned char* hash, size_t hash_length, const char codec) {
+struct Cid* ipfs_cid_new(int version, const unsigned char* hash, size_t hash_length, int codec) {
 	struct Cid* cid = (struct Cid*) malloc(sizeof(struct Cid));
 	if (cid != NULL) {
 		cid->hash_length = hash_length;
