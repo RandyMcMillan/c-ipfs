@@ -27,7 +27,7 @@ all:
 	cd path; make all;
 	cd util; make all;
 	cd rbsr; make all;
-	cd nostril; make config.h;
+	cd nostril; make config.h libsecp256k1.a;
 	cd nostr; make all;
 	cd main; make all;
 	cd test; make all;
@@ -58,6 +58,7 @@ clean:
 	cd path; make clean;
 	cd util; make clean;
 	cd rbsr; make clean;
+	cd nostril; make clean;
 	cd test; make clean;
 
 rebuild: clean all

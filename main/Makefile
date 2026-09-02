@@ -1,7 +1,10 @@
 CC = gcc
 CFLAGS = -O0 -I../include -I../c-libp2p/include -I../c-libp2p/c-multihash/include -I../c-libp2p/c-multiaddr/include -I../c-libp2p/c-protobuf -I../nostril -I../nostril/deps/secp256k1/include -g3 -Wall -std=gnu99
 LFLAGS = -L../c-libp2p -L../c-libp2p/c-multihash -L../c-libp2p/c-multiaddr -lp2p -lm -lmultihash -lmultiaddr -lpthread -lresolv -lcurl
-SECP256K1_AR = ../nostril/deps/secp256k1/.libs/libsecp256k1.a
+SECP256K1_AR = ../nostril/libsecp256k1.a
+$(SECP256K1_AR):
+	$(MAKE) -C ../nostril libsecp256k1.a
+
 ifeq ($(shell uname -s),Darwin)
 LFLAGS += -Wl,-rpath,@loader_path/../c-libp2p
 else
