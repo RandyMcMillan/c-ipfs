@@ -4,7 +4,7 @@ export DEBUG
 .DEFAULT_GOAL := all
 
 # Modules that are part of the main project
-MODULES := blocks cid cmd commands core exchange importer journal merkledag multibase pin repo flatfs datastore thirdparty unixfs routing dnslink namesys path util rbsr nostr main test
+MODULES := blocks cid cmd commands core exchange importer journal merkledag multibase pin repo flatfs datastore thirdparty unixfs routing dnslink namesys path util rbsr nostr main
 
 # External submodules
 SUBMODULES := c-libp2p lmdb nostril
@@ -18,9 +18,9 @@ prepare:
 # ---------------------------------------------------------------------------
 # Top-level aggregates
 # ---------------------------------------------------------------------------
-all: prepare $(SUBMODULES) $(MODULES)
+all: prepare $(SUBMODULES) $(MODULES) build-test-module
 
-clean: $(addprefix clean-,$(SUBMODULES)) $(addprefix clean-,$(MODULES))
+clean: $(addprefix clean-,$(SUBMODULES)) $(addprefix clean-,$(MODULES)) clean-build-test-module
 
 rebuild: clean all
 
@@ -60,11 +60,21 @@ clean-nostril:
 clean-%:
 	cd $* && $(MAKE) clean
 
+build-test-module:
+	cd test && $(MAKE) all
+
+clean-build-test-module:
+	cd test && $(MAKE) clean
+
 # ---------------------------------------------------------------------------
 # Testing
 # ---------------------------------------------------------------------------
-TEST_BIN := test/test_ipfs
-TESTS    ?=
+TEST_BIN     := test/test_ipfs
+TESTS        ?=
+TEST_TIMEOUT ?= 120
+
+# Portable timeout: Linux has `timeout`, macOS often needs `gtimeout` (coreutils)
+TIMEOUT_CMD := $(shell command -v timeout 2>/dev/null || command -v gtimeout 2>/dev/null)
 
 test-build: all
 	cd test && $(MAKE) all
@@ -74,7 +84,13 @@ test-run:
 		echo "  ERROR: $(TEST_BIN) not found. Run 'make test-build' first."; \
 		exit 1; \
 	fi
-	$(TEST_BIN) $(TESTS)
+	@if [ -n "$(TIMEOUT_CMD)" ]; then \
+		$(TIMEOUT_CMD) $(TEST_TIMEOUT) $(TEST_BIN) $(TESTS); \
+	else \
+		echo "  WARNING: no timeout command found (install 'coreutils' on macOS)."; \
+		echo "           Running tests without timeout protection."; \
+		$(TEST_BIN) $(TESTS); \
+	fi
 
 test: test-build test-run
 
@@ -106,6 +122,6 @@ help:
 	@echo "Clean targets:"
 	@echo "  make clean-<name>       Clean a specific submodule or module"
 
-.PHONY: all clean rebuild selfhost prepare help test test-build test-run
+.PHONY: all clean rebuild selfhost prepare help test test-build test-run build-test-module clean-build-test-module
 .PHONY: $(SUBMODULES) $(MODULES)
 .PHONY: $(addprefix clean-,$(SUBMODULES)) $(addprefix clean-,$(MODULES))
