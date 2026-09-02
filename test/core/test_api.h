@@ -9,6 +9,7 @@
 #include "ipfs/importer/exporter.h"
 #include "ipfs/importer/importer.h"
 #include "ipfs/namesys/name.h"
+#include "ipfs/pin/pin.h"
 
 int test_core_api_startup_shutdown() {
 	char* repo_path = "/tmp/ipfs_1";
@@ -734,6 +735,178 @@ int test_core_api_block_put() {
 	}
 
 	if (strstr((char*)resp->bytes, "Key") != NULL && strstr((char*)resp->bytes, "Size") != NULL) {
+		retVal = 1;
+	}
+
+	ipfs_core_http_response_free(resp);
+	ipfs_core_http_request_free(req);
+exit:
+	ipfs_node_free(local_node);
+	if (peer_id) free(peer_id);
+	return retVal;
+}
+
+int test_core_api_dht_findprovs() {
+	int retVal = 0;
+	struct IpfsNode* local_node = NULL;
+	char* repo_path = "/tmp/ipfs_api_dht_findprovs";
+	char* peer_id = NULL;
+
+	if (!drop_and_build_repository(repo_path, 4001, NULL, &peer_id))
+		goto exit;
+	if (!ipfs_node_offline_new(repo_path, &local_node))
+		goto exit;
+
+	struct HttpRequest* req = ipfs_core_http_request_new();
+	if (!req) goto exit;
+	req->command = strdup("dht");
+	req->sub_command = strdup("findprovs");
+	// Use a dummy hash (QmUNLLsPACCz1vLxQVkX7LXxXzr6bTc8dKXpu3Q27bJ2t9 is empty directory)
+	libp2p_utils_vector_add(req->arguments, strdup("QmUNLLsPACCz1vLxQVkX7LXxXzr6bTc8dKXpu3Q27bJ2t9"));
+
+	struct HttpResponse* resp = NULL;
+	if (!ipfs_core_http_request_process(local_node, req, &resp) || !resp) {
+		ipfs_core_http_request_free(req);
+		goto exit;
+	}
+
+	if (strstr((char*)resp->bytes, "Responses") != NULL) {
+		retVal = 1;
+	}
+
+	ipfs_core_http_response_free(resp);
+	ipfs_core_http_request_free(req);
+exit:
+	ipfs_node_free(local_node);
+	if (peer_id) free(peer_id);
+	return retVal;
+}
+
+int test_core_api_pin_add() {
+	int retVal = 0;
+	struct IpfsNode* local_node = NULL;
+	char* repo_path = "/tmp/ipfs_api_pin_add";
+	char* peer_id = NULL;
+	struct HashtableNode* node = NULL;
+	char hash_str[256] = {0};
+
+	if (!drop_and_build_repository(repo_path, 4001, NULL, &peer_id))
+		goto exit;
+	if (!ipfs_node_offline_new(repo_path, &local_node))
+		goto exit;
+
+	// Import a small file to get a hash to pin
+	const char* content = "pin me please\n";
+	char* filename = "/tmp/test_api_pin_add.txt";
+	create_file(filename, (unsigned char*)content, strlen(content));
+
+	size_t bytes_written = 0;
+	if (!ipfs_import_file(NULL, filename, &node, local_node, &bytes_written, 0))
+		goto exit;
+
+	if (!ipfs_cid_hash_to_base58(node->hash, node->hash_size, (unsigned char*)hash_str, 256))
+		goto exit;
+
+	struct HttpRequest* req = ipfs_core_http_request_new();
+	if (!req) goto exit;
+	req->command = strdup("pin");
+	req->sub_command = strdup("add");
+	libp2p_utils_vector_add(req->arguments, strdup(hash_str));
+
+	struct HttpResponse* resp = NULL;
+	if (!ipfs_core_http_request_process(local_node, req, &resp) || !resp) {
+		ipfs_core_http_request_free(req);
+		goto exit;
+	}
+
+	if (strstr((char*)resp->bytes, "Pins") != NULL && strstr((char*)resp->bytes, hash_str) != NULL) {
+		retVal = 1;
+	}
+
+	ipfs_core_http_response_free(resp);
+	ipfs_core_http_request_free(req);
+exit:
+	if (node) ipfs_hashtable_node_free(node);
+	ipfs_node_free(local_node);
+	if (peer_id) free(peer_id);
+	return retVal;
+}
+
+int test_core_api_pin_ls() {
+	int retVal = 0;
+	struct IpfsNode* local_node = NULL;
+	char* repo_path = "/tmp/ipfs_api_pin_ls";
+	char* peer_id = NULL;
+	struct HashtableNode* node = NULL;
+	char hash_str[256] = {0};
+
+	if (!drop_and_build_repository(repo_path, 4001, NULL, &peer_id))
+		goto exit;
+	if (!ipfs_node_offline_new(repo_path, &local_node))
+		goto exit;
+
+	// Import and pin a file first
+	const char* content = "list my pins\n";
+	char* filename = "/tmp/test_api_pin_ls.txt";
+	create_file(filename, (unsigned char*)content, strlen(content));
+
+	size_t bytes_written = 0;
+	if (!ipfs_import_file(NULL, filename, &node, local_node, &bytes_written, 0))
+		goto exit;
+
+	if (!ipfs_cid_hash_to_base58(node->hash, node->hash_size, (unsigned char*)hash_str, 256))
+		goto exit;
+
+	if (!ipfs_pin_add(local_node->repo, node->hash, node->hash_size, Recursive))
+		goto exit;
+
+	struct HttpRequest* req = ipfs_core_http_request_new();
+	if (!req) goto exit;
+	req->command = strdup("pin");
+	req->sub_command = strdup("ls");
+
+	struct HttpResponse* resp = NULL;
+	if (!ipfs_core_http_request_process(local_node, req, &resp) || !resp) {
+		ipfs_core_http_request_free(req);
+		goto exit;
+	}
+
+	if (strstr((char*)resp->bytes, hash_str) != NULL) {
+		retVal = 1;
+	}
+
+	ipfs_core_http_response_free(resp);
+	ipfs_core_http_request_free(req);
+exit:
+	if (node) ipfs_hashtable_node_free(node);
+	ipfs_node_free(local_node);
+	if (peer_id) free(peer_id);
+	return retVal;
+}
+
+int test_core_api_repo_gc() {
+	int retVal = 0;
+	struct IpfsNode* local_node = NULL;
+	char* repo_path = "/tmp/ipfs_api_repo_gc";
+	char* peer_id = NULL;
+
+	if (!drop_and_build_repository(repo_path, 4001, NULL, &peer_id))
+		goto exit;
+	if (!ipfs_node_offline_new(repo_path, &local_node))
+		goto exit;
+
+	struct HttpRequest* req = ipfs_core_http_request_new();
+	if (!req) goto exit;
+	req->command = strdup("repo");
+	req->sub_command = strdup("gc");
+
+	struct HttpResponse* resp = NULL;
+	if (!ipfs_core_http_request_process(local_node, req, &resp) || !resp) {
+		ipfs_core_http_request_free(req);
+		goto exit;
+	}
+
+	if (strstr((char*)resp->bytes, "Size") != NULL) {
 		retVal = 1;
 	}
 

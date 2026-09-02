@@ -132,6 +132,10 @@ int build_test_collection() {
 	add_test("test_core_api_block_get", test_core_api_block_get, 1);
 	add_test("test_core_api_block_put", test_core_api_block_put, 1);
 	add_test("test_core_api_cat", test_core_api_cat, 1);
+	add_test("test_core_api_dht_findprovs", test_core_api_dht_findprovs, 1);
+	add_test("test_core_api_pin_add", test_core_api_pin_add, 1);
+	add_test("test_core_api_pin_ls", test_core_api_pin_ls, 1);
+	add_test("test_core_api_repo_gc", test_core_api_repo_gc, 1);
 	add_test("test_daemon_startup_shutdown", test_daemon_startup_shutdown, 1);
 	add_test("test_datastore_list_journal", test_datastore_list_journal, 1);
 	add_test("test_journal_db", test_journal_db, 1);

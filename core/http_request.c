@@ -12,6 +12,7 @@
 #include "ipfs/importer/exporter.h"
 #include "ipfs/namesys/resolver.h"
 #include "ipfs/namesys/publisher.h"
+#include "ipfs/pin/pin.h"
 #include "ipfs/routing/routing.h"
 
 #ifndef C_IPFS_VERSION
@@ -530,6 +531,120 @@ static int ipfs_core_http_process_cat(struct IpfsNode* local_node, struct HttpRe
 	return 1;
 }
 
+static int ipfs_core_http_process_dht_findprovs(struct IpfsNode* local_node, struct HttpRequest* request, struct HttpResponse** response) {
+	if (!request->arguments || request->arguments->total < 1) return 0;
+	char* hash = (char*)libp2p_utils_vector_get(request->arguments, 0);
+	struct Cid* cid = NULL;
+	if (!ipfs_cid_decode_hash_from_base58((unsigned char*)hash, strlen(hash), &cid)) {
+		return 0;
+	}
+	struct Libp2pVector* peers = NULL;
+	int retVal = local_node->routing->FindProviders(local_node->routing, cid->hash, cid->hash_length, &peers);
+	ipfs_cid_free(cid);
+	*response = ipfs_core_http_response_new();
+	if (!*response) return 0;
+	struct HttpResponse* res = *response;
+	res->content_type = "application/json";
+	FILE* out = open_memstream((char**)&res->bytes, &res->bytes_size);
+	fprintf(out, "{\"Extra\":\"\",\"ID\":\"\",\"Responses\":[");
+	if (retVal && peers) {
+		for (int i = 0; i < peers->total; i++) {
+			struct Libp2pPeer* peer = (struct Libp2pPeer*)libp2p_utils_vector_get(peers, i);
+			if (i > 0) fprintf(out, ",");
+			fprintf(out, "{\"ID\":\"%s\",\"Addrs\":[]}", peer->id ? peer->id : "");
+		}
+	}
+	fprintf(out, "],\"Type\":4}");
+	fclose(out);
+	if (peers) libp2p_utils_vector_free(peers);
+	return 1;
+}
+
+static int ipfs_core_http_process_pin_add(struct IpfsNode* local_node, struct HttpRequest* request, struct HttpResponse** response) {
+	if (!request->arguments || request->arguments->total < 1) return 0;
+	char* hash = (char*)libp2p_utils_vector_get(request->arguments, 0);
+	struct Cid* cid = NULL;
+	if (!ipfs_cid_decode_hash_from_base58((unsigned char*)hash, strlen(hash), &cid)) {
+		return 0;
+	}
+	PinMode mode = Recursive;
+	// Check for "recursive" param
+	if (request->params) {
+		for (int i = 0; i < request->params->total; i++) {
+			struct HttpParam* param = (struct HttpParam*)libp2p_utils_vector_get(request->params, i);
+			if (param && param->name && strcmp(param->name, "recursive") == 0) {
+				if (param->value && strcmp(param->value, "false") == 0)
+					mode = Direct;
+			}
+		}
+	}
+	int retVal = ipfs_pin_add(local_node->repo, cid->hash, cid->hash_length, mode);
+	ipfs_cid_free(cid);
+	if (!retVal) return 0;
+	*response = ipfs_core_http_response_new();
+	if (!*response) return 0;
+	struct HttpResponse* res = *response;
+	res->content_type = "application/json";
+	int bytes_needed = 32 + strlen(hash);
+	res->bytes = (uint8_t*)malloc(bytes_needed);
+	if (!res->bytes) {
+		ipfs_core_http_response_free(res);
+		*response = NULL;
+		return 0;
+	}
+	snprintf((char*)res->bytes, bytes_needed, "{\"Pins\":[\"%s\"]}", hash);
+	res->bytes_size = strlen((char*)res->bytes);
+	return 1;
+}
+
+static int ipfs_core_http_process_pin_ls(struct IpfsNode* local_node, struct HttpRequest* request, struct HttpResponse** response) {
+	(void)request;
+	struct PinEntry* entries = ipfs_pin_load(local_node->repo);
+	*response = ipfs_core_http_response_new();
+	if (!*response) return 0;
+	struct HttpResponse* res = *response;
+	res->content_type = "application/json";
+	FILE* out = open_memstream((char**)&res->bytes, &res->bytes_size);
+	fprintf(out, "{");
+	struct PinEntry* curr = entries;
+	int first = 1;
+	while (curr) {
+		char hash_str[256] = {0};
+		if (ipfs_cid_hash_to_base58(curr->hash, curr->hash_size, (unsigned char*)hash_str, 256)) {
+			if (!first) fprintf(out, ",");
+			fprintf(out, "\"%s\":{\"Type\":\"%s\"}", hash_str,
+				curr->mode == Recursive ? "recursive" : (curr->mode == Direct ? "direct" : "indirect"));
+			first = 0;
+		}
+		curr = curr->next;
+	}
+	fprintf(out, "}");
+	fclose(out);
+	if (entries) ipfs_pin_entry_free(entries);
+	return 1;
+}
+
+static int ipfs_core_http_process_repo_gc(struct IpfsNode* local_node, struct HttpRequest* request, struct HttpResponse** response) {
+	(void)request;
+	size_t reclaimed = 0;
+	int retVal = ipfs_gc_collect(local_node->repo, &reclaimed);
+	if (!retVal) return 0;
+	*response = ipfs_core_http_response_new();
+	if (!*response) return 0;
+	struct HttpResponse* res = *response;
+	res->content_type = "application/json";
+	int bytes_needed = 64;
+	res->bytes = (uint8_t*)malloc(bytes_needed);
+	if (!res->bytes) {
+		ipfs_core_http_response_free(res);
+		*response = NULL;
+		return 0;
+	}
+	snprintf((char*)res->bytes, bytes_needed, "{\"Key\":\"\",\"Error\":\"\",\"Size\":%zu}", reclaimed);
+	res->bytes_size = strlen((char*)res->bytes);
+	return 1;
+}
+
 /***
  * Process the parameters passed in from an http request
  * @param local_node the context
@@ -546,6 +661,8 @@ int ipfs_core_http_request_process(struct IpfsNode* local_node, struct HttpReque
 		retVal = ipfs_core_http_process_name(local_node, request, response);
 	} else if (strcmp(request->command, "object") == 0) {
 		retVal = ipfs_core_http_process_object(local_node, request, response);
+	} else if (strcmp(request->command, "dht") == 0 && request->sub_command && strcmp(request->sub_command, "findprovs") == 0) {
+		retVal = ipfs_core_http_process_dht_findprovs(local_node, request, response);
 	} else if (strcmp(request->command, "dht") == 0) {
 		retVal = ipfs_core_http_process_dht(local_node, request, response);
 	} else if (strcmp(request->command, "swarm") == 0) {
@@ -560,6 +677,12 @@ int ipfs_core_http_request_process(struct IpfsNode* local_node, struct HttpReque
 		retVal = ipfs_core_http_process_block_put(local_node, request, response);
 	} else if (strcmp(request->command, "cat") == 0) {
 		retVal = ipfs_core_http_process_cat(local_node, request, response);
+	} else if (strcmp(request->command, "pin") == 0 && request->sub_command && strcmp(request->sub_command, "add") == 0) {
+		retVal = ipfs_core_http_process_pin_add(local_node, request, response);
+	} else if (strcmp(request->command, "pin") == 0 && request->sub_command && strcmp(request->sub_command, "ls") == 0) {
+		retVal = ipfs_core_http_process_pin_ls(local_node, request, response);
+	} else if (strcmp(request->command, "repo") == 0 && request->sub_command && strcmp(request->sub_command, "gc") == 0) {
+		retVal = ipfs_core_http_process_repo_gc(local_node, request, response);
 	}
 	return retVal;
 }
