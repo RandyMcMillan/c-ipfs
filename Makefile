@@ -4,7 +4,7 @@ export DEBUG
 .DEFAULT_GOAL := all
 
 # Modules that are part of the main project
-MODULES := blocks cid cmd commands core exchange importer ipld journal merkledag multibase pin repo flatfs datastore thirdparty unixfs routing dnslink namesys path util rbsr nostr main
+MODULES := blocks cid cmd commands core exchange importer ipld journal merkledag multibase pin pubsub repo flatfs datastore thirdparty unixfs routing dnslink namesys path util rbsr nostr main
 
 # External submodules
 SUBMODULES := c-libp2p lmdb nostril

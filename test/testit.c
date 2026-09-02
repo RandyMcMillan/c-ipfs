@@ -31,6 +31,7 @@
 #include "namesys/test_namesys.h"
 #include "pin/test_pin.h"
 #include "ipld/test_dag_cbor.h"
+#include "pubsub/test_ipns_pubsub.h"
 
 struct test {
 	int index;
@@ -97,6 +98,12 @@ int build_test_collection() {
 	add_test("test_ipld_dag_cbor_link_large_cid", test_ipld_dag_cbor_link_large_cid, 1);
 	add_test("test_ipld_dag_cbor_link_invalid_inputs", test_ipld_dag_cbor_link_invalid_inputs, 1);
 	add_test("test_ipld_dag_cbor_link_decode_corrupt", test_ipld_dag_cbor_link_decode_corrupt, 1);
+	add_test("test_ipns_pubsub_entry_parse_basic", test_ipns_pubsub_entry_parse_basic, 1);
+	add_test("test_ipns_pubsub_topic_valid", test_ipns_pubsub_topic_valid, 1);
+	add_test("test_ipns_pubsub_on_message_valid", test_ipns_pubsub_on_message_valid, 1);
+	add_test("test_ipns_pubsub_on_message_wrong_topic", test_ipns_pubsub_on_message_wrong_topic, 1);
+	add_test("test_ipns_pubsub_on_message_corrupt_data", test_ipns_pubsub_on_message_corrupt_data, 1);
+	add_test("test_ipns_pubsub_entry_parse_null", test_ipns_pubsub_entry_parse_null, 1);
 	add_test("test_core_api_startup_shutdown", test_core_api_startup_shutdown, 1);
 	add_test("test_core_api_object_cat", test_core_api_object_cat, 0); // timing-sensitive multi-node; often hangs
 	add_test("test_core_api_object_cat_binary", test_core_api_object_cat_binary, 0); // timing-sensitive multi-node; often hangs

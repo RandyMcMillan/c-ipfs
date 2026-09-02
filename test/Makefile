@@ -27,6 +27,7 @@ OBJS = testit.o test_helper.o \
 	../namesys/resolver.o \
 	../namesys/name.o \
 	../pin/pin.o \
+	../pubsub/ipns_pubsub.o \
 	../repo/init.o \
 	../repo/fsrepo/*.o \
 	../repo/config/*.o \
