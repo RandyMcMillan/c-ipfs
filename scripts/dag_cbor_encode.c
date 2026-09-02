@@ -57,6 +57,12 @@ bool encode_dag_cbor_link(const uint8_t *cid_bytes, size_t cid_len, uint8_t *out
         out_buf[offset++] = 0x59;
         out_buf[offset++] = (uint8_t)((payload_len >> 8) & 0xFF);
         out_buf[offset++] = (uint8_t)(payload_len & 0xFF);
+    } else if (payload_len <= 0xFFFFFFFF) {
+        out_buf[offset++] = 0x5A;
+        out_buf[offset++] = (uint8_t)((payload_len >> 24) & 0xFF);
+        out_buf[offset++] = (uint8_t)((payload_len >> 16) & 0xFF);
+        out_buf[offset++] = (uint8_t)((payload_len >> 8) & 0xFF);
+        out_buf[offset++] = (uint8_t)(payload_len & 0xFF);
     } else {
         return false;
     }
@@ -88,7 +94,7 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    uint8_t raw_bytes[1024];
+    uint8_t raw_bytes[65536];
     size_t raw_len = hex_to_bin(hex_input, raw_bytes, sizeof(raw_bytes));
 
     if (raw_len == 0) {
@@ -96,7 +102,7 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    uint8_t cbor_output[2048];
+    uint8_t cbor_output[65545];
     size_t cbor_len = 0;
 
     if (!encode_dag_cbor_link(raw_bytes, raw_len, cbor_output, &cbor_len)) {

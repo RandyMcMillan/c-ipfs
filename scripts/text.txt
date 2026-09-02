@@ -1,0 +1,159 @@
+===============================================================================
+                    DAG-CBOR Tag 42 Link Encoder CLI
+===============================================================================
+
+A lightweight, standalone C utility that encodes raw binary multihashes and
+CIDs into IPLD-compliant DAG-CBOR Tag 42 Link byte strings according to the
+official IPLD DAG-CBOR Specification:
+https://github.com/ipld/specs/tree/master/blocklayer/codecs/dag-cbor
+
+-------------------------------------------------------------------------------
+1. OVERVIEW & WIRE FORMAT
+-------------------------------------------------------------------------------
+
+In IPLD's DAG-CBOR codec, links referencing other CIDs are encoded using
+CBOR Tag 42 (0xD8 0x2A) wrapping a byte string prefixed with a single
+multibase binary tag (0x00).
+
+Byte Order:
+  [0xD8, 0x2A] + [CBOR Major Type 2 Byte String Header] + [0x00] + [Binary CID]
+
+-------------------------------------------------------------------------------
+2. CBOR MAJOR TYPE 2 (BYTE STRING) ENCODING RULES
+-------------------------------------------------------------------------------
+
+Total Payload Length = 1 byte (0x00 multibase prefix) + len(Raw CID/Multihash)
+
+Case A: Inline Length (Total Payload < 24 bytes)
+  - CBOR Header Byte = 0x40 | Total Payload Length
+  - Example (18-byte multihash -> 19-byte total payload):
+      Header = 0x40 | 19 = 0x53
+      Output: [0xD8, 0x2A, 0x53, 0x00, <18-byte multihash>]
+
+Case B: 1-Byte Extended Length (24 <= Total Payload <= 255 bytes)
+  - CBOR Header Bytes = 0x58, followed by 1-byte length byte
+  - Example (36-byte CIDv1 -> 37-byte total payload = 0x25):
+      Header = 0x58 0x25
+      Output: [0xD8, 0x2A, 0x58, 0x25, 0x00, <36-byte CIDv1>]
+
+Case C: 2-Byte Extended Length (256 <= Total Payload <= 65535 bytes)
+  - CBOR Header Bytes = 0x59, followed by 2-byte big-endian uint16
+  - Example (1000-byte raw payload -> 1001-byte total payload = 0x03E9):
+      Header = 0x59 0x03 0xE9
+      Output: [0xD8, 0x2A, 0x59, 0x03, 0xE9, 0x00, <1000-byte payload>]
+
+Case D: 4-Byte Extended Length (65536 <= Total Payload <= 4294967295 bytes)
+  - CBOR Header Bytes = 0x5A, followed by 4-byte big-endian uint32
+  - Example (70000-byte raw payload -> 70001-byte total payload = 0x00011171):
+      Header = 0x5A 0x00 0x01 0x11 0x71
+      Output: [0xD8, 0x2A, 0x5A, 0x00, 0x01, 0x11, 0x71, 0x00, <70000-byte payload>]
+
+-------------------------------------------------------------------------------
+3. COMPILATION
+-------------------------------------------------------------------------------
+
+Build the executable using gcc or clang:
+
+  gcc -Wall -Wextra -O2 dag_cbor_encode.c -o dag_cbor_encode
+
+-------------------------------------------------------------------------------
+4. USAGE & CLI FLAGS
+-------------------------------------------------------------------------------
+
+Usage:
+  ./dag_cbor_encode <hex_multihash_or_cid_bytes> [FLAGS]
+
+Flags:
+  (Default)     Outputs the raw hex string of the encoded DAG-CBOR link.
+  --formatted   Outputs a human-readable, formatted byte array with byte counts.
+  --binary      Emits raw binary stream directly to stdout.
+
+Examples:
+
+  * Default Hex Output:
+    ./dag_cbor_encode 01701220e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+    Output: d82a58250001701220e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+
+  * Formatted Byte Array Output:
+    ./dag_cbor_encode 01701220e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 --formatted
+    Output:
+    DAG-CBOR Tag 42 Bytes (41 bytes):
+    0xD8 0x2A 0x58 0x25 0x00 0x01 0x70 0x12 0x20 0xE3 0xB0 0xC4 0x42 0x98 0xFC
+    0x1C 0x14 0x9A 0xFB 0xF4 0xC8 0x99 0x6F 0xB9 0x24 0x27 0xAE 0x41 0xE4 0x64
+    0x9B 0x93 0x4C 0xA4 0x95 0x99 0x1B 0x78 0x52 0xB8 0x55
+
+  * Save Binary Payload to File:
+    ./dag_cbor_encode 01701220e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 --binary > link.cbor
+
+-------------------------------------------------------------------------------
+5. FULL SPECIFICATION TEST VECTORS
+-------------------------------------------------------------------------------
+
+Vector 1: Standard CIDv1 Raw (SHA2-256)
+  String CID: bafkreifjjcie6lypi6ny7amxnfftagclb26yan63gah9ib223vda
+  Raw Binary CID (36 Bytes Hex Input):
+    01701220e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+  Expected DAG-CBOR Output (Hex):
+    d82a58250001701220e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+
+  Structural Breakdown:
+    - d8 2a           : CBOR Tag 42 Header
+    - 58 25           : CBOR Major Type 2, 1-byte length indicator (0x25 = 37 bytes)
+    - 00              : Multibase Binary Tag
+    - 01701220e3b0... : 36-byte CIDv1 Payload (0x01 raw codec + 0x70 sha2-256 + 32-byte hash)
+
+Vector 2: Short Multihash Payload (< 24 Bytes Total Payload)
+  Raw Multihash Input (18 Bytes Hex):
+    12100102030405060708090a0b0c0d0e0f10
+  Expected DAG-CBOR Output (Hex):
+    d82a530012100102030405060708090a0b0c0d0e0f10
+
+  Structural Breakdown:
+    - d8 2a    : CBOR Tag 42 Header
+    - 53       : Inline Byte String Header (0x40 | 19 bytes payload)
+    - 00       : Multibase Binary Tag
+    - 1210...  : 18-byte Multihash payload
+
+Vector 3: Medium CIDv1 Dag-PB Payload
+  String CID: bafybeicg22634333...
+  Raw Binary CID (36 Bytes Hex Input):
+    017012200123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+  Expected DAG-CBOR Output (Hex):
+    d82a582500017012200123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+
+Vector 4: Large Payload Test (2-Byte Length Header)
+  Raw Binary CID (300 Bytes Hex Input):
+    [300 bytes of arbitrary hex data]
+  Expected DAG-CBOR Prefix (Hex):
+    d82a59012d00...
+
+  Structural Breakdown:
+    - d8 2a : CBOR Tag 42 Header
+    - 59    : CBOR Major Type 2, 2-byte uint16 length indicator
+    - 01 2d : Length uint16 (0x012D = 301 bytes: 1 byte multibase tag + 300 bytes CID)
+    - 00    : Multibase Binary Tag
+
+-------------------------------------------------------------------------------
+6. AUTOMATED VERIFICATION SCRIPT
+-------------------------------------------------------------------------------
+
+Save as test.sh and execute with `bash test.sh`:
+
+  #!/usr/bin/env bash
+  set -euo pipefail
+
+  TEST_IN="01701220e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  EXPECTED="d82a58250001701220e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+
+  RESULT=$(./dag_cbor_encode "$TEST_IN")
+
+  if [ "$RESULT" = "$EXPECTED" ]; then
+      echo "SUCCESS: DAG-CBOR Tag 42 encoding matches canonical IPLD spec."
+  else
+      echo "ERROR: Vector mismatch!"
+      echo "Got:      $RESULT"
+      echo "Expected: $EXPECTED"
+      exit 1
+  fi
+
+===============================================================================

@@ -33,6 +33,11 @@ TEST_VECTORS = [
         "1220e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
         "d82a5823001220e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     ),
+    (
+        "large payload triggering 2-byte length header (Case C)",
+        "aa" * 255,
+        "d82a59010000" + "aa" * 255,
+    ),
 ]
 
 
