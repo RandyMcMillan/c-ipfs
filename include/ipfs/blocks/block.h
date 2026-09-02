@@ -22,6 +22,21 @@ struct Block* ipfs_block_new();
 
 int ipfs_blocks_block_add_data(const unsigned char* data, size_t data_size, struct Block* block);
 
+/**
+ * Create a new raw block (CIDv1, CID_RAW codec) from data
+ * @param data the raw data
+ * @param data_size the length of the data
+ * @returns a new Block or NULL on failure
+ */
+struct Block* ipfs_block_new_raw(const unsigned char* data, size_t data_size);
+
+/**
+ * Validate that a block's CID matches the hash of its data
+ * @param block the block to validate
+ * @returns true(1) if valid, false(0) otherwise
+ */
+int ipfs_block_validate(const struct Block* block);
+
 /***
  * Free resources used by the creation of a block
  * @param block the block to free
