@@ -1,5 +1,6 @@
 #include <pthread.h>
 
+#include "blocks/test_block.h"
 #include "cid/test_cid.h"
 #include "cmd/ipfs/test_init.h"
 #include "core/test_api.h"
@@ -119,6 +120,8 @@ int build_test_collection() {
 	add_test("test_flatfs_get_full_filename", test_flatfs_get_full_filename, 1);
 	add_test("test_ds_key_from_binary", test_ds_key_from_binary, 1);
 	add_test("test_blocks_new", test_blocks_new, 1);
+	add_test("test_block_new_raw", test_block_new_raw, 1);
+	add_test("test_block_validate", test_block_validate, 1);
 	add_test("test_repo_bootstrap_peers_init", test_repo_bootstrap_peers_init, 1);
 	add_test("test_ipfs_datastore_put", test_ipfs_datastore_put, 1);
 	add_test("test_node", test_node, 1);
@@ -129,6 +132,8 @@ int build_test_collection() {
 	add_test("test_merkledag_get_data", test_merkledag_get_data, 1);
 	add_test("test_merkledag_add_node", test_merkledag_add_node, 1);
 	add_test("test_merkledag_add_node_with_links", test_merkledag_add_node_with_links, 1);
+	add_test("test_merkledag_traverse", test_merkledag_traverse, 1);
+	add_test("test_merkledag_link_ordering", test_merkledag_link_ordering, 1);
 	add_test("test_namesys_publisher_publish", test_namesys_publisher_publish, 1);
 	add_test("test_namesys_resolver_resolve", test_namesys_resolver_resolve, 1);
 	add_test("test_resolver_get", test_resolver_get, 0); // not working (test directory does not exist)
