@@ -54,6 +54,14 @@ Repo state events carry an RBSR fingerprint instead of raw refs. Two peers can e
 * [getting started](https://github.com/ipfs/community/issues/177)
 * [libp2p](https://github.com/libp2p/specs)
 
+## Kubo compatibility target
+
+[`ipfs-compatibility-profile.json`](ipfs-compatibility-profile.json) is the
+versioned interoperability target for this implementation. The corresponding
+[`ipfs-compatibility-matrix.json`](ipfs-compatibility-matrix.json) records the
+current source-backed audit, gaps, and evidence. A feature is conformant only
+after its matrix entry has interoperability test evidence.
+
 ## Prerequisites: To compile the C version you will need, all included as submodules:
 * [lmdb](https://github.com/jmjatlanta/lmdb)
 * [c-protobuf](https://github.com/Agorise/c-protobuf)
