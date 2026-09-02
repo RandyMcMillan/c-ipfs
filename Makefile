@@ -1,6 +1,7 @@
 
 DEBUG = true
 export DEBUG
+.DEFAULT_GOAL := all
 
 prepare:
 	@if [ "$$(uname -s)" = "Darwin" ] && find . -type f -name '*.o' -exec file {} + 2>/dev/null | grep -vq 'Mach-O'; then \
