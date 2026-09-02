@@ -11,6 +11,8 @@
 !include/**
 !cmd/**
 !README.md
+!ipfs-compatibility-profile.json
+!ipfs-compatibility-matrix.json
 
 *.o
 .settings/language.settings.xml

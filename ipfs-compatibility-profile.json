@@ -1,0 +1,130 @@
+{
+  "schema_version": "1.0",
+  "profile_id": "c-ipfs-kubo-v0.43",
+  "target_implementation": {
+    "name": "Kubo",
+    "version": "v0.43.0",
+    "release": "https://github.com/ipfs/kubo/releases/tag/v0.43.0"
+  },
+  "specification_sources": {
+    "ipfs": "https://specs.ipfs.tech/",
+    "ipld": "https://ipld.io/specs/",
+    "libp2p": "https://github.com/libp2p/specs",
+    "kubo_repository": "https://github.com/ipfs/kubo/tree/v0.43.0/docs/specifications"
+  },
+  "conformance_rule": "A capability is conformant only when its matrix entry cites an interoperable test against the target implementation.",
+  "targets": {
+    "multiformats": {
+      "cid_versions": ["v0", "v1"],
+      "requirements": [
+        "canonical unsigned-varint encoding",
+        "multibase and multicodec validation",
+        "multihash and identity multihash support",
+        "content-codec validation"
+      ]
+    },
+    "ipld": {
+      "codecs": ["raw", "dag-pb", "dag-cbor"],
+      "requirements": [
+        "CID validation on block read and write",
+        "deterministic dag-pb link ordering",
+        "bounded streaming traversal",
+        "selector support"
+      ]
+    },
+    "unixfs": {
+      "version": "UnixFS v1",
+      "requirements": [
+        "files, directories, and symlinks",
+        "HAMT directories",
+        "mode and mtime metadata",
+        "balanced and trickle layouts",
+        "configurable chunking"
+      ]
+    },
+    "repository": {
+      "requirements": [
+        "Kubo-compatible configuration where practical",
+        "blockstore and datastore interfaces",
+        "flatfs and transactional metadata",
+        "pins, garbage collection, locking, and crash-safe writes",
+        "filestore and provider reannouncement"
+      ]
+    },
+    "libp2p": {
+      "transports": ["TCP", "QUIC", "WebSocket"],
+      "security": ["Noise", "TLS"],
+      "multiplexers": ["yamux", "mplex"],
+      "requirements": [
+        "peer ID and key-format compatibility",
+        "multistream-select and identify",
+        "connection and resource management",
+        "NAT traversal, relay, AutoNAT, hole punching, and mDNS"
+      ]
+    },
+    "routing": {
+      "protocol": "Kademlia DHT",
+      "requirements": [
+        "iterative lookup and routing-table maintenance",
+        "signed provider records and record validation",
+        "provider announcements, discovery, and bootstrap"
+      ]
+    },
+    "bitswap": {
+      "protocol": "Bitswap",
+      "requirements": [
+        "protocol negotiation",
+        "want-have, want-block, cancels, and block presences",
+        "sessions, ledgers, scheduling, verification, and retry policy",
+        "provider and DHT fallback"
+      ]
+    },
+    "naming": {
+      "requirements": [
+        "signed IPNS records with sequence and validity handling",
+        "DHT and pubsub distribution",
+        "recursive resolution and cache policy",
+        "DNSLink and /ipfs or /ipns path resolution"
+      ]
+    },
+    "interfaces": {
+      "api_version": "/api/v0",
+      "selected_rpc_endpoints": [
+        "add",
+        "block/get",
+        "block/put",
+        "cat",
+        "dag/get",
+        "dag/put",
+        "dht/findprovs",
+        "dht/provide",
+        "get",
+        "id",
+        "ls",
+        "pin/add",
+        "pin/ls",
+        "repo/gc",
+        "swarm/connect",
+        "version"
+      ],
+      "requirements": [
+        "managed daemon lifecycle",
+        "HTTP gateway",
+        "selected Kubo-compatible /api/v0 RPC endpoints",
+        "stable CLI",
+        "authentication and origin controls",
+        "separation of public APIs from Nostr extensions"
+      ]
+    },
+    "security_and_verification": {
+      "requirements": [
+        "strict parser and resource bounds",
+        "documented ownership and error conventions",
+        "fuzzing of wire and content decoders",
+        "concurrency-safe storage",
+        "dependency and license review",
+        "Linux and macOS interoperability CI"
+      ]
+    }
+  }
+}

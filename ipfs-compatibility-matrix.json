@@ -1,0 +1,80 @@
+{
+  "schema_version": "1.0",
+  "profile": "ipfs-compatibility-profile.json",
+  "last_audited_commit": "e94e3bf",
+  "evidence_policy": "Source evidence shows only that an implementation exists. Interoperability evidence is required before a feature becomes conformant.",
+  "features": [
+    {
+      "id": "multiformats",
+      "phase": 1,
+      "status": "partial",
+      "specifications": ["https://github.com/multiformats/multiformats"],
+      "source_evidence": ["cid/cid.c", "multibase/multibase.c", "c-libp2p/c-multihash"],
+      "test_evidence": ["test/cid/test_cid.h"],
+      "gaps": ["canonical varints", "CIDv1 and identity vectors", "content-codec validation", "cross-language vectors"]
+    },
+    {
+      "id": "ipld",
+      "phase": 2,
+      "status": "partial",
+      "specifications": ["https://ipld.io/specs/"],
+      "source_evidence": ["blocks/block.c", "blocks/blockstore.c", "merkledag/merkledag.c", "merkledag/node.c"],
+      "test_evidence": ["test/blocks/test_block.h", "test/merkledag/test_merkledag.h"],
+      "gaps": ["raw and DAG-CBOR codecs", "CID verification on all storage operations", "selectors", "bounded streaming traversal"]
+    },
+    {
+      "id": "unixfs-storage",
+      "phase": 3,
+      "status": "partial",
+      "specifications": ["https://specs.ipfs.tech/unixfs/", "https://github.com/ipfs/kubo/tree/v0.43.0/docs/specifications"],
+      "source_evidence": ["unixfs/unixfs.c", "importer/importer.c", "importer/exporter.c", "flatfs/flatfs.c", "repo/fsrepo/fs_repo.c", "pin/pin.c"],
+      "test_evidence": ["test/node/test_importer.h", "test/flatfs/test_flatfs.h"],
+      "gaps": ["HAMT directories", "metadata", "trickle layout", "transactional metadata", "garbage collection", "crash-safe storage"]
+    },
+    {
+      "id": "libp2p",
+      "phase": 4,
+      "status": "partial",
+      "specifications": ["https://github.com/libp2p/specs"],
+      "source_evidence": ["c-libp2p", "core/swarm.c", "core/net.c"],
+      "test_evidence": ["test/core/test_node.h", "test/core/test_ping.h"],
+      "gaps": ["modern security and multiplexing negotiation", "QUIC and WebSocket", "resource management", "NAT and discovery features"]
+    },
+    {
+      "id": "dht-bitswap",
+      "phase": 5,
+      "status": "partial",
+      "specifications": ["https://specs.ipfs.tech/bitswap-protocol/", "https://github.com/libp2p/specs/tree/master/kad-dht"],
+      "source_evidence": ["routing/k_routing.c", "routing/online.c", "exchange/bitswap/bitswap.c", "exchange/bitswap/message.c"],
+      "test_evidence": ["test/exchange/test_bitswap.h", "test/exchange/test_bitswap_request_queue.h"],
+      "gaps": ["standards-compatible iterative DHT", "modern Bitswap messages and sessions", "provider fallback", "Kubo interoperability tests"]
+    },
+    {
+      "id": "ipns-dnslink",
+      "phase": 6,
+      "status": "partial",
+      "specifications": ["https://specs.ipfs.tech/ipns/", "https://dnslink.dev/"],
+      "source_evidence": ["namesys/publisher.c", "namesys/resolver.c", "namesys/routing.c", "dnslink/dnslink.c", "path/resolver.c"],
+      "test_evidence": ["test/namesys/test_namesys.h"],
+      "gaps": ["modern signed IPNS records", "pubsub distribution", "cache policy", "complete path resolution"]
+    },
+    {
+      "id": "daemon-api-cli",
+      "phase": 7,
+      "status": "partial",
+      "specifications": ["https://specs.ipfs.tech/http-gateways/", "https://docs.ipfs.tech/reference/kubo/rpc/"],
+      "source_evidence": ["core/daemon.c", "core/api.c", "cmd/cli.c", "cmd/ipfs/main.c"],
+      "test_evidence": ["test/core/test_api.h", "test/core/test_daemon.h"],
+      "gaps": ["gateway behavior", "selected current RPC compatibility", "stable CLI output", "authentication and origin policy"]
+    },
+    {
+      "id": "security-verification",
+      "phase": 8,
+      "status": "planned",
+      "specifications": ["https://specs.ipfs.tech/"],
+      "source_evidence": [],
+      "test_evidence": ["test/testit.c"],
+      "gaps": ["parser limits", "fuzzing", "multi-node interoperability", "persistence and GC restart tests", "Linux and macOS interoperability CI"]
+    }
+  ]
+}
