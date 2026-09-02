@@ -13,7 +13,7 @@ endif
 DEPS = cmd/ipfs/test_init.h repo/test_repo_bootstrap_peers.h repo/test_repo_config.h repo/test_repo_identity.h cid/test_cid.h
 OBJS = main.o \
 	../blocks/block.o ../blocks/blockstore.o \
-	../cid/cid.o \
+	../cid/cid.o ../cid/set.o \
 	../cmd/ipfs/init.o \
 	../cmd/ipfs/id.o \
 	../cmd/ipfs/get.o \
