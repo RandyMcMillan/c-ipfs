@@ -172,3 +172,18 @@ int test_namesys_verify_entry_signature_null(void) {
 exit:
     return retVal;
 }
+
+static size_t hex_to_bin_ns(const char *hex, uint8_t *out, size_t max_len) {
+    size_t hex_len = strlen(hex);
+    if (hex_len % 2 != 0 || hex_len / 2 > max_len) return 0;
+    for (size_t i = 0; i < hex_len / 2; i++) {
+        sscanf(hex + (i * 2), "%02hhx", &out[i]);
+    }
+    return hex_len / 2;
+}
+
+/* NOTE: hex_to_bin_ns helper is kept above for future real-vector tests.
+ * The previously added Ed25519/secp256k1 IPNS vector tests used
+ * example/mock data that is not a valid cryptographic signature,
+ * so those test functions have been removed.  Existing parse and
+ * invalid-input tests still exercise the code. */

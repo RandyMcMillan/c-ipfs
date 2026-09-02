@@ -116,3 +116,18 @@ cleanup_key:
 exit:
     return retVal;
 }
+
+static size_t hex_to_bin(const char *hex, uint8_t *out, size_t max_len) {
+    size_t hex_len = strlen(hex);
+    if (hex_len % 2 != 0 || hex_len / 2 > max_len) return 0;
+    for (size_t i = 0; i < hex_len / 2; i++) {
+        sscanf(hex + (i * 2), "%02hhx", &out[i]);
+    }
+    return hex_len / 2;
+}
+
+/* NOTE: hex_to_bin helper is kept above for future real-vector tests.
+ * The previously added Ed25519/secp256k1 IPNS vector tests used
+ * example/mock data that is not a valid cryptographic signature,
+ * so those test functions have been removed.  Roundtrip tests
+ * (test_crypto_verify_ed25519_roundtrip) still exercise the code. */

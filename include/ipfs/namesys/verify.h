@@ -64,4 +64,21 @@ int ipfs_namesys_verify_entry_parse(const uint8_t *buffer, size_t size, struct I
  */
 int ipfs_namesys_verify_entry_signature(const struct IpnsVerifyEntry *entry);
 
+/**
+ * Verify an IPNS record signature from raw components.
+ *
+ * @param key_type the key type (ED25519 or SECP256K1)
+ * @param pubkey the raw public key bytes
+ * @param pubkey_len the public key length
+ * @param cbor_data the canonical CBOR data payload
+ * @param cbor_data_len the data payload length
+ * @param sig the signature bytes
+ * @param sig_len the signature length
+ * @returns 1 if the signature is valid, 0 otherwise
+ */
+int ipfs_namesys_verify_ipns_record(enum IpfsKeyType key_type,
+                                     const uint8_t *pubkey, size_t pubkey_len,
+                                     const uint8_t *cbor_data, size_t cbor_data_len,
+                                     const uint8_t *sig, size_t sig_len);
+
 #endif

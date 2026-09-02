@@ -158,3 +158,30 @@ int ipfs_namesys_verify_entry_signature(const struct IpnsVerifyEntry *entry) {
     free(signed_msg);
     return verified;
 }
+
+/**
+ * Verify an IPNS record signature from raw components.
+ */
+int ipfs_namesys_verify_ipns_record(enum IpfsKeyType key_type,
+                                     const uint8_t *pubkey, size_t pubkey_len,
+                                     const uint8_t *cbor_data, size_t cbor_data_len,
+                                     const uint8_t *sig, size_t sig_len) {
+    if (!pubkey || !cbor_data || !sig) return 0;
+
+    size_t signed_msg_len = IPNS_SIG_PREFIX_LEN + cbor_data_len;
+    uint8_t *signed_msg = (uint8_t *)malloc(signed_msg_len);
+    if (!signed_msg) return 0;
+
+    memcpy(signed_msg, IPNS_SIG_PREFIX, IPNS_SIG_PREFIX_LEN);
+    memcpy(signed_msg + IPNS_SIG_PREFIX_LEN, cbor_data, cbor_data_len);
+
+    int verified = 0;
+    if (key_type == IPFS_KEY_TYPE_ED25519) {
+        verified = ipfs_crypto_verify_ed25519(pubkey, pubkey_len, signed_msg, signed_msg_len, sig, sig_len);
+    } else if (key_type == IPFS_KEY_TYPE_SECP256K1) {
+        verified = ipfs_crypto_verify_secp256k1(pubkey, pubkey_len, signed_msg, signed_msg_len, sig, sig_len);
+    }
+
+    free(signed_msg);
+    return verified;
+}
