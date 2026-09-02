@@ -27,9 +27,9 @@
       "phase": 3,
       "status": "partial",
       "specifications": ["https://specs.ipfs.tech/unixfs/", "https://github.com/ipfs/kubo/tree/v0.43.0/docs/specifications"],
-      "source_evidence": ["unixfs/unixfs.c", "importer/importer.c", "importer/exporter.c", "flatfs/flatfs.c", "repo/fsrepo/fs_repo.c", "pin/pin.c"],
-      "test_evidence": ["test/node/test_importer.h", "test/flatfs/test_flatfs.h"],
-      "gaps": ["HAMT directories", "metadata", "trickle layout", "transactional metadata", "garbage collection", "crash-safe storage"]
+      "source_evidence": ["unixfs/unixfs.c", "unixfs/hamt.c", "importer/importer.c", "importer/exporter.c", "flatfs/flatfs.c", "repo/fsrepo/fs_repo.c", "pin/pin.c", "blocks/blockstore.c"],
+      "test_evidence": ["test/node/test_importer.h", "test/flatfs/test_flatfs.h", "test/pin/test_pin.h", "test/storage/test_unixfs.h", "test/repo/test_repo_config.h"],
+      "gaps": ["Kubo v0.43.0 interoperability tests for UnixFS storage"]
     },
     {
       "id": "libp2p",
