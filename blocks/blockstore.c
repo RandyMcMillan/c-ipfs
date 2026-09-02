@@ -136,6 +136,9 @@ int ipfs_blockstore_get(const struct BlockstoreContext* context, struct Cid* cid
 
 	(*block)->cid = ipfs_cid_copy(cid);
 
+	if (!ipfs_block_validate(*block))
+		goto exit;
+
 	retVal = 1;
 	exit:
 	free(key);
@@ -152,6 +155,9 @@ int ipfs_blockstore_get(const struct BlockstoreContext* context, struct Cid* cid
 int ipfs_blockstore_put(const struct BlockstoreContext* context, struct Block* block, size_t* bytes_written) {
 	// from blockstore.go line 118
 	int retVal = 0;
+
+	if (!ipfs_block_validate(block))
+		return 0;
 
 	// Get Datastore key, which is a base32 key of the multihash,
 	unsigned char* key = ipfs_blockstore_cid_to_base32(block->cid);
