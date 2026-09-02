@@ -1,127 +1,80 @@
 #include <pthread.h>
 
 #include "ipfs/routing/routing.h"
+#include "ipfs/core/null.h"
 #include "libp2p/routing/kademlia.h"
+#include "libp2p/routing/dht_protocol.h"
 #include "libp2p/peer/providerstore.h"
 #include "libp2p/utils/vector.h"
 #include "ipfs/thirdparty/ipfsaddr/ipfs_addr.h"
 
-/**
- * Routing using Kademlia and DHT
- *
- * The go version has "supernode" which is similar to this:
- */
+// Forward declarations from online routing
+int ipfs_routing_online_get_value(struct IpfsRouting*, const unsigned char*, size_t, void**, size_t*);
+int ipfs_routing_online_find_providers(struct IpfsRouting*, const unsigned char*, size_t, struct Libp2pVector**);
+int ipfs_routing_online_find_peer(struct IpfsRouting*, const unsigned char*, size_t, struct Libp2pPeer**);
+int ipfs_routing_online_ping(struct IpfsRouting*, struct Libp2pPeer*);
+int ipfs_routing_online_bootstrap(struct IpfsRouting*);
+int ipfs_routing_online_provide(struct IpfsRouting*, const unsigned char*, size_t);
 
 /**
  * Put a value in the datastore
- * @param routing the struct that contains connection information
- * @param key the key
- * @param key_size the size of the key
- * @param value the value
- * @param value_size the size of the value
- * @returns 0 on success, otherwise -1
  */
 int ipfs_routing_kademlia_put_value(struct IpfsRouting* routing, const unsigned char* key, size_t key_size, const void* value, size_t value_size) {
-	return 0;
+	return ipfs_routing_generic_put_value(routing, key, key_size, value, value_size);
 }
 
 /**
  * Get a value from the datastore
- * @param 1 the struct that contains the connection information
- * @param 2 the key to look for
- * @param 3 the size of the key
- * @param 4 a place to store the value
- * @param 5 the size of the value
  */
 int ipfs_routing_kademlia_get_value(struct IpfsRouting* routing, const unsigned char* key, size_t key_size, void** value, size_t* value_size) {
-	return 0;
+	return ipfs_routing_online_get_value(routing, key, key_size, value, value_size);
 }
 
 /**
  * Find a provider that can provide a particular key
- * NOTE: It will look locally before asking the network. So
- * if a peer announced, we already have an answer.
- *
- * @param routing the context
- * @param key the key to what we're looking for
- * @param key_size the size of the key
- * @param results the results, which is a vector of MultiAddress*
- * @param results_size the size of the results buffer
- * @returns true(1) on success, otherwise false(0)
  */
 int ipfs_routing_kademlia_find_providers(struct IpfsRouting* routing, const unsigned char* key, size_t key_size, struct Libp2pVector** results) {
-	int retVal = 1;
-	*results = libp2p_utils_vector_new(1);
-	struct Libp2pVector* vector = *results;
-	// see if I can provide it
-	unsigned char* peer_id = NULL;
-	int peer_id_size = 0;
-	if (libp2p_providerstore_get(routing->local_node->providerstore, (unsigned char*)key, key_size, &peer_id, &peer_id_size)) {
-		struct Libp2pPeer* peer = libp2p_peerstore_get_peer(routing->local_node->peerstore, peer_id, peer_id_size);
-		struct Libp2pLinkedList* current = peer->addr_head;
-		while (current != NULL) {
-			struct MultiAddress* ma = (struct MultiAddress*)current->item;
-			if (multiaddress_is_ip(ma)) {
-				libp2p_utils_vector_add(vector, ma);
-			}
-			current = current->next;
-		}
-	}
-	//get a list of providers that are closest
-	if (vector->total == 0) {
-		// search requires null terminated key
-		char* key_nt = malloc(key_size + 1);
-		if (key_nt != NULL) {
-			strncpy(key_nt, (char*)key, key_size);
-			key_nt[key_size] = 0;
-			struct MultiAddress** list = search_kademlia(key_nt, 3);
-			free(key_nt);
-			if (list != NULL) {
-				int i = 0;
-				while (list[i] != NULL) {
-					struct MultiAddress* current = list[i];
-					libp2p_utils_vector_add(vector, current);
-					i++;
-				}
-			}
-		} else {
-			retVal = 0;
-		}
-	}
-	if (vector->total == 0) {
-		// we were unable to find it, even on the network
-		libp2p_utils_vector_free(vector);
-		vector = NULL;
-		retVal = 0;
-	}
-	return retVal;
+	return ipfs_routing_online_find_providers(routing, key, key_size, results);
 }
 
 /**
  * Find a peer
  */
 int ipfs_routing_kademlia_find_peer(struct IpfsRouting* routing, const unsigned char* param1, size_t param2, struct Libp2pPeer **result) {
-	return 0;
+	return ipfs_routing_online_find_peer(routing, param1, param2, result);
 }
 
 /**
  * Calling this method notifies the network that this peer can provide this key
- * @param routing the context
- * @param key the key that can be provided
- * @param key_size the size of the key
- * @returns true(1) on success, otherwise false(0)
  */
 int ipfs_routing_kademlia_provide(struct IpfsRouting* routing, const unsigned char* key, size_t key_size) {
-	//TODO: Announce to the network that I can provide this file
-	// save in a cache
-	// store key and address in cache. Key is the hash, peer id is the value
-	libp2p_providerstore_add(routing->local_node->providerstore, (unsigned char*)key, key_size, (unsigned char*)routing->local_node->identity->peer->id, routing->local_node->identity->peer->id_size);
+	// Store locally
+	libp2p_providerstore_add(routing->local_node->providerstore, (unsigned char*)key, key_size,
+		(unsigned char*)routing->local_node->identity->peer->id, routing->local_node->identity->peer->id_size);
 
+	// Announce to nearest peers via DHT protocol
+	struct KademliaMessage* msg = libp2p_message_new();
+	msg->message_type = MESSAGE_TYPE_ADD_PROVIDER;
+	msg->key_size = key_size;
+	msg->key = malloc(key_size);
+	if (msg->key != NULL) {
+		memcpy(msg->key, key, key_size);
+		struct Libp2pPeer* local_peer = libp2p_peer_copy(routing->local_node->identity->peer);
+		if (local_peer != NULL) {
+			local_peer->connection_type = CONNECTION_TYPE_CONNECTED;
+			msg->provider_peer_head = libp2p_utils_linked_list_new();
+			if (msg->provider_peer_head != NULL)
+				msg->provider_peer_head->item = local_peer;
+		}
+		libp2p_routing_dht_send_message_nearest_x(routing->local_node->dialer, routing->local_node->peerstore,
+			routing->local_node->repo->config->datastore, msg, 3);
+		libp2p_message_free(msg);
+	} else {
+		libp2p_message_free(msg);
+	}
 	return 1;
 }
 
-// declared here so as to have the code in 1 place
-int ipfs_routing_online_ping(struct IpfsRouting*, struct Libp2pPeer*);
 /**
  * Ping this instance
  */
@@ -130,16 +83,18 @@ int ipfs_routing_kademlia_ping(struct IpfsRouting* routing, struct Libp2pPeer* p
 }
 
 int ipfs_routing_kademlia_bootstrap(struct IpfsRouting* routing) {
+	// First do the online bootstrap (connect to bootstrap peers)
+	ipfs_routing_online_bootstrap(routing);
+
 	struct IpfsNode *local_node = routing->local_node;
 	// read the config file and get the bootstrap peers
-	for(int i = 0; i < local_node->repo->config->bootstrap_peers->total; i++) { // loop through the peers
+	for(int i = 0; i < local_node->repo->config->bootstrap_peers->total; i++) {
 		struct IPFSAddr* ipfs_addr = (struct IPFSAddr*) libp2p_utils_vector_get(local_node->repo->config->bootstrap_peers, i);
 		struct MultiAddress* ma = multiaddress_new_from_string(ipfs_addr->entire_string);
-		// get the id
 		char* ptr;
-		if ( (ptr = strstr(ipfs_addr->entire_string, "/ipfs/")) != NULL) { // look for the peer id
+		if ( (ptr = strstr(ipfs_addr->entire_string, "/ipfs/")) != NULL) {
 			ptr += 6;
-			if (ptr[0] == 'Q' && ptr[1] == 'm') { // things look good
+			if (ptr[0] == 'Q' && ptr[1] == 'm') {
 				struct Libp2pPeer* peer = libp2p_peer_new_from_multiaddress(ma);
 				if (peer) {
 					peer->id = ptr;
@@ -147,11 +102,14 @@ int ipfs_routing_kademlia_bootstrap(struct IpfsRouting* routing) {
 					libp2p_peerstore_add_peer(local_node->peerstore, peer);
 				}
 			}
-			// TODO: attempt to connect to the peer
-
-		} // we have a good peer ID
-
+		}
 	}
+	return 1;
+}
+
+int ipfs_routing_kademlia_free(struct IpfsRouting* incoming) {
+	stop_kademlia();
+	free(incoming);
 	return 1;
 }
 
@@ -174,6 +132,8 @@ struct IpfsRouting* ipfs_routing_new_kademlia(struct IpfsNode* local_node, struc
 		routing->Provide = ipfs_routing_kademlia_provide;
 		routing->Ping = ipfs_routing_kademlia_ping;
 		routing->Bootstrap = ipfs_routing_kademlia_bootstrap;
+		routing->Listen = ipfs_null_listen;
+		routing->Shutdown = ipfs_null_shutdown;
 	}
 	// connect to nodes and listen for connections
 	struct MultiAddress* address = multiaddress_new_from_string(local_node->repo->config->addresses->api);

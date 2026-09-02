@@ -178,21 +178,14 @@ int test_routing_find_peer() {
 	char* peer_id_1 = NULL;
 	char* peer_id_2 = NULL;
 	char* peer_id_3 = NULL;
-    struct IpfsNode* local_node = NULL;
+	struct IpfsNode* local_node = NULL;
 	struct IpfsNode* local_node2 = NULL;
 	struct IpfsNode* local_node3 = NULL;
 	struct FSRepo* fs_repo = NULL;
-	struct MultiAddress* ma_peer1;
+	struct MultiAddress* ma_peer1 = NULL;
 	struct Libp2pVector *ma_vector = NULL;
-    struct Libp2pPeer* result = NULL;
-    struct HashtableNode *node = NULL;
-    struct Libp2pVector* peers = NULL;
-
-    //libp2p_logger_add_class("online");
-    //libp2p_logger_add_class("null");
-    //libp2p_logger_add_class("daemon");
-    //libp2p_logger_add_class("dht_protocol");
-    //libp2p_logger_add_class("peerstore");
+	struct Libp2pPeer* result = NULL;
+	struct HashtableNode *node = NULL;
 
 	// create peer 1
 	drop_and_build_repository(ipfs_path1, 4001, NULL, &peer_id_1);
@@ -200,7 +193,7 @@ int test_routing_find_peer() {
 	sprintf(multiaddress_string, "/ip4/127.0.0.1/tcp/4001/ipfs/%s", peer_id_1);
 	ma_peer1 = multiaddress_new_from_string(multiaddress_string);
 	// start the daemon in a separate thread
-	if (pthread_create(&thread1, NULL, test_daemon_start, (void*)ipfs_path2) < 0)
+	if (pthread_create(&thread1, NULL, test_daemon_start, (void*)ipfs_path1) < 0)
 		goto exit;
 	thread1_started = 1;
 
@@ -215,19 +208,18 @@ int test_routing_find_peer() {
 		goto exit;
 	thread2_started = 1;
 
-
-	// JMJ wait for everything to start up
-    sleep(3);
+	// wait for everything to start up
+	sleep(3);
 
 	// add a file to peer 2
-    char* hello_text = "Hello, World!";
-    create_file("/tmp/hello.txt", (uint8_t*)hello_text, strlen(hello_text));
+	char* hello_text = "Hello, World!";
+	create_file("/tmp/hello.txt", (uint8_t*)hello_text, strlen(hello_text));
 	size_t bytes_written = 0;
 	ipfs_node_offline_new(ipfs_path2, &local_node2);
 	ipfs_import_file(NULL, "/tmp/hello.txt", &node, local_node2, &bytes_written, 0);
 	ipfs_node_free(local_node2);
 
-    // create my peer, peer 3
+	// create my peer, peer 3
 	libp2p_utils_vector_add(ma_vector, ma_peer1);
 	drop_and_build_repository(ipfs_path3, 4003, ma_vector, &peer_id_3);
 	// start the daemon in a separate thread
@@ -240,10 +232,10 @@ int test_routing_find_peer() {
 	ipfs_node_offline_new(ipfs_path3, &local_node3);
 	int peer2_len = strlen(peer_id_2);
 
-    if (!local_node3->routing->FindProviders(local_node3->routing, (unsigned char*)peer_id_2, peer2_len, &peers)) {
-    		fprintf(stderr, "Unable to find peer %s by asking %s\n", peer_id_2, peer_id_1);
-    		goto exit;
-    }
+	if (!local_node3->routing->FindPeer(local_node3->routing, (unsigned char*)peer_id_2, peer2_len, &result)) {
+		fprintf(stderr, "Unable to find peer %s by asking %s\n", peer_id_2, peer_id_1);
+		goto exit;
+	}
 
 	if (result == NULL) {
 		fprintf(stderr, "Result was NULL\n");
@@ -282,7 +274,6 @@ int test_routing_find_peer() {
 		libp2p_peer_free(result);
 
 	return retVal;
-
 }
 
 int test_routing_find_providers() {
@@ -778,4 +769,52 @@ int test_routing_retrieve_large_file() {
 		ipfs_hashtable_node_free(result_node);
 	return retVal;
 
+}
+
+#include "libp2p/routing/dht_utils.h"
+
+int test_dht_utils_xor_distance() {
+	unsigned char a[DHT_ID_SIZE] = {0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+		                               0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F,
+		                               0x10, 0x11, 0x12, 0x13};
+	unsigned char b[DHT_ID_SIZE] = {0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+		                               0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F,
+		                               0x10, 0x11, 0x12, 0x13};
+	unsigned char c[DHT_ID_SIZE] = {0xFF, 0xFE, 0xFD, 0xFC, 0xFB, 0xFA, 0xF9, 0xF8,
+		                               0xF7, 0xF6, 0xF5, 0xF4, 0xF3, 0xF2, 0xF1, 0xF0,
+		                               0xEF, 0xEE, 0xED, 0xEC};
+	unsigned char d[DHT_ID_SIZE] = {0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+		                               0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F,
+		                               0x10, 0x11, 0x12, 0xFF};
+
+	unsigned char dist_ab[DHT_ID_SIZE];
+	unsigned char dist_ac[DHT_ID_SIZE];
+	unsigned char dist_ad[DHT_ID_SIZE];
+
+	libp2p_routing_dht_xor_distance(a, b, dist_ab);
+	libp2p_routing_dht_xor_distance(a, c, dist_ac);
+	libp2p_routing_dht_xor_distance(a, d, dist_ad);
+
+	// a XOR a should be 0
+	for (int i = 0; i < DHT_ID_SIZE; i++) {
+		if (dist_ab[i] != 0) return 0;
+	}
+
+	// a XOR c should be all 0xFF
+	for (int i = 0; i < DHT_ID_SIZE; i++) {
+		if (dist_ac[i] != 0xFF) return 0;
+	}
+
+	// a XOR d should have only last byte non-zero
+	for (int i = 0; i < DHT_ID_SIZE - 1; i++) {
+		if (dist_ad[i] != 0) return 0;
+	}
+	if (dist_ad[DHT_ID_SIZE - 1] != (0x13 ^ 0xFF)) return 0;
+
+	// Distance ordering: ad < ac
+	if (libp2p_routing_dht_distance_cmp(dist_ad, dist_ac) >= 0) return 0;
+	// ab < ad
+	if (libp2p_routing_dht_distance_cmp(dist_ab, dist_ad) >= 0) return 0;
+
+	return 1;
 }
