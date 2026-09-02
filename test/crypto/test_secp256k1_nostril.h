@@ -218,3 +218,122 @@ cleanup_ctx:
 exit:
     return retVal;
 }
+
+/* ============================================================================
+ * BIP-340 Official Test Vectors
+ * Source: https://github.com/bitcoin/bips/blob/master/bip-0340/test-vectors.csv
+ * ============================================================================ */
+
+static int hex_to_bin_vec(const char *hex, unsigned char *out, size_t max_len) {
+    size_t hex_len = strlen(hex);
+    if (hex_len % 2 != 0 || hex_len / 2 > max_len) return 0;
+    for (size_t i = 0; i < hex_len / 2; i++) {
+        sscanf(hex + (i * 2), "%02hhx", &out[i]);
+    }
+    return hex_len / 2;
+}
+
+/**
+ * Test: BIP-340 official verification vectors using nostril/libsecp256k1.
+ */
+int test_secp256k1_nostril_bip340_vectors(void) {
+    int retVal = 0;
+    secp256k1_context *ctx = secp256k1_context_create(SECP256K1_CONTEXT_SIGN | SECP256K1_CONTEXT_VERIFY);
+    if (!ctx) {
+        fprintf(stderr, "failed to create secp256k1 context\n");
+        return 0;
+    }
+
+    /* Vector 0: all-zeros message, simple key, expected TRUE */
+    {
+        const char *pk_hex = "F9308A019258C31049344F85F89D5229B531C845836F99B08601F113BCE036F9";
+        const char *msg_hex = "0000000000000000000000000000000000000000000000000000000000000000";
+        const char *sig_hex = "E907831F80848D1069A5371B402410364BDF1C5F8307B0084C55F1CE2DCA821525F66A4A85EA8B71E482A74F382D2CE5EBEEE8FDB2172F477DF4900D310536C0";
+        unsigned char pk[32], msg[32], sig[64];
+        if (hex_to_bin_vec(pk_hex, pk, 32) != 32 ||
+            hex_to_bin_vec(msg_hex, msg, 32) != 32 ||
+            hex_to_bin_vec(sig_hex, sig, 64) != 64) {
+            fprintf(stderr, "BIP-340 vector 0: hex decode failed\n");
+            goto cleanup;
+        }
+        secp256k1_xonly_pubkey xonly_pk;
+        if (!secp256k1_xonly_pubkey_parse(ctx, &xonly_pk, pk)) {
+            fprintf(stderr, "BIP-340 vector 0: pubkey parse failed\n");
+            goto cleanup;
+        }
+        if (secp256k1_schnorrsig_verify(ctx, sig, msg, 32, &xonly_pk) != 1) {
+            fprintf(stderr, "BIP-340 vector 0: expected TRUE but verification failed\n");
+            goto cleanup;
+        }
+    }
+
+    /* Vector 1: standard test vector, expected TRUE */
+    {
+        const char *pk_hex = "DFF1D77F2A671C5F36183726DB2341BE58FEAE1DA2DECED843240F7B502BA659";
+        const char *msg_hex = "243F6A8885A308D313198A2E03707344A4093822299F31D0082EFA98EC4E6C89";
+        const char *sig_hex = "6896BD60EEAE296DB48A229FF71DFE071BDE413E6D43F917DC8DCF8C78DE33418906D11AC976ABCCB20B091292BFF4EA897EFCB639EA871CFA95F6DE339E4B0A";
+        unsigned char pk[32], msg[32], sig[64];
+        if (hex_to_bin_vec(pk_hex, pk, 32) != 32 ||
+            hex_to_bin_vec(msg_hex, msg, 32) != 32 ||
+            hex_to_bin_vec(sig_hex, sig, 64) != 64) {
+            fprintf(stderr, "BIP-340 vector 1: hex decode failed\n");
+            goto cleanup;
+        }
+        secp256k1_xonly_pubkey xonly_pk;
+        if (!secp256k1_xonly_pubkey_parse(ctx, &xonly_pk, pk)) {
+            fprintf(stderr, "BIP-340 vector 1: pubkey parse failed\n");
+            goto cleanup;
+        }
+        if (secp256k1_schnorrsig_verify(ctx, sig, msg, 32, &xonly_pk) != 1) {
+            fprintf(stderr, "BIP-340 vector 1: expected TRUE but verification failed\n");
+            goto cleanup;
+        }
+    }
+
+    /* Vector 5: public key not on curve, expected FALSE */
+    {
+        const char *pk_hex = "EEFDEA4CDB677750A420FEE807EACF21EB9898AE79B9768766E4FAA04A2D4A34";
+        const char *msg_hex = "243F6A8885A308D313198A2E03707344A4093822299F31D0082EFA98EC4E6C89";
+        const char *sig_hex = "6CFF5C3BA86C69EA4B7376F31A9BCB4F74C1976089B2D9963DA2E5543E17776969E89B4C5564D00349106B8497785DD7D1D713A8AE82B32FA79D5F7FC407D39B";
+        unsigned char pk[32], msg[32], sig[64];
+        if (hex_to_bin_vec(pk_hex, pk, 32) != 32 ||
+            hex_to_bin_vec(msg_hex, msg, 32) != 32 ||
+            hex_to_bin_vec(sig_hex, sig, 64) != 64) {
+            fprintf(stderr, "BIP-340 vector 5: hex decode failed\n");
+            goto cleanup;
+        }
+        secp256k1_xonly_pubkey xonly_pk;
+        if (!secp256k1_xonly_pubkey_parse(ctx, &xonly_pk, pk)) {
+            /* pubkey parse may fail for invalid keys; that's acceptable for FALSE vectors */
+        } else if (secp256k1_schnorrsig_verify(ctx, sig, msg, 32, &xonly_pk) == 1) {
+            fprintf(stderr, "BIP-340 vector 5: expected FALSE but verification succeeded\n");
+            goto cleanup;
+        }
+    }
+
+    /* Vector 15: empty message, expected TRUE */
+    {
+        const char *pk_hex = "778CAA53B4393AC467774D09497A87224BF9FAB6F6E68B23086497324D6FD117";
+        const char *sig_hex = "71535DB165ECD9FBBC046E5FFAEA61186BB6AD436732FCCC25291A55895464CF6069CE26BF03466228F19A3A62DB8A649F2D560FAC652827D1AF0574E427AB63";
+        unsigned char pk[32], sig[64];
+        if (hex_to_bin_vec(pk_hex, pk, 32) != 32 ||
+            hex_to_bin_vec(sig_hex, sig, 64) != 64) {
+            fprintf(stderr, "BIP-340 vector 15: hex decode failed\n");
+            goto cleanup;
+        }
+        secp256k1_xonly_pubkey xonly_pk;
+        if (!secp256k1_xonly_pubkey_parse(ctx, &xonly_pk, pk)) {
+            fprintf(stderr, "BIP-340 vector 15: pubkey parse failed\n");
+            goto cleanup;
+        }
+        if (secp256k1_schnorrsig_verify(ctx, sig, NULL, 0, &xonly_pk) != 1) {
+            fprintf(stderr, "BIP-340 vector 15: expected TRUE but verification failed\n");
+            goto cleanup;
+        }
+    }
+
+    retVal = 1;
+cleanup:
+    secp256k1_context_destroy(ctx);
+    return retVal;
+}

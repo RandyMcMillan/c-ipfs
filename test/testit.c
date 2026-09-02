@@ -114,9 +114,11 @@ int build_test_collection() {
 	add_test("test_namesys_verify_entry_parse_null", test_namesys_verify_entry_parse_null, 1);
 	add_test("test_namesys_verify_entry_signature_invalid", test_namesys_verify_entry_signature_invalid, 1);
 	add_test("test_namesys_verify_entry_signature_null", test_namesys_verify_entry_signature_null, 1);
+	add_test("test_namesys_verify_entry_signature_valid_ed25519", test_namesys_verify_entry_signature_valid_ed25519, 1);
 	add_test("test_secp256k1_nostril_ecdsa_roundtrip", test_secp256k1_nostril_ecdsa_roundtrip, 1);
 	add_test("test_secp256k1_nostril_schnorr_roundtrip", test_secp256k1_nostril_schnorr_roundtrip, 1);
 	add_test("test_secp256k1_nostril_openssl_cross_verify", test_secp256k1_nostril_openssl_cross_verify, 1);
+	add_test("test_secp256k1_nostril_bip340_vectors", test_secp256k1_nostril_bip340_vectors, 1);
 	add_test("test_core_api_startup_shutdown", test_core_api_startup_shutdown, 1);
 	add_test("test_core_api_object_cat", test_core_api_object_cat, 0); // timing-sensitive multi-node; often hangs
 	add_test("test_core_api_object_cat_binary", test_core_api_object_cat_binary, 0); // timing-sensitive multi-node; often hangs
