@@ -11,6 +11,7 @@
 !include/**
 !cmd/**
 !README.md
+!TODOs.md
 
 *.o
 .settings/language.settings.xml
