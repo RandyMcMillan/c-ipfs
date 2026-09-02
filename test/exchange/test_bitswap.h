@@ -114,6 +114,103 @@ int test_bitswap_protobuf() {
 	return retVal;
 }
 
+/**
+ * Test Bitswap 1.2.0 message round-trip with wantType, sendDontHave,
+ * BlockPresence, and pendingBytes.
+ */
+int test_bitswap_message_120() {
+	int retVal = 0;
+
+	struct BitswapMessage* message = ipfs_bitswap_message_new();
+	if (message == NULL)
+		return 0;
+
+	// Wantlist with 1.2.0 fields
+	message->wantlist = ipfs_bitswap_wantlist_new();
+	message->wantlist->entries = libp2p_utils_vector_new(2);
+	message->wantlist->full = 1;
+
+	struct WantlistEntry* entry1 = ipfs_bitswap_wantlist_entry_new();
+	entry1->block = generate_bytes(32);
+	entry1->block_size = 32;
+	entry1->priority = 10;
+	entry1->cancel = 0;
+	entry1->want_type = WANT_TYPE_HAVE;     // 1.2.0
+	entry1->send_dont_have = 1;              // 1.2.0
+	libp2p_utils_vector_add(message->wantlist->entries, entry1);
+
+	struct WantlistEntry* entry2 = ipfs_bitswap_wantlist_entry_new();
+	entry2->block = generate_bytes(32);
+	entry2->block_size = 32;
+	entry2->priority = 5;
+	entry2->cancel = 1;
+	entry2->want_type = WANT_TYPE_BLOCK;    // 1.2.0
+	entry2->send_dont_have = 0;              // 1.2.0
+	libp2p_utils_vector_add(message->wantlist->entries, entry2);
+
+	// BlockPresences (1.2.0)
+	message->block_presences = libp2p_utils_vector_new(2);
+	struct BitswapBlockPresence* bp1 = ipfs_bitswap_block_presence_new();
+	bp1->cid = generate_bytes(32);
+	bp1->cid_size = 32;
+	bp1->type = BLOCK_PRESENCE_HAVE;
+	libp2p_utils_vector_add(message->block_presences, bp1);
+
+	struct BitswapBlockPresence* bp2 = ipfs_bitswap_block_presence_new();
+	bp2->cid = generate_bytes(32);
+	bp2->cid_size = 32;
+	bp2->type = BLOCK_PRESENCE_DONT_HAVE;
+	libp2p_utils_vector_add(message->block_presences, bp2);
+
+	// pendingBytes (1.2.0)
+	message->pending_bytes = 4096;
+
+	// Encode
+	size_t buf_size = ipfs_bitswap_message_protobuf_encode_size(message);
+	uint8_t* buf = (uint8_t*) malloc(buf_size);
+	if (buf == NULL)
+		goto exit;
+	size_t bytes_written = 0;
+	if (!ipfs_bitswap_message_protobuf_encode(message, buf, buf_size, &bytes_written))
+		goto exit;
+
+	// Decode
+	struct BitswapMessage* decoded = NULL;
+	if (!ipfs_bitswap_message_protobuf_decode(buf, bytes_written, &decoded))
+		goto exit;
+
+	// Verify wantlist
+	if (decoded->wantlist == NULL || decoded->wantlist->entries == NULL || decoded->wantlist->entries->total != 2)
+		goto exit;
+	struct WantlistEntry* de1 = (struct WantlistEntry*) libp2p_utils_vector_get(decoded->wantlist->entries, 0);
+	struct WantlistEntry* de2 = (struct WantlistEntry*) libp2p_utils_vector_get(decoded->wantlist->entries, 1);
+	if (de1->want_type != WANT_TYPE_HAVE || de1->send_dont_have != 1)
+		goto exit;
+	if (de2->want_type != WANT_TYPE_BLOCK || de2->send_dont_have != 0 || de2->cancel != 1)
+		goto exit;
+
+	// Verify block presences
+	if (decoded->block_presences == NULL || decoded->block_presences->total != 2)
+		goto exit;
+	struct BitswapBlockPresence* dbp1 = (struct BitswapBlockPresence*) libp2p_utils_vector_get(decoded->block_presences, 0);
+	struct BitswapBlockPresence* dbp2 = (struct BitswapBlockPresence*) libp2p_utils_vector_get(decoded->block_presences, 1);
+	if (dbp1->type != BLOCK_PRESENCE_HAVE || dbp1->cid_size != 32)
+		goto exit;
+	if (dbp2->type != BLOCK_PRESENCE_DONT_HAVE || dbp2->cid_size != 32)
+		goto exit;
+
+	// Verify pending bytes
+	if (decoded->pending_bytes != 4096)
+		goto exit;
+
+	retVal = 1;
+exit:
+	if (buf != NULL) free(buf);
+	if (decoded != NULL) ipfs_bitswap_message_free(decoded);
+	ipfs_bitswap_message_free(message);
+	return retVal;
+}
+
 /***
  * Put a file in ipfs and attempt to retrieve it using bitswap's Exchange interface
  */

@@ -6,6 +6,11 @@
 #include <stddef.h>
 #include "libp2p/utils/vector.h"
 
+enum BitswapWantType {
+	WANT_TYPE_BLOCK = 0,
+	WANT_TYPE_HAVE = 1
+};
+
 struct WantlistEntry {
 	// optional string block = 1, the block cid (cidV0 in bitswap 1.0.0, cidV1 in bitswap 1.1.0
 	unsigned char* block;
@@ -14,6 +19,10 @@ struct WantlistEntry {
 	uint32_t priority;
 	// optional bool cancel = 3, whether this revokes an entry
 	uint8_t cancel;
+	// optional WantType wantType = 4, default Block (0)
+	enum BitswapWantType want_type;
+	// optional bool sendDontHave = 5, default false
+	uint8_t send_dont_have;
 };
 
 struct BitswapWantlist {
@@ -32,6 +41,19 @@ struct BitswapBlock {
 	size_t bytes_size;
 };
 
+enum BitswapBlockPresenceType {
+	BLOCK_PRESENCE_HAVE = 0,
+	BLOCK_PRESENCE_DONT_HAVE = 1
+};
+
+struct BitswapBlockPresence {
+	// optional bytes cid = 1
+	unsigned char* cid;
+	size_t cid_size;
+	// optional BlockPresenceType type = 2
+	enum BitswapBlockPresenceType type;
+};
+
 struct BitswapMessage {
 	// optional Wantlist wantlist = 1
 	struct BitswapWantlist* wantlist;
@@ -39,7 +61,10 @@ struct BitswapMessage {
 	struct Libp2pVector* blocks;
 	// repeated Block payload = 3, used to send Blocks in bitswap 1.1.0
 	struct Libp2pVector* payload;
-
+	// repeated BlockPresence blockPresences = 4, NEW in bitswap 1.2.0
+	struct Libp2pVector* block_presences;
+	// optional int32 pendingBytes = 5, NEW in bitswap 1.2.0
+	int32_t pending_bytes;
 };
 
 /***
@@ -200,6 +225,45 @@ int ipfs_bitswap_message_protobuf_encode(const struct BitswapMessage* message, u
  * @returns true(1) on success, otherwise false(0)
  */
 int ipfs_bitswap_message_protobuf_decode(const uint8_t* buffer, size_t buffer_length, struct BitswapMessage** output);
+
+/****
+ * Allocate memory for a new BitswapBlockPresence
+ * @returns the newly allocated BitswapBlockPresence
+ */
+struct BitswapBlockPresence* ipfs_bitswap_block_presence_new();
+
+/**
+ * Free the resources used by a BitswapBlockPresence
+ * @param presence the BitswapBlockPresence to free
+ * @returns true(1)
+ */
+int ipfs_bitswap_block_presence_free(struct BitswapBlockPresence* presence);
+
+/***
+ * Calculate the maximum size of a protobuf'd BitswapBlockPresence
+ * @param presence the BitswapBlockPresence
+ * @returns the maximum size
+ */
+size_t ipfs_bitswap_block_presence_protobuf_encode_size(struct BitswapBlockPresence* presence);
+
+/***
+ * Encode a BitswapBlockPresence into a protobuf buffer
+ * @param presence the presence to encode
+ * @param buffer the buffer to fill
+ * @param buffer_length the length of the allocated buffer
+ * @param bytes_written the total number of bytes written to the buffer
+ * @returns true(1) on success, otherwise false(0)
+ */
+int ipfs_bitswap_block_presence_protobuf_encode(struct BitswapBlockPresence* presence, unsigned char* buffer, size_t buffer_length, size_t* bytes_written);
+
+/***
+ * Decode a BitswapBlockPresence from a protobuf
+ * @param buffer the protobuf
+ * @param buffer_length the length of the protobuf
+ * @param output the newly allocated BitswapBlockPresence
+ * @returns true(1) on success, otherwise false(0)
+ */
+int ipfs_bitswap_block_presence_protobuf_decode(unsigned char* buffer, size_t buffer_length, struct BitswapBlockPresence** output);
 
 /****
  * Add a vector of Cids to the bitswap message
