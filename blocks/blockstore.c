@@ -9,6 +9,10 @@
 #include "ipfs/repo/fsrepo/fs_repo.h"
 #include "libp2p/os/utils.h"
 
+/* forward declarations of helpers */
+unsigned char* ipfs_blockstore_cid_to_base32(const struct Cid* cid);
+char* ipfs_blockstore_path_get(const struct FSRepo* fs_repo, const char* filename);
+
 
 /***
  * Create a new Blockstore struct
@@ -46,13 +50,93 @@ int ipfs_blockstore_free(struct Blockstore* blockstore) {
 	return 1;
 }
 
+/***
+ * List all blocks in the blockstore.
+ */
+int ipfs_blockstore_list(const struct FSRepo* fs_repo, struct BlockstoreEntry** entries) {
+	int count = 0;
+	*entries = NULL;
+	struct BlockstoreEntry* last = NULL;
+
+	char blockstore_path[strlen(fs_repo->path) + 12];
+	if (!os_utils_filepath_join(fs_repo->path, "blockstore", blockstore_path, sizeof(blockstore_path)))
+		return -1;
+
+	struct FileList* files = os_utils_list_directory(blockstore_path);
+	struct FileList* current = files;
+	while (current != NULL) {
+		// skip non-data files
+		if (strstr(current->file_name, ".data") == NULL) {
+			current = current->next;
+			continue;
+		}
+		// strip .data suffix to get base32 key
+		char* dot = strchr(current->file_name, '.');
+		if (dot) *dot = '\0';
+
+		size_t hash_len = 0;
+		unsigned char hash[64];
+		if (!ipfs_datastore_helper_binary_from_ds_key((unsigned char*)current->file_name, strlen(current->file_name),
+			hash, sizeof(hash), &hash_len)) {
+			current = current->next;
+			continue;
+		}
+
+		struct BlockstoreEntry* entry = (struct BlockstoreEntry*)calloc(1, sizeof(struct BlockstoreEntry));
+		if (!entry) {
+			os_utils_free_file_list(files);
+			return -1;
+		}
+		entry->hash = (unsigned char*)malloc(hash_len);
+		if (!entry->hash) {
+			free(entry);
+			os_utils_free_file_list(files);
+			return -1;
+		}
+		memcpy(entry->hash, hash, hash_len);
+		entry->hash_size = hash_len;
+		entry->next = NULL;
+
+		if (last == NULL) {
+			*entries = entry;
+		} else {
+			last->next = entry;
+		}
+		last = entry;
+		count++;
+		current = current->next;
+	}
+	os_utils_free_file_list(files);
+	return count;
+}
+
+void ipfs_blockstore_list_free(struct BlockstoreEntry* entries) {
+	while (entries != NULL) {
+		struct BlockstoreEntry* next = entries->next;
+		free(entries->hash);
+		free(entries);
+		entries = next;
+	}
+}
+
 /**
  * Delete a block based on its Cid
  * @param cid the Cid to look for
  * @param returns true(1) on success
  */
 int ipfs_blockstore_delete(const struct BlockstoreContext* context, struct Cid* cid) {
-	return 0;
+	unsigned char* key = ipfs_blockstore_cid_to_base32(cid);
+	if (key == NULL)
+		return 0;
+	char* filename = ipfs_blockstore_path_get(context->fs_repo, (char*)key);
+	if (filename == NULL) {
+		free(key);
+		return 0;
+	}
+	int ret = remove(filename);
+	free(key);
+	free(filename);
+	return ret == 0;
 }
 
 /***

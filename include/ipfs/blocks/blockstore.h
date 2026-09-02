@@ -12,6 +12,12 @@ struct BlockstoreContext {
 	const struct FSRepo* fs_repo;
 };
 
+struct BlockstoreEntry {
+	unsigned char* hash;
+	size_t hash_size;
+	struct BlockstoreEntry* next;
+};
+
 struct Blockstore {
 	struct BlockstoreContext* blockstoreContext;
 	int (*Delete)(const struct BlockstoreContext* context, struct Cid* cid);
@@ -93,5 +99,18 @@ int ipfs_blockstore_get_unixfs(const unsigned char* hash, size_t hash_length, st
  */
 int ipfs_blockstore_put_node(const struct HashtableNode* node, const struct FSRepo* fs_repo, size_t* bytes_written);
 int ipfs_blockstore_get_node(const unsigned char* hash, size_t hash_length, struct HashtableNode** node, const struct FSRepo* fs_repo);
+
+/**
+ * List all blocks in the blockstore.
+ * @param fs_repo the repository
+ * @param entries linked list of BlockstoreEntry (caller must free with ipfs_blockstore_list_free)
+ * @returns number of entries on success, -1 on error
+ */
+int ipfs_blockstore_list(const struct FSRepo* fs_repo, struct BlockstoreEntry** entries);
+
+/**
+ * Free a linked list of BlockstoreEntry
+ */
+void ipfs_blockstore_list_free(struct BlockstoreEntry* entries);
 
 #endif
