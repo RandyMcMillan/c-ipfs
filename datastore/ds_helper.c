@@ -3,6 +3,7 @@
  * NOTE: the datastore stores things under a multihash key
  */
 #include <stdlib.h>
+#include "libp2p/utils/logger.h"
 #include "libp2p/crypto/encoding/base32.h"
 #include "ipfs/datastore/ds_helper.h"
 /**

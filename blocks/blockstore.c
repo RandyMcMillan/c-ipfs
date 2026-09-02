@@ -184,11 +184,14 @@ char* ipfs_blockstore_path_get(const struct FSRepo* fs_repo, const char* filenam
 		free(filepath);
 		return 0;
 	}
-	int complete_filename_size = strlen(filepath) + strlen(filename) + 2;
+	int complete_filename_size = strlen(filepath) + strlen(filename) + 8;
 	char* complete_filename = (char*)malloc(complete_filename_size);
 	if (complete_filename == NULL)
 		return NULL;
 	retVal = os_utils_filepath_join(filepath, filename, complete_filename, complete_filename_size);
+	if (retVal) {
+		strcat(complete_filename, ".data");
+	}
 	return complete_filename;
 }
 
@@ -432,6 +435,11 @@ int ipfs_blockstore_get_node(const unsigned char* hash, size_t hash_length, stru
 	unsigned char buffer[file_size];
 
 	FILE* file = fopen(filename, "rb");
+	if (file == NULL) {
+		free(key);
+		free(filename);
+		return 0;
+	}
 	size_t bytes_read = fread(buffer, 1, file_size, file);
 	fclose(file);
 

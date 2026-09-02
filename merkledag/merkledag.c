@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "libp2p/utils/logger.h"
 #include "libp2p/crypto/sha256.h"
 #include "mh/multihash.h"
 #include "mh/hashes.h"
@@ -93,7 +94,6 @@ int ipfs_merkledag_add(struct HashtableNode* node, struct FSRepo* fs_repo, size_
 		return 0;
 	}
 	ipfs_block_free(block);
-	// TODO: call HasBlock (unsure why as yet)
 	return 1;
 }
 

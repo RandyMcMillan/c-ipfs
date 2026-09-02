@@ -169,11 +169,13 @@ static int ipfs_import_file_trickle(const char* fileName, struct HashtableNode**
 	struct LeafInfo* last_leaf = NULL;
 	int bytes_read = 1;
 	size_t file_size = 0;
+	int leaf_count = 0;
 
 	while (bytes_read > 0) {
 		struct LeafInfo* leaf = NULL;
 		bytes_read = ipfs_import_create_leaf(file, fs_repo, &leaf);
 		if (bytes_read > 0) {
+			leaf_count++;
 			if (first_leaf == NULL)
 				first_leaf = leaf;
 			else
@@ -225,8 +227,10 @@ static int ipfs_import_file_trickle(const char* fileName, struct HashtableNode**
 
 	int link_count = 0;
 	struct LeafInfo* current_leaf = first_leaf;
+	int loop_iter = 0;
 
 	while (current_leaf != NULL) {
+		loop_iter++;
 		if (link_count < max_links) {
 			struct NodeLink* new_link = NULL;
 			if (ipfs_node_link_create(NULL, current_leaf->hash, current_leaf->hash_size, &new_link) == 0) {

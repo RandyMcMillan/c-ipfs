@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <sys/stat.h>
+#include <unistd.h>
 
 #include "libp2p/utils/logger.h"
 #include "libp2p/crypto/encoding/base64.h"
@@ -21,108 +22,216 @@
  */
 
 /**
- * writes the config file
+ * writes the config file atomically (temp file + rename)
  * @param full_filename the full filename of the config file in the OS
  * @param config the details to put into the file
  * @returns true(1) on success, else false(0)
  */
 int repo_config_write_config_file(char* full_filename, struct RepoConfig* config) {
-	FILE* out_file = fopen(full_filename, "w");
-	if (out_file == NULL)
+	// build temp filename: full_filename + ".tmp"
+	size_t tmp_len = strlen(full_filename) + 5;
+	char* tmp_filename = malloc(tmp_len);
+	if (tmp_filename == NULL)
 		return 0;
-	
-	fprintf(out_file, "{\n");
-	fprintf(out_file, " \"Identity\": {\n");
-	fprintf(out_file, "  \"PeerID\": \"%s\",\n", config->identity->peer->id);
+	snprintf(tmp_filename, tmp_len, "%s.tmp", full_filename);
+
+	FILE* out_file = fopen(tmp_filename, "w");
+	if (out_file == NULL) {
+		free(tmp_filename);
+		return 0;
+	}
+
+	int write_ok = 1;
+	if (write_ok)
+		write_ok = (fprintf(out_file, "{\n") > 0);
+	if (write_ok)
+		write_ok = (fprintf(out_file, " \"Identity\": {\n") > 0);
+	if (write_ok)
+		write_ok = (fprintf(out_file, "  \"PeerID\": \"%s\",\n", config->identity->peer->id) > 0);
 	// print correct format of private key
 	// first put it in a protobuf
-	struct PrivateKey* priv_key = libp2p_crypto_private_key_new();
-	if (priv_key == NULL)
-		return 0;
-	priv_key->data_size = config->identity->private_key.der_length;
-	priv_key->data = (unsigned char*)malloc(priv_key->data_size);
-	if (priv_key->data == NULL) {
-		libp2p_crypto_private_key_free(priv_key);
-		return 0;
+	struct PrivateKey* priv_key = NULL;
+	unsigned char* protobuf = NULL;
+	unsigned char* encoded_buffer = NULL;
+	if (write_ok) {
+		priv_key = libp2p_crypto_private_key_new();
+		if (priv_key == NULL)
+			write_ok = 0;
 	}
-	memcpy(priv_key->data, config->identity->private_key.der, priv_key->data_size);
-	priv_key->type = KEYTYPE_RSA;
-	size_t protobuf_size = libp2p_crypto_private_key_protobuf_encode_size(priv_key);
-	unsigned char protobuf[protobuf_size];
-	libp2p_crypto_private_key_protobuf_encode(priv_key, protobuf, protobuf_size, &protobuf_size);
-	libp2p_crypto_private_key_free(priv_key);
-	// then base 64 it
-	size_t encoded_size = libp2p_crypto_encoding_base64_encode_size(protobuf_size);
-	unsigned char encoded_buffer[encoded_size + 1];
-	int retVal = libp2p_crypto_encoding_base64_encode(protobuf, protobuf_size, encoded_buffer, encoded_size, &encoded_size);
-	if (retVal == 0)
-		return 0;
-	encoded_buffer[encoded_size] = 0;
-	fprintf(out_file, "  \"PrivKey\": \"%s\"\n", encoded_buffer);
-	fprintf(out_file, " },\n");
-	fprintf(out_file, " \"Datastore\": {\n");
-	fprintf(out_file, "  \"Type\": \"%s\",\n", config->datastore->type);
-	fprintf(out_file, "  \"Path\": \"%s\",\n", config->datastore->path);
-	fprintf(out_file, "  \"StorageMax\": \"%s\",\n", config->datastore->storage_max);
-	fprintf(out_file, "  \"StorageGCWatermark\": %d,\n", config->datastore->storage_gc_watermark);
-	fprintf(out_file, "  \"GCPeriod\": \"%s\",\n", config->datastore->gc_period);
-	fprintf(out_file, "  \"Params\": null,\n");
-	fprintf(out_file, "  \"NoSync\": %s,\n", config->datastore->no_sync ? "true" : "false");
-	fprintf(out_file, "  \"HashOnRead\": %s,\n", config->datastore->hash_on_read ? "true" : "false");
-	fprintf(out_file, "  \"BloomFilterSize\": %d\n", config->datastore->bloom_filter_size);
-	fprintf(out_file, " },\n \"Addresses\": {\n");
-	fprintf(out_file, "  \"Swarm\": [\n");
-	struct Libp2pLinkedList* current = config->addresses->swarm_head;
-	while (current != NULL) {
-		fprintf(out_file, "  \"%s\"", (char*)current->item);
-		if (current->next == NULL)
-			fprintf(out_file, "\n");
-		else
-			fprintf(out_file, ",\n");
-		current = current->next;
+	if (write_ok) {
+		priv_key->data_size = config->identity->private_key.der_length;
+		priv_key->data = (unsigned char*)malloc(priv_key->data_size);
+		if (priv_key->data == NULL) {
+			libp2p_crypto_private_key_free(priv_key);
+			write_ok = 0;
+		} else {
+			memcpy(priv_key->data, config->identity->private_key.der, priv_key->data_size);
+			priv_key->type = KEYTYPE_RSA;
+			size_t protobuf_size = libp2p_crypto_private_key_protobuf_encode_size(priv_key);
+			protobuf = (unsigned char*)malloc(protobuf_size);
+			if (protobuf == NULL) {
+				libp2p_crypto_private_key_free(priv_key);
+				write_ok = 0;
+			} else {
+				size_t encoded_size = libp2p_crypto_encoding_base64_encode_size(protobuf_size);
+				encoded_buffer = (unsigned char*)malloc(encoded_size + 1);
+				if (encoded_buffer == NULL) {
+					libp2p_crypto_private_key_free(priv_key);
+					free(protobuf);
+					write_ok = 0;
+				} else {
+					size_t out_size = 0;
+					libp2p_crypto_private_key_protobuf_encode(priv_key, protobuf, protobuf_size, &out_size);
+					int retVal = libp2p_crypto_encoding_base64_encode(protobuf, protobuf_size, encoded_buffer, encoded_size, &encoded_size);
+					encoded_buffer[encoded_size] = 0;
+					if (retVal == 0)
+						write_ok = 0;
+					else
+						write_ok = (fprintf(out_file, "  \"PrivKey\": \"%s\"\n", encoded_buffer) > 0);
+				}
+			}
+		}
 	}
-	fprintf(out_file, "  ],\n");
-	fprintf(out_file, "  \"API\": \"%s\",\n", config->addresses->api);
-	fprintf(out_file, "  \"Gateway\": \"%s\"\n", config->addresses->gateway);
-	fprintf(out_file, " },\n  \"Mounts\": {\n");
-	fprintf(out_file, "  \"IPFS\": \"%s\",\n", config->mounts.ipfs);
-	fprintf(out_file, "  \"IPNS\": \"%s\",\n", config->mounts.ipns);
-	fprintf(out_file, "  \"FuseAllowOther\": %s\n", "false");
-	fprintf(out_file, " },\n  \"Discovery\": {\n   \"MDNS\": {\n");
-	fprintf(out_file, "   \"Enabled\": %s,\n", config->discovery.mdns.enabled ? "true" : "false");
-	fprintf(out_file, "   \"Interval\": %d\n  }\n },\n", config->discovery.mdns.interval);
-	fprintf(out_file, " \"Ipns\": {\n");
-	fprintf(out_file, "  \"RepublishedPeriod\": \"\",\n");
-	fprintf(out_file, "  \"RecordLifetime\": \"\",\n");
-	fprintf(out_file, "  \"ResolveCacheSize\": %d\n", config->ipns.resolve_cache_size);
-	fprintf(out_file, " },\n \"Bootstrap\": [\n");
-	for(int i = 0; i < config->bootstrap_peers->total; i++) {
-		const struct MultiAddress* peer = (const struct MultiAddress*)libp2p_utils_vector_get(config->bootstrap_peers, i);
-		fprintf(out_file, "  \"%s\"", peer->string);
-		if (i < config->bootstrap_peers->total - 1)
-			fprintf(out_file, ",\n");
-		else
-			fprintf(out_file, "\n");
+	if (write_ok)
+		write_ok = (fprintf(out_file, " },\n") > 0);
+	if (write_ok)
+		write_ok = (fprintf(out_file, " \"Datastore\": {\n") > 0);
+	if (write_ok)
+		write_ok = (fprintf(out_file, "  \"Type\": \"%s\",\n", config->datastore->type) > 0);
+	if (write_ok)
+		write_ok = (fprintf(out_file, "  \"Path\": \"%s\",\n", config->datastore->path) > 0);
+	if (write_ok)
+		write_ok = (fprintf(out_file, "  \"StorageMax\": \"%s\",\n", config->datastore->storage_max) > 0);
+	if (write_ok)
+		write_ok = (fprintf(out_file, "  \"StorageGCWatermark\": %d,\n", config->datastore->storage_gc_watermark) > 0);
+	if (write_ok)
+		write_ok = (fprintf(out_file, "  \"GCPeriod\": \"%s\",\n", config->datastore->gc_period) > 0);
+	if (write_ok)
+		write_ok = (fprintf(out_file, "  \"Params\": null,\n") > 0);
+	if (write_ok)
+		write_ok = (fprintf(out_file, "  \"NoSync\": %s,\n", config->datastore->no_sync ? "true" : "false") > 0);
+	if (write_ok)
+		write_ok = (fprintf(out_file, "  \"HashOnRead\": %s,\n", config->datastore->hash_on_read ? "true" : "false") > 0);
+	if (write_ok)
+		write_ok = (fprintf(out_file, "  \"BloomFilterSize\": %d\n", config->datastore->bloom_filter_size) > 0);
+	if (write_ok)
+		write_ok = (fprintf(out_file, " },\n \"Addresses\": {\n") > 0);
+	if (write_ok)
+		write_ok = (fprintf(out_file, "  \"Swarm\": [\n") > 0);
+	if (write_ok) {
+		struct Libp2pLinkedList* current = config->addresses->swarm_head;
+		while (current != NULL && write_ok) {
+			write_ok = (fprintf(out_file, "  \"%s\"", (char*)current->item) > 0);
+			if (write_ok) {
+				if (current->next == NULL)
+					write_ok = (fprintf(out_file, "\n") > 0);
+				else
+					write_ok = (fprintf(out_file, ",\n") > 0);
+			}
+			current = current->next;
+		}
 	}
-	fprintf(out_file, " ],\n \"Tour\": {\n  \"Last\": \"\"\n },\n");
-	fprintf(out_file, " \"Gateway\": {\n");
-	fprintf(out_file, "  \"HTTPHeaders\": {\n");
-	for (int i = 0; i < config->gateway->http_headers->num_elements; i++) {
-		fprintf(out_file, "   \"%s\": [\n    \"%s\"\n  ]", config->gateway->http_headers->headers[i]->header, config->gateway->http_headers->headers[i]->value);
-		if (i < config->gateway->http_headers->num_elements - 1)
-			fprintf(out_file, ",\n");
-		else
-			fprintf(out_file, "\n },\n");
+	if (write_ok)
+		write_ok = (fprintf(out_file, "  ],\n") > 0);
+	if (write_ok)
+		write_ok = (fprintf(out_file, "  \"API\": \"%s\",\n", config->addresses->api) > 0);
+	if (write_ok)
+		write_ok = (fprintf(out_file, "  \"Gateway\": \"%s\"\n", config->addresses->gateway) > 0);
+	if (write_ok)
+		write_ok = (fprintf(out_file, " },\n  \"Mounts\": {\n") > 0);
+	if (write_ok)
+		write_ok = (fprintf(out_file, "  \"IPFS\": \"%s\",\n", config->mounts.ipfs) > 0);
+	if (write_ok)
+		write_ok = (fprintf(out_file, "  \"IPNS\": \"%s\",\n", config->mounts.ipns) > 0);
+	if (write_ok)
+		write_ok = (fprintf(out_file, "  \"FuseAllowOther\": %s\n", "false") > 0);
+	if (write_ok)
+		write_ok = (fprintf(out_file, " },\n  \"Discovery\": {\n   \"MDNS\": {\n") > 0);
+	if (write_ok)
+		write_ok = (fprintf(out_file, "   \"Enabled\": %s,\n", config->discovery.mdns.enabled ? "true" : "false") > 0);
+	if (write_ok)
+		write_ok = (fprintf(out_file, "   \"Interval\": %d\n  }\n },\n", config->discovery.mdns.interval) > 0);
+	if (write_ok)
+		write_ok = (fprintf(out_file, " \"Ipns\": {\n") > 0);
+	if (write_ok)
+		write_ok = (fprintf(out_file, "  \"RepublishedPeriod\": \"\",\n") > 0);
+	if (write_ok)
+		write_ok = (fprintf(out_file, "  \"RecordLifetime\": \"\",\n") > 0);
+	if (write_ok)
+		write_ok = (fprintf(out_file, "  \"ResolveCacheSize\": %d\n", config->ipns.resolve_cache_size) > 0);
+	if (write_ok)
+		write_ok = (fprintf(out_file, " },\n \"Bootstrap\": [\n") > 0);
+	if (write_ok) {
+		for(int i = 0; i < config->bootstrap_peers->total && write_ok; i++) {
+			const struct MultiAddress* peer = (const struct MultiAddress*)libp2p_utils_vector_get(config->bootstrap_peers, i);
+			write_ok = (fprintf(out_file, "  \"%s\"", peer->string) > 0);
+			if (write_ok) {
+				if (i < config->bootstrap_peers->total - 1)
+					write_ok = (fprintf(out_file, ",\n") > 0);
+				else
+					write_ok = (fprintf(out_file, "\n") > 0);
+			}
+		}
 	}
-	fprintf(out_file, "  \"RootRedirect\": \"%s\"\n", config->gateway->root_redirect);
-	fprintf(out_file, "  \"Writable\": %s\n", config->gateway->writable ? "true" : "false");
-	fprintf(out_file, "  \"PathPrefixes\": []\n");
-	fprintf(out_file, " },\n \"SupernodeRouting\": {\n");
-	fprintf(out_file, "  \"Servers\": null\n },");
-	fprintf(out_file, " \"API\": {\n  \"HTTPHeaders\": null\n },\n");
-	fprintf(out_file, " \"Swarm\": {\n  \"AddrFilters\": null\n }\n}");
+	if (write_ok)
+		write_ok = (fprintf(out_file, " ],\n \"Tour\": {\n  \"Last\": \"\"\n },\n") > 0);
+	if (write_ok)
+		write_ok = (fprintf(out_file, " \"Gateway\": {\n") > 0);
+	if (write_ok)
+		write_ok = (fprintf(out_file, "  \"HTTPHeaders\": {\n") > 0);
+	if (write_ok) {
+		for (int i = 0; i < config->gateway->http_headers->num_elements && write_ok; i++) {
+			write_ok = (fprintf(out_file, "   \"%s\": [\n    \"%s\"\n  ]", config->gateway->http_headers->headers[i]->header, config->gateway->http_headers->headers[i]->value) > 0);
+			if (write_ok) {
+				if (i < config->gateway->http_headers->num_elements - 1)
+					write_ok = (fprintf(out_file, ",\n") > 0);
+				else
+					write_ok = (fprintf(out_file, "\n },\n") > 0);
+			}
+		}
+	}
+	if (write_ok)
+		write_ok = (fprintf(out_file, "  \"RootRedirect\": \"%s\"\n", config->gateway->root_redirect) > 0);
+	if (write_ok)
+		write_ok = (fprintf(out_file, "  \"Writable\": %s\n", config->gateway->writable ? "true" : "false") > 0);
+	if (write_ok)
+		write_ok = (fprintf(out_file, "  \"PathPrefixes\": []\n") > 0);
+	if (write_ok)
+		write_ok = (fprintf(out_file, " },\n \"SupernodeRouting\": {\n") > 0);
+	if (write_ok)
+		write_ok = (fprintf(out_file, "  \"Servers\": null\n },") > 0);
+	if (write_ok)
+		write_ok = (fprintf(out_file, " \"API\": {\n  \"HTTPHeaders\": null\n },\n") > 0);
+	if (write_ok)
+		write_ok = (fprintf(out_file, " \"Swarm\": {\n  \"AddrFilters\": null\n }\n}") > 0);
+
+	int flush_ok = 0;
+	if (write_ok) {
+		flush_ok = (fflush(out_file) == 0);
+		if (flush_ok) {
+			int fd = fileno(out_file);
+			flush_ok = (fsync(fd) == 0);
+		}
+	}
 	fclose(out_file);
-	return 1;
+
+	int rename_ok = 0;
+	if (flush_ok) {
+		rename_ok = (rename(tmp_filename, full_filename) == 0);
+	}
+
+	if (!rename_ok && !flush_ok && !write_ok) {
+		remove(tmp_filename);
+	}
+
+	if (priv_key != NULL)
+		libp2p_crypto_private_key_free(priv_key);
+	if (protobuf != NULL)
+		free(protobuf);
+	if (encoded_buffer != NULL)
+		free(encoded_buffer);
+	free(tmp_filename);
+	return rename_ok;
 }
 
 // forward declaration, actual is in init.c
@@ -743,22 +852,20 @@ int fs_repo_write_config_file(char* path, struct RepoConfig* config) {
  * @returns true(1) on success
  */
 int ipfs_repo_fsrepo_block_write(struct Block* block, const struct FSRepo* fs_repo, size_t* bytes_written) {
-	/**
-	 * What is put in the blockstore is the block.
-	 * What is put in the datastore is the multihash (the Cid) as the key,
-	 * and the base32 encoded multihash as the value.
-	 */
 	int retVal = 1;
 	struct Blockstore* blockstore = ipfs_blockstore_new(fs_repo);
-	if (blockstore == NULL)
+	if (blockstore == NULL) {
 		return 0;
+	}
 	retVal = ipfs_blockstore_put(blockstore->blockstoreContext, block, bytes_written);
 	ipfs_blockstore_free(blockstore);
-	if (retVal == 0)
+	if (retVal == 0) {
 		return 0;
+	}
 	retVal = ipfs_datastore_helper_add_block_to_datastore(block, fs_repo->config->datastore);
-	if (retVal == 0)
+	if (retVal == 0) {
 		return 0;
+	}
 	return 1;
 }
 

@@ -331,10 +331,6 @@ int ipfs_gc_collect(struct FSRepo* fs_repo, size_t* bytes_reclaimed) {
     if (bytes_reclaimed) *bytes_reclaimed = 0;
 
     struct PinEntry* pins = ipfs_pin_load(fs_repo);
-    if (pins == NULL) {
-        // no pins: nothing is protected, but we'll be conservative and not delete anything
-        return 1;
-    }
 
     struct CidSet* marked = ipfs_cid_set_new();
     if (!marked) {
