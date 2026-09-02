@@ -12,6 +12,7 @@
 !cmd/**
 !README.md
 !TODOs.md
+!TODOs_EASE_OF_IMPLEMENTATION.md
 
 *.o
 .settings/language.settings.xml
