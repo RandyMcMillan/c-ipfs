@@ -136,3 +136,40 @@ int ipfs_merkledag_get_by_multihash(const unsigned char* multihash, size_t multi
 	}
 	return ipfs_merkledag_get(hash, hash_size, node, fs_repo);
 }
+
+static int traverse_helper(struct FSRepo* fs_repo, const unsigned char* hash, size_t hash_size,
+	int depth, int max_depth, int (*visit)(struct HashtableNode*, int depth, void* ctx), void* ctx)
+{
+	if (depth > max_depth)
+		return 1;
+
+	struct HashtableNode* node = NULL;
+	if (!ipfs_merkledag_get(hash, hash_size, &node, fs_repo))
+		return 0;
+
+	int ret = visit(node, depth, ctx);
+	if (ret == 0) {
+		ipfs_hashtable_node_free(node);
+		return 0;
+	}
+
+	struct NodeLink* link = node->head_link;
+	while (link != NULL) {
+		if (!traverse_helper(fs_repo, link->hash, link->hash_size, depth + 1, max_depth, visit, ctx)) {
+			ipfs_hashtable_node_free(node);
+			return 0;
+		}
+		link = link->next;
+	}
+
+	ipfs_hashtable_node_free(node);
+	return 1;
+}
+
+int ipfs_merkledag_traverse(struct FSRepo* fs_repo, const unsigned char* hash, size_t hash_size,
+	int max_depth, int (*visit)(struct HashtableNode*, int depth, void* ctx), void* ctx)
+{
+	if (max_depth < 0 || visit == NULL)
+		return 0;
+	return traverse_helper(fs_repo, hash, hash_size, 0, max_depth, visit, ctx);
+}
