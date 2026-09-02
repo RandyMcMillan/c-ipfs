@@ -5,6 +5,7 @@
 #include "ipfs/cmd/cli.h"
 #include "ipfs/core/client_api.h"
 #include "ipfs/core/daemon.h"
+#include "ipfs/core/http_request.h"
 #include "ipfs/importer/exporter.h"
 #include "ipfs/importer/importer.h"
 #include "ipfs/namesys/name.h"
@@ -529,4 +530,173 @@ int test_core_api_name_resolve_3()
 	args = NULL;
 	return retVal;
 
+}
+
+int test_core_api_id() {
+	int retVal = 0;
+	struct IpfsNode* local_node = NULL;
+	char* repo_path = "/tmp/ipfs_api_id";
+	char* peer_id = NULL;
+
+	if (!drop_and_build_repository(repo_path, 4001, NULL, &peer_id))
+		goto exit;
+	if (!ipfs_node_offline_new(repo_path, &local_node))
+		goto exit;
+
+	struct HttpRequest* req = ipfs_core_http_request_new();
+	if (!req) goto exit;
+	req->command = strdup("id");
+
+	struct HttpResponse* resp = NULL;
+	if (!ipfs_core_http_request_process(local_node, req, &resp) || !resp) {
+		ipfs_core_http_request_free(req);
+		goto exit;
+	}
+
+	if (strstr((char*)resp->bytes, local_node->identity->peer->id) != NULL) {
+		retVal = 1;
+	}
+
+	ipfs_core_http_response_free(resp);
+	ipfs_core_http_request_free(req);
+exit:
+	ipfs_node_free(local_node);
+	if (peer_id) free(peer_id);
+	return retVal;
+}
+
+int test_core_api_version() {
+	int retVal = 0;
+	struct IpfsNode* local_node = NULL;
+	char* repo_path = "/tmp/ipfs_api_version";
+	char* peer_id = NULL;
+
+	if (!drop_and_build_repository(repo_path, 4001, NULL, &peer_id))
+		goto exit;
+	if (!ipfs_node_offline_new(repo_path, &local_node))
+		goto exit;
+
+	struct HttpRequest* req = ipfs_core_http_request_new();
+	if (!req) goto exit;
+	req->command = strdup("version");
+
+	struct HttpResponse* resp = NULL;
+	if (!ipfs_core_http_request_process(local_node, req, &resp) || !resp) {
+		ipfs_core_http_request_free(req);
+		goto exit;
+	}
+
+	if (strstr((char*)resp->bytes, "Version") != NULL) {
+		retVal = 1;
+	}
+
+	ipfs_core_http_response_free(resp);
+	ipfs_core_http_request_free(req);
+exit:
+	ipfs_node_free(local_node);
+	if (peer_id) free(peer_id);
+	return retVal;
+}
+
+int test_core_api_block_get() {
+	int retVal = 0;
+	struct IpfsNode* local_node = NULL;
+	char* repo_path = "/tmp/ipfs_api_block";
+	char* peer_id = NULL;
+	struct Block* block = NULL;
+	struct Cid* cid = NULL;
+
+	if (!drop_and_build_repository(repo_path, 4001, NULL, &peer_id))
+		goto exit;
+	if (!ipfs_node_offline_new(repo_path, &local_node))
+		goto exit;
+
+	// Create and store a raw block
+	const char* data = "hello block";
+	block = ipfs_block_new_raw((const unsigned char*)data, strlen(data));
+	if (!block) goto exit;
+
+	size_t written = 0;
+	if (!ipfs_blockstore_put(local_node->blockstore->blockstoreContext, block, &written))
+		goto exit;
+
+	// Get the CID as base58 string
+	char hash_str[256] = {0};
+	if (!ipfs_cid_hash_to_base58(block->cid->hash, block->cid->hash_length, (unsigned char*)hash_str, 256))
+		goto exit;
+
+	// Build HTTP request for block/get
+	struct HttpRequest* req = ipfs_core_http_request_new();
+	if (!req) goto exit;
+	req->command = strdup("block");
+	req->sub_command = strdup("get");
+	libp2p_utils_vector_add(req->arguments, strdup(hash_str));
+
+	struct HttpResponse* resp = NULL;
+	if (!ipfs_core_http_request_process(local_node, req, &resp) || !resp) {
+		ipfs_core_http_request_free(req);
+		goto exit;
+	}
+
+	if (resp->bytes_size == strlen(data) && memcmp(resp->bytes, data, strlen(data)) == 0) {
+		retVal = 1;
+	}
+
+	ipfs_core_http_response_free(resp);
+	ipfs_core_http_request_free(req);
+exit:
+	if (block) ipfs_block_free(block);
+	ipfs_node_free(local_node);
+	if (peer_id) free(peer_id);
+	return retVal;
+}
+
+int test_core_api_cat() {
+	int retVal = 0;
+	struct IpfsNode* local_node = NULL;
+	char* repo_path = "/tmp/ipfs_api_cat";
+	char* peer_id = NULL;
+	struct HashtableNode* node = NULL;
+	char hash_str[256] = {0};
+
+	if (!drop_and_build_repository(repo_path, 4001, NULL, &peer_id))
+		goto exit;
+	if (!ipfs_node_offline_new(repo_path, &local_node))
+		goto exit;
+
+	// Import a small file
+	const char* content = "hello, cat world!\n";
+	char* filename = "/tmp/test_api_cat.txt";
+	create_file(filename, (unsigned char*)content, strlen(content));
+
+	size_t bytes_written = 0;
+	if (!ipfs_import_file(NULL, filename, &node, local_node, &bytes_written, 0))
+		goto exit;
+
+	if (!ipfs_cid_hash_to_base58(node->hash, node->hash_size, (unsigned char*)hash_str, 256))
+		goto exit;
+
+	// Build HTTP request for cat
+	struct HttpRequest* req = ipfs_core_http_request_new();
+	if (!req) goto exit;
+	req->command = strdup("cat");
+	libp2p_utils_vector_add(req->arguments, strdup(hash_str));
+
+	struct HttpResponse* resp = NULL;
+	if (!ipfs_core_http_request_process(local_node, req, &resp) || !resp) {
+		ipfs_core_http_request_free(req);
+		goto exit;
+	}
+
+	if (resp->bytes_size == strlen(content) && memcmp(resp->bytes, content, strlen(content)) == 0) {
+		retVal = 1;
+	}
+
+	ipfs_core_http_response_free(resp);
+	ipfs_core_http_request_free(req);
+exit:
+	if (node) ipfs_hashtable_node_free(node);
+	ipfs_node_free(local_node);
+	if (peer_id) free(peer_id);
+	return retVal;
 }

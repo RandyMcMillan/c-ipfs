@@ -1,15 +1,22 @@
 #include <stdlib.h>
 #include <string.h>
 #include <curl/curl.h>
+#include "libp2p/crypto/encoding/base64.h"
 #include "libp2p/os/memstream.h"
 #include "libp2p/utils/vector.h"
 #include "libp2p/utils/logger.h"
+#include "ipfs/blocks/block.h"
+#include "ipfs/blocks/blockstore.h"
 #include "ipfs/cid/cid.h"
 #include "ipfs/core/http_request.h"
 #include "ipfs/importer/exporter.h"
 #include "ipfs/namesys/resolver.h"
 #include "ipfs/namesys/publisher.h"
 #include "ipfs/routing/routing.h"
+
+#ifndef C_IPFS_VERSION
+#define C_IPFS_VERSION "0.0.0-dev"
+#endif
 
 /**
  * Handles HttpRequest and HttpParam
@@ -355,6 +362,137 @@ int ipfs_core_http_process_swarm(struct IpfsNode* local_node, struct HttpRequest
 	return retVal;
 }
 
+static int ipfs_core_http_process_id(struct IpfsNode* local_node, struct HttpRequest* request, struct HttpResponse** response) {
+	(void)request;
+	*response = ipfs_core_http_response_new();
+	if (!*response) return 0;
+	struct HttpResponse* res = *response;
+	res->content_type = "application/json";
+
+	// Base64-encode the public key DER
+	size_t pk_b64_max = libp2p_crypto_encoding_base64_encode_size(local_node->identity->private_key.public_key_length);
+	char* pk_b64 = malloc(pk_b64_max + 1);
+	if (!pk_b64) {
+		ipfs_core_http_response_free(res);
+		*response = NULL;
+		return 0;
+	}
+	size_t pk_b64_len = 0;
+	libp2p_crypto_encoding_base64_encode(
+		(const unsigned char*)local_node->identity->private_key.public_key_der,
+		local_node->identity->private_key.public_key_length,
+		(unsigned char*)pk_b64, pk_b64_max, &pk_b64_len);
+	pk_b64[pk_b64_len] = '\0';
+
+	// Build addresses array from swarm_head linked list
+	char addr_buf[1024] = "";
+	struct Libp2pLinkedList* curr = local_node->repo->config->addresses->swarm_head;
+	int first = 1;
+	while (curr) {
+		if (!first) strncat(addr_buf, ",", sizeof(addr_buf) - strlen(addr_buf) - 1);
+		strncat(addr_buf, "\"", sizeof(addr_buf) - strlen(addr_buf) - 1);
+		strncat(addr_buf, (char*)curr->item, sizeof(addr_buf) - strlen(addr_buf) - 1);
+		strncat(addr_buf, "\"", sizeof(addr_buf) - strlen(addr_buf) - 1);
+		first = 0;
+		curr = curr->next;
+	}
+
+	int bytes_needed = 256 + strlen(local_node->identity->peer->id) + pk_b64_len + strlen(addr_buf);
+	res->bytes = (uint8_t*)malloc(bytes_needed);
+	if (!res->bytes) {
+		free(pk_b64);
+		ipfs_core_http_response_free(res);
+		*response = NULL;
+		return 0;
+	}
+	snprintf((char*)res->bytes, bytes_needed,
+		"{"
+		"\"ID\":\"%s\","
+		"\"PublicKey\":\"%s\","
+		"\"Addresses\":[%s],"
+		"\"AgentVersion\":\"c-ipfs/%s\","
+		"\"ProtocolVersion\":\"ipfs/0.1.0\""
+		"}",
+		local_node->identity->peer->id,
+		pk_b64,
+		addr_buf,
+		C_IPFS_VERSION);
+	res->bytes_size = strlen((char*)res->bytes);
+	free(pk_b64);
+	return 1;
+}
+
+static int ipfs_core_http_process_version(struct IpfsNode* local_node, struct HttpRequest* request, struct HttpResponse** response) {
+	(void)local_node;
+	(void)request;
+	*response = ipfs_core_http_response_new();
+	if (!*response) return 0;
+	struct HttpResponse* res = *response;
+	res->content_type = "application/json";
+	res->bytes = (uint8_t*)strdup("{\"Version\":\"" C_IPFS_VERSION "\",\"Commit\":\"\",\"Repo\":\"12\",\"System\":\"amd64/darwin\",\"Golang\":\"\"}");
+	res->bytes_size = strlen((char*)res->bytes);
+	return 1;
+}
+
+static int ipfs_core_http_process_block_get(struct IpfsNode* local_node, struct HttpRequest* request, struct HttpResponse** response) {
+	if (!request->arguments || request->arguments->total < 1) return 0;
+	char* hash = (char*)libp2p_utils_vector_get(request->arguments, 0);
+	struct Cid* cid = NULL;
+	if (!ipfs_cid_decode_hash_from_base58((unsigned char*)hash, strlen(hash), &cid)) {
+		return 0;
+	}
+	struct Block* block = NULL;
+	int retVal = ipfs_blockstore_get(local_node->blockstore->blockstoreContext, cid, &block);
+	ipfs_cid_free(cid);
+	if (!retVal || !block) {
+		return 0;
+	}
+	*response = ipfs_core_http_response_new();
+	if (!*response) {
+		ipfs_block_free(block);
+		return 0;
+	}
+	struct HttpResponse* res = *response;
+	res->content_type = "application/vnd.ipld.raw";
+	res->bytes = (uint8_t*)malloc(block->data_length);
+	if (!res->bytes) {
+		ipfs_core_http_response_free(res);
+		*response = NULL;
+		ipfs_block_free(block);
+		return 0;
+	}
+	memcpy(res->bytes, block->data, block->data_length);
+	res->bytes_size = block->data_length;
+	ipfs_block_free(block);
+	return 1;
+}
+
+static int ipfs_core_http_process_cat(struct IpfsNode* local_node, struct HttpRequest* request, struct HttpResponse** response) {
+	if (!request->arguments || request->arguments->total < 1) return 0;
+	char* hash = (char*)libp2p_utils_vector_get(request->arguments, 0);
+	struct Cid* cid = NULL;
+	if (!ipfs_cid_decode_hash_from_base58((unsigned char*)hash, strlen(hash), &cid)) {
+		return 0;
+	}
+	*response = ipfs_core_http_response_new();
+	if (!*response) {
+		ipfs_cid_free(cid);
+		return 0;
+	}
+	struct HttpResponse* res = *response;
+	res->content_type = "application/octet-stream";
+	FILE* response_file = open_memstream((char**)&res->bytes, &res->bytes_size);
+	int retVal = ipfs_exporter_object_cat_to_file(local_node, cid->hash, cid->hash_length, response_file);
+	ipfs_cid_free(cid);
+	fclose(response_file);
+	if (!retVal) {
+		ipfs_core_http_response_free(res);
+		*response = NULL;
+		return 0;
+	}
+	return 1;
+}
+
 /***
  * Process the parameters passed in from an http request
  * @param local_node the context
@@ -375,6 +513,14 @@ int ipfs_core_http_request_process(struct IpfsNode* local_node, struct HttpReque
 		retVal = ipfs_core_http_process_dht(local_node, request, response);
 	} else if (strcmp(request->command, "swarm") == 0) {
 		retVal = ipfs_core_http_process_swarm(local_node, request, response);
+	} else if (strcmp(request->command, "id") == 0) {
+		retVal = ipfs_core_http_process_id(local_node, request, response);
+	} else if (strcmp(request->command, "version") == 0) {
+		retVal = ipfs_core_http_process_version(local_node, request, response);
+	} else if (strcmp(request->command, "block") == 0 && request->sub_command && strcmp(request->sub_command, "get") == 0) {
+		retVal = ipfs_core_http_process_block_get(local_node, request, response);
+	} else if (strcmp(request->command, "cat") == 0) {
+		retVal = ipfs_core_http_process_cat(local_node, request, response);
 	}
 	return retVal;
 }
