@@ -8,6 +8,8 @@
 #include "ipfs/core/http_request.h"
 #include "ipfs/importer/exporter.h"
 #include "ipfs/importer/importer.h"
+#include "ipfs/merkledag/merkledag.h"
+#include "ipfs/merkledag/node.h"
 #include "ipfs/namesys/name.h"
 #include "ipfs/pin/pin.h"
 
@@ -913,6 +915,269 @@ int test_core_api_repo_gc() {
 	ipfs_core_http_response_free(resp);
 	ipfs_core_http_request_free(req);
 exit:
+	ipfs_node_free(local_node);
+	if (peer_id) free(peer_id);
+	return retVal;
+}
+
+int test_core_api_add() {
+	int retVal = 0;
+	struct IpfsNode* local_node = NULL;
+	char* repo_path = "/tmp/ipfs_api_add";
+	char* peer_id = NULL;
+
+	if (!drop_and_build_repository(repo_path, 4001, NULL, &peer_id))
+		goto exit;
+	if (!ipfs_node_offline_new(repo_path, &local_node))
+		goto exit;
+
+	const char* content = "hello add world\n";
+
+	struct HttpRequest* req = ipfs_core_http_request_new();
+	if (!req) goto exit;
+	req->command = strdup("add");
+	req->data = (uint8_t*)malloc(strlen(content));
+	if (!req->data) {
+		ipfs_core_http_request_free(req);
+		goto exit;
+	}
+	memcpy(req->data, content, strlen(content));
+	req->data_size = strlen(content);
+
+	struct HttpResponse* resp = NULL;
+	if (!ipfs_core_http_request_process(local_node, req, &resp) || !resp) {
+		ipfs_core_http_request_free(req);
+		goto exit;
+	}
+
+	if (strstr((char*)resp->bytes, "Hash") != NULL && strstr((char*)resp->bytes, "Size") != NULL) {
+		retVal = 1;
+	}
+
+	ipfs_core_http_response_free(resp);
+	ipfs_core_http_request_free(req);
+exit:
+	ipfs_node_free(local_node);
+	if (peer_id) free(peer_id);
+	return retVal;
+}
+
+int test_core_api_dag_get() {
+	int retVal = 0;
+	struct IpfsNode* local_node = NULL;
+	char* repo_path = "/tmp/ipfs_api_dag_get";
+	char* peer_id = NULL;
+	struct HashtableNode* node = NULL;
+	char hash_str[256] = {0};
+
+	if (!drop_and_build_repository(repo_path, 4001, NULL, &peer_id))
+		goto exit;
+	if (!ipfs_node_offline_new(repo_path, &local_node))
+		goto exit;
+
+	// Create a simple node with data
+	const char* data = "dag node data";
+	if (!ipfs_hashtable_node_new_from_data((unsigned char*)data, strlen(data), &node))
+		goto exit;
+
+	size_t bytes_written = 0;
+	if (!ipfs_merkledag_add(node, local_node->repo, &bytes_written))
+		goto exit;
+
+	if (!ipfs_cid_hash_to_base58(node->hash, node->hash_size, (unsigned char*)hash_str, 256))
+		goto exit;
+
+	struct HttpRequest* req = ipfs_core_http_request_new();
+	if (!req) goto exit;
+	req->command = strdup("dag");
+	req->sub_command = strdup("get");
+	libp2p_utils_vector_add(req->arguments, strdup(hash_str));
+
+	struct HttpResponse* resp = NULL;
+	if (!ipfs_core_http_request_process(local_node, req, &resp) || !resp) {
+		ipfs_core_http_request_free(req);
+		goto exit;
+	}
+
+	if (strstr((char*)resp->bytes, "data") != NULL && strstr((char*)resp->bytes, "links") != NULL) {
+		retVal = 1;
+	}
+
+	ipfs_core_http_response_free(resp);
+	ipfs_core_http_request_free(req);
+exit:
+	if (node) ipfs_hashtable_node_free(node);
+	ipfs_node_free(local_node);
+	if (peer_id) free(peer_id);
+	return retVal;
+}
+
+int test_core_api_dag_put() {
+	int retVal = 0;
+	struct IpfsNode* local_node = NULL;
+	char* repo_path = "/tmp/ipfs_api_dag_put";
+	char* peer_id = NULL;
+	struct HashtableNode* node = NULL;
+
+	if (!drop_and_build_repository(repo_path, 4001, NULL, &peer_id))
+		goto exit;
+	if (!ipfs_node_offline_new(repo_path, &local_node))
+		goto exit;
+
+	// Create a simple node and encode to protobuf
+	const char* data = "dag put data";
+	if (!ipfs_hashtable_node_new_from_data((unsigned char*)data, strlen(data), &node))
+		goto exit;
+
+	size_t protobuf_size = ipfs_hashtable_node_protobuf_encode_size(node);
+	unsigned char* protobuf = (unsigned char*)malloc(protobuf_size);
+	if (!protobuf) goto exit;
+	size_t bytes_encoded = 0;
+	if (!ipfs_hashtable_node_protobuf_encode(node, protobuf, protobuf_size, &bytes_encoded)) {
+		free(protobuf);
+		goto exit;
+	}
+	ipfs_hashtable_node_free(node);
+	node = NULL;
+
+	struct HttpRequest* req = ipfs_core_http_request_new();
+	if (!req) {
+		free(protobuf);
+		goto exit;
+	}
+	req->command = strdup("dag");
+	req->sub_command = strdup("put");
+	req->data = protobuf;
+	req->data_size = bytes_encoded;
+
+	struct HttpResponse* resp = NULL;
+	if (!ipfs_core_http_request_process(local_node, req, &resp) || !resp) {
+		ipfs_core_http_request_free(req);
+		goto exit;
+	}
+
+	if (strstr((char*)resp->bytes, "Cid") != NULL) {
+		retVal = 1;
+	}
+
+	ipfs_core_http_response_free(resp);
+	ipfs_core_http_request_free(req);
+exit:
+	if (node) ipfs_hashtable_node_free(node);
+	ipfs_node_free(local_node);
+	if (peer_id) free(peer_id);
+	return retVal;
+}
+
+int test_core_api_get() {
+	int retVal = 0;
+	struct IpfsNode* local_node = NULL;
+	char* repo_path = "/tmp/ipfs_api_get";
+	char* peer_id = NULL;
+	struct HashtableNode* node = NULL;
+	char hash_str[256] = {0};
+
+	if (!drop_and_build_repository(repo_path, 4001, NULL, &peer_id))
+		goto exit;
+	if (!ipfs_node_offline_new(repo_path, &local_node))
+		goto exit;
+
+	// Import a small file
+	const char* content = "hello, get world!\n";
+	char* filename = "/tmp/test_api_get.txt";
+	create_file(filename, (unsigned char*)content, strlen(content));
+
+	size_t bytes_written = 0;
+	if (!ipfs_import_file(NULL, filename, &node, local_node, &bytes_written, 0))
+		goto exit;
+
+	if (!ipfs_cid_hash_to_base58(node->hash, node->hash_size, (unsigned char*)hash_str, 256))
+		goto exit;
+
+	struct HttpRequest* req = ipfs_core_http_request_new();
+	if (!req) goto exit;
+	req->command = strdup("get");
+	libp2p_utils_vector_add(req->arguments, strdup(hash_str));
+
+	struct HttpResponse* resp = NULL;
+	if (!ipfs_core_http_request_process(local_node, req, &resp) || !resp) {
+		ipfs_core_http_request_free(req);
+		goto exit;
+	}
+
+	if (resp->bytes_size == strlen(content) && memcmp(resp->bytes, content, strlen(content)) == 0) {
+		retVal = 1;
+	}
+
+	ipfs_core_http_response_free(resp);
+	ipfs_core_http_request_free(req);
+exit:
+	if (node) ipfs_hashtable_node_free(node);
+	ipfs_node_free(local_node);
+	if (peer_id) free(peer_id);
+	return retVal;
+}
+
+int test_core_api_ls() {
+	int retVal = 0;
+	struct IpfsNode* local_node = NULL;
+	char* repo_path = "/tmp/ipfs_api_ls";
+	char* peer_id = NULL;
+	struct HashtableNode* node = NULL;
+	char hash_str[256] = {0};
+
+	if (!drop_and_build_repository(repo_path, 4001, NULL, &peer_id))
+		goto exit;
+	if (!ipfs_node_offline_new(repo_path, &local_node))
+		goto exit;
+
+	// Create a directory node with a link
+	if (!ipfs_hashtable_node_create_directory(&node))
+		goto exit;
+
+	// Create a child node and add it
+	struct HashtableNode* child = NULL;
+	const char* child_data = "child file";
+	if (!ipfs_hashtable_node_new_from_data((unsigned char*)child_data, strlen(child_data), &child))
+		goto exit;
+
+	size_t child_written = 0;
+	if (!ipfs_merkledag_add(child, local_node->repo, &child_written))
+		goto exit;
+
+	struct NodeLink* link = NULL;
+	if (!ipfs_node_link_create("child.txt", child->hash, child->hash_size, &link))
+		goto exit;
+	link->t_size = child_written;
+	ipfs_hashtable_node_add_link(node, link);
+
+	size_t bytes_written = 0;
+	if (!ipfs_merkledag_add(node, local_node->repo, &bytes_written))
+		goto exit;
+
+	if (!ipfs_cid_hash_to_base58(node->hash, node->hash_size, (unsigned char*)hash_str, 256))
+		goto exit;
+
+	struct HttpRequest* req = ipfs_core_http_request_new();
+	if (!req) goto exit;
+	req->command = strdup("ls");
+	libp2p_utils_vector_add(req->arguments, strdup(hash_str));
+
+	struct HttpResponse* resp = NULL;
+	if (!ipfs_core_http_request_process(local_node, req, &resp) || !resp) {
+		ipfs_core_http_request_free(req);
+		goto exit;
+	}
+
+	if (strstr((char*)resp->bytes, "Objects") != NULL && strstr((char*)resp->bytes, "child.txt") != NULL) {
+		retVal = 1;
+	}
+
+	ipfs_core_http_response_free(resp);
+	ipfs_core_http_request_free(req);
+exit:
+	if (child) ipfs_hashtable_node_free(child);
+	if (node) ipfs_hashtable_node_free(node);
 	ipfs_node_free(local_node);
 	if (peer_id) free(peer_id);
 	return retVal;

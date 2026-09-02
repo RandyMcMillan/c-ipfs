@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include <curl/curl.h>
 #include "libp2p/crypto/encoding/base64.h"
 #include "libp2p/os/memstream.h"
@@ -10,8 +11,11 @@
 #include "ipfs/cid/cid.h"
 #include "ipfs/core/http_request.h"
 #include "ipfs/importer/exporter.h"
+#include "ipfs/importer/importer.h"
 #include "ipfs/namesys/resolver.h"
 #include "ipfs/namesys/publisher.h"
+#include "ipfs/merkledag/merkledag.h"
+#include "ipfs/merkledag/node.h"
 #include "ipfs/pin/pin.h"
 #include "ipfs/routing/routing.h"
 
@@ -645,6 +649,190 @@ static int ipfs_core_http_process_repo_gc(struct IpfsNode* local_node, struct Ht
 	return 1;
 }
 
+static int ipfs_core_http_process_add(struct IpfsNode* local_node, struct HttpRequest* request, struct HttpResponse** response) {
+	if (!request->data || request->data_size == 0) return 0;
+
+	char tmpfile[] = "/tmp/ipfs_api_add_XXXXXX";
+	int fd = mkstemp(tmpfile);
+	if (fd < 0) return 0;
+	if (write(fd, request->data, request->data_size) != (ssize_t)request->data_size) {
+		close(fd);
+		unlink(tmpfile);
+		return 0;
+	}
+	close(fd);
+
+	struct HashtableNode* node = NULL;
+	size_t bytes_written = 0;
+	int retVal = ipfs_import_file(NULL, tmpfile, &node, local_node, &bytes_written, 0);
+	unlink(tmpfile);
+	if (!retVal || !node) return 0;
+
+	char hash_str[256] = {0};
+	if (!ipfs_cid_hash_to_base58(node->hash, node->hash_size, (unsigned char*)hash_str, 256)) {
+		ipfs_hashtable_node_free(node);
+		return 0;
+	}
+	ipfs_hashtable_node_free(node);
+
+	*response = ipfs_core_http_response_new();
+	if (!*response) return 0;
+	struct HttpResponse* res = *response;
+	res->content_type = "application/json";
+	int bytes_needed = 128 + strlen(hash_str);
+	res->bytes = (uint8_t*)malloc(bytes_needed);
+	if (!res->bytes) {
+		ipfs_core_http_response_free(res);
+		*response = NULL;
+		return 0;
+	}
+	snprintf((char*)res->bytes, bytes_needed, "{\"Name\":\"\",\"Hash\":\"%s\",\"Size\":\"%zu\"}", hash_str, bytes_written);
+	res->bytes_size = strlen((char*)res->bytes);
+	return 1;
+}
+
+static int ipfs_core_http_process_dag_get(struct IpfsNode* local_node, struct HttpRequest* request, struct HttpResponse** response) {
+	if (!request->arguments || request->arguments->total < 1) return 0;
+	char* hash = (char*)libp2p_utils_vector_get(request->arguments, 0);
+	struct Cid* cid = NULL;
+	if (!ipfs_cid_decode_hash_from_base58((unsigned char*)hash, strlen(hash), &cid)) {
+		return 0;
+	}
+	struct HashtableNode* node = NULL;
+	int retVal = ipfs_merkledag_get(cid->hash, cid->hash_length, &node, local_node->repo);
+	ipfs_cid_free(cid);
+	if (!retVal || !node) return 0;
+
+	*response = ipfs_core_http_response_new();
+	if (!*response) {
+		ipfs_hashtable_node_free(node);
+		return 0;
+	}
+	struct HttpResponse* res = *response;
+	res->content_type = "application/json";
+	FILE* out = open_memstream((char**)&res->bytes, &res->bytes_size);
+
+	// Base64-encode data if present
+	fprintf(out, "{\"data\":\"");
+	if (node->data && node->data_size > 0) {
+		size_t b64_max = libp2p_crypto_encoding_base64_encode_size(node->data_size);
+		char* b64 = malloc(b64_max + 1);
+		if (b64) {
+			size_t b64_len = 0;
+			libp2p_crypto_encoding_base64_encode(node->data, node->data_size, (unsigned char*)b64, b64_max, &b64_len);
+			b64[b64_len] = '\0';
+			fprintf(out, "%s", b64);
+			free(b64);
+		}
+	}
+	fprintf(out, "\",\"links\":[");
+	struct NodeLink* link = node->head_link;
+	int first = 1;
+	while (link) {
+		char link_hash[256] = {0};
+		if (ipfs_cid_hash_to_base58(link->hash, link->hash_size, (unsigned char*)link_hash, 256)) {
+			if (!first) fprintf(out, ",");
+			fprintf(out, "{\"Name\":\"%s\",\"Hash\":\"%s\",\"Size\":%zu}",
+				link->name ? link->name : "", link_hash, link->t_size);
+			first = 0;
+		}
+		link = link->next;
+	}
+	fprintf(out, "]}");
+	fclose(out);
+	ipfs_hashtable_node_free(node);
+	return 1;
+}
+
+static int ipfs_core_http_process_dag_put(struct IpfsNode* local_node, struct HttpRequest* request, struct HttpResponse** response) {
+	if (!request->data || request->data_size == 0) return 0;
+
+	struct HashtableNode* node = NULL;
+	if (!ipfs_hashtable_node_protobuf_decode(request->data, request->data_size, &node)) {
+		return 0;
+	}
+
+	size_t bytes_written = 0;
+	if (!ipfs_merkledag_add(node, local_node->repo, &bytes_written)) {
+		ipfs_hashtable_node_free(node);
+		return 0;
+	}
+
+	char hash_str[256] = {0};
+	if (!ipfs_cid_hash_to_base58(node->hash, node->hash_size, (unsigned char*)hash_str, 256)) {
+		ipfs_hashtable_node_free(node);
+		return 0;
+	}
+	ipfs_hashtable_node_free(node);
+
+	*response = ipfs_core_http_response_new();
+	if (!*response) return 0;
+	struct HttpResponse* res = *response;
+	res->content_type = "application/json";
+	int bytes_needed = 64 + strlen(hash_str);
+	res->bytes = (uint8_t*)malloc(bytes_needed);
+	if (!res->bytes) {
+		ipfs_core_http_response_free(res);
+		*response = NULL;
+		return 0;
+	}
+	snprintf((char*)res->bytes, bytes_needed, "{\"Cid\":{\"\":\"%s\"}}", hash_str);
+	res->bytes_size = strlen((char*)res->bytes);
+	return 1;
+}
+
+static int ipfs_core_http_process_get(struct IpfsNode* local_node, struct HttpRequest* request, struct HttpResponse** response) {
+	// get is functionally identical to cat for raw content retrieval
+	return ipfs_core_http_process_cat(local_node, request, response);
+}
+
+static int ipfs_core_http_process_ls(struct IpfsNode* local_node, struct HttpRequest* request, struct HttpResponse** response) {
+	if (!request->arguments || request->arguments->total < 1) return 0;
+	char* hash = (char*)libp2p_utils_vector_get(request->arguments, 0);
+	struct Cid* cid = NULL;
+	if (!ipfs_cid_decode_hash_from_base58((unsigned char*)hash, strlen(hash), &cid)) {
+		return 0;
+	}
+	struct HashtableNode* node = NULL;
+	int retVal = ipfs_merkledag_get(cid->hash, cid->hash_length, &node, local_node->repo);
+	if (!retVal || !node) {
+		ipfs_cid_free(cid);
+		return 0;
+	}
+
+	*response = ipfs_core_http_response_new();
+	if (!*response) {
+		ipfs_hashtable_node_free(node);
+		ipfs_cid_free(cid);
+		return 0;
+	}
+	struct HttpResponse* res = *response;
+	res->content_type = "application/json";
+	FILE* out = open_memstream((char**)&res->bytes, &res->bytes_size);
+	fprintf(out, "{\"Objects\":[{\"Hash\":\"%s\",\"Links\":[", hash);
+	struct NodeLink* link = node->head_link;
+	int first = 1;
+	while (link) {
+		char link_hash[256] = {0};
+		if (ipfs_cid_hash_to_base58(link->hash, link->hash_size, (unsigned char*)link_hash, 256)) {
+			if (!first) fprintf(out, ",");
+			int type = 2; // default to file
+			if (link->name && strlen(link->name) > 0 && link->name[strlen(link->name)-1] == '/') {
+				type = 1; // directory
+			}
+			fprintf(out, "{\"Name\":\"%s\",\"Hash\":\"%s\",\"Size\":%zu,\"Type\":%d}",
+				link->name ? link->name : "", link_hash, link->t_size, type);
+			first = 0;
+		}
+		link = link->next;
+	}
+	fprintf(out, "]}]}");
+	fclose(out);
+	ipfs_hashtable_node_free(node);
+	ipfs_cid_free(cid);
+	return 1;
+}
+
 /***
  * Process the parameters passed in from an http request
  * @param local_node the context
@@ -677,6 +865,16 @@ int ipfs_core_http_request_process(struct IpfsNode* local_node, struct HttpReque
 		retVal = ipfs_core_http_process_block_put(local_node, request, response);
 	} else if (strcmp(request->command, "cat") == 0) {
 		retVal = ipfs_core_http_process_cat(local_node, request, response);
+	} else if (strcmp(request->command, "get") == 0) {
+		retVal = ipfs_core_http_process_get(local_node, request, response);
+	} else if (strcmp(request->command, "add") == 0) {
+		retVal = ipfs_core_http_process_add(local_node, request, response);
+	} else if (strcmp(request->command, "dag") == 0 && request->sub_command && strcmp(request->sub_command, "get") == 0) {
+		retVal = ipfs_core_http_process_dag_get(local_node, request, response);
+	} else if (strcmp(request->command, "dag") == 0 && request->sub_command && strcmp(request->sub_command, "put") == 0) {
+		retVal = ipfs_core_http_process_dag_put(local_node, request, response);
+	} else if (strcmp(request->command, "ls") == 0) {
+		retVal = ipfs_core_http_process_ls(local_node, request, response);
 	} else if (strcmp(request->command, "pin") == 0 && request->sub_command && strcmp(request->sub_command, "add") == 0) {
 		retVal = ipfs_core_http_process_pin_add(local_node, request, response);
 	} else if (strcmp(request->command, "pin") == 0 && request->sub_command && strcmp(request->sub_command, "ls") == 0) {
