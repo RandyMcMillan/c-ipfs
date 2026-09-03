@@ -74,7 +74,6 @@ IPFS_PATH="${C_REPO}" "${C_IPFS_BIN}" swarm connect "${KUBO_ADDR}" || true
 echo "=== Test 4: IPNS record resolution ==="
 IPNS_TEST_FILE="${TMP_DIR}/ipns_target.txt"
 echo "IPNS Target Content Payload" > "${IPNS_TEST_FILE}"
-TARGET_CID=$(IPFS_PATH="${C_REPO}" "${C_IPFS_BIN}" add -q "${IPNS_TEST_FILE}" | tail -n 1)
 TARGET_CID=$(IPFS_PATH="${C_REPO}" "${C_IPFS_BIN}" add "${IPNS_TEST_FILE}" | awk '/^added / {print $2; exit}')
 if [ -z "${TARGET_CID}" ]; then
     echo "Failed to parse CID from c-ipfs add output"
