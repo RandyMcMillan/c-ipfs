@@ -19,6 +19,25 @@ typedef struct libp2p_transport {
  * Note: libwebsockets must be available at compile time (HAS_LIBWEBSOCKETS defined).
  * If libwebsockets is not available, this function returns NULL.
  */
+/**
+ * Create a QUIC transport backed by lsquic.
+ *
+ * @param tls_ctx An OpenSSL SSL_CTX pointer, or NULL for default.
+ * @return A libp2p_transport_t pointer, or NULL on error.
+ *
+ * Note: lsquic must be available at compile time (HAS_LSQUIC defined).
+ * If lsquic is not available, this function returns NULL.
+ */
+libp2p_transport_t *libp2p_quic_transport_create(void *tls_ctx);
+
+/**
+ * Create a WebSocket transport backed by libwebsockets.
+ *
+ * @return A libp2p_transport_t pointer, or NULL on error.
+ *
+ * Note: libwebsockets must be available at compile time (HAS_LIBWEBSOCKETS defined).
+ * If libwebsockets is not available, this function returns NULL.
+ */
 libp2p_transport_t *libp2p_ws_transport_create(void);
 
 #endif

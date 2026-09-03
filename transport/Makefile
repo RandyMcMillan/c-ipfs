@@ -16,7 +16,7 @@ LFLAGS += $(shell pkg-config --libs libwebsockets 2>/dev/null || echo "-lwebsock
 endif
 
 DEPS =
-OBJS = quic_transport.o ws_transport.o
+OBJS = quic_transport.o ws_transport.o registry.o
 
 %.o: %.c $(DEPS)
 	$(CC) -c -o $@ $< $(CFLAGS)

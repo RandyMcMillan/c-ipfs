@@ -81,7 +81,6 @@ static struct lws_protocols ws_protocols[] = {
 };
 
 static int ws_dial(libp2p_transport_t *self, const char *multiaddr, libp2p_stream_t **out_stream) {
-    (void)out_stream;
     libp2p_ws_transport_t *ws_trans = (libp2p_ws_transport_t *)self;
 
     char ip[64];
@@ -90,6 +89,12 @@ static int ws_dial(libp2p_transport_t *self, const char *multiaddr, libp2p_strea
         fprintf(stderr, "Invalid WebSocket multiaddr format\n");
         return -1;
     }
+
+    ws_stream_impl_t *stream = calloc(1, sizeof(ws_stream_impl_t));
+    if (!stream) return -1;
+    stream->base.read = ws_stream_read;
+    stream->base.write = ws_stream_write;
+    stream->base.close = ws_stream_close;
 
     struct lws_client_connect_info ccinfo;
     memset(&ccinfo, 0, sizeof(ccinfo));
@@ -101,17 +106,42 @@ static int ws_dial(libp2p_transport_t *self, const char *multiaddr, libp2p_strea
     ccinfo.origin = ccinfo.address;
     ccinfo.protocol = ws_protocols[0].name;
     ccinfo.ssl_connection = 0;
+    ccinfo.userdata = stream;
 
     struct lws *wsi = lws_client_connect_via_info(&ccinfo);
-    if (!wsi) return -1;
+    if (!wsi) {
+        free(stream);
+        return -1;
+    }
+    stream->wsi = wsi;
 
+    if (out_stream) {
+        *out_stream = (libp2p_stream_t *)stream;
+    }
     return 0;
+}
+
+static int ws_listen(libp2p_transport_t *self, const char *multiaddr) {
+    (void)self;
+    (void)multiaddr;
+    fprintf(stderr, "[WS] listen not yet implemented\n");
+    return -1;
+}
+
+static void ws_transport_close(libp2p_transport_t *self) {
+    libp2p_ws_transport_t *ws_trans = (libp2p_ws_transport_t *)self;
+    if (ws_trans->lws_ctx) {
+        lws_context_destroy(ws_trans->lws_ctx);
+        ws_trans->lws_ctx = NULL;
+    }
 }
 
 libp2p_transport_t *libp2p_ws_transport_create(void) {
     libp2p_ws_transport_t *t = calloc(1, sizeof(libp2p_ws_transport_t));
     t->base.name = "ws";
     t->base.dial = ws_dial;
+    t->base.listen = ws_listen;
+    t->base.close = ws_transport_close;
 
     struct lws_context_creation_info info;
     memset(&info, 0, sizeof(info));

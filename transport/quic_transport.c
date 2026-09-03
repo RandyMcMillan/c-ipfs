@@ -94,11 +94,13 @@ static int quic_dial(libp2p_transport_t *self, const char *multiaddr, libp2p_str
     return 0;
 }
 
-libp2p_transport_t *libp2p_quic_transport_create(SSL_CTX *libp2p_tls_ctx) {
+libp2p_transport_t *libp2p_quic_transport_create(void *tls_ctx) {
     libp2p_quic_transport_t *t = calloc(1, sizeof(libp2p_quic_transport_t));
     t->base.name = "quic-v1";
     t->base.dial = quic_dial;
-    t->ssl_ctx = libp2p_tls_ctx;
+    t->base.listen = NULL; /* TODO: implement QUIC listen */
+    t->base.close = NULL;  /* TODO: implement QUIC transport close */
+    t->ssl_ctx = (SSL_CTX *)tls_ctx;
 
     struct lsquic_engine_api api;
     memset(&api, 0, sizeof(api));
@@ -111,8 +113,8 @@ libp2p_transport_t *libp2p_quic_transport_create(SSL_CTX *libp2p_tls_ctx) {
 
 #else /* !HAS_LSQUIC */
 
-libp2p_transport_t *libp2p_quic_transport_create(void *ctx) {
-    (void)ctx;
+libp2p_transport_t *libp2p_quic_transport_create(void *tls_ctx) {
+    (void)tls_ctx;
     fprintf(stderr, "[QUIC] lsquic not available at compile time\n");
     return NULL;
 }

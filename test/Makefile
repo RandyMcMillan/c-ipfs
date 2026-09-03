@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -O0 -I../include -I../c-libp2p/include -I../c-libp2p/c-multihash/include -I../c-libp2p/c-multiaddr/include -I../c-libp2p/c-protobuf -I../lmdb/libraries/liblmdb -I../nostril/deps/secp256k1/include -g3 -Wall -std=gnu99
+CFLAGS = -O0 -I../include -I../c-libp2p/include -I../c-libp2p/c-multihash/include -I../c-libp2p/c-multiaddr/include -I../c-libp2p/c-protobuf -I../lmdb/libraries/liblmdb -I../nostril -I../nostril/deps/secp256k1/include -g3 -Wall -std=gnu99
 LFLAGS = -L../c-libp2p -L../c-libp2p/c-multihash -L../c-libp2p/c-multiaddr -lp2p -lm -lmultihash -lmultiaddr -lpthread -lresolv -lcurl -lz
 ifeq ($(shell uname -s),Darwin)
 CFLAGS += -I/opt/homebrew/opt/openssl/include
@@ -8,7 +8,7 @@ else
 LFLAGS += -Wl,-rpath,'$$ORIGIN/../c-libp2p'
 endif
 LFLAGS += -lssl -lcrypto ../nostril/libsecp256k1.a
-DEPS = cmd/ipfs/test_init.h repo/test_repo_bootstrap_peers.h repo/test_repo_config.h repo/test_repo_identity.h cid/test_cid.h
+DEPS = cmd/ipfs/test_init.h repo/test_repo_bootstrap_peers.h repo/test_repo_config.h repo/test_repo_identity.h cid/test_cid.h transport/test_transport.h
 OBJS = testit.o test_helper.o \
 	../blocks/block.o ../blocks/blockstore.o ../blocks/blockstore_shard.o \
 	../cid/cid.o ../cid/set.o ../cid/cid_v1.o \
@@ -51,7 +51,7 @@ OBJS = testit.o test_helper.o \
 	../transport/*.o \
 	../unixfs/unixfs.o ../unixfs/hamt.o \
 	../util/thread_pool.o ../util/time.o ../util/errs.o ../util/errs_impl.o \
-	../nostr/*.o \
+	../nostr/event.o ../nostr/git.o ../nostr/kind.o ../nostr/pip.o ../nostr/tag.o \
 	../rbsr/rbsr.o \
 	../nostril/sha256.o \
 	../c-libp2p/c-protobuf/protobuf.o ../c-libp2p/c-protobuf/varint.o

@@ -238,6 +238,10 @@ int build_test_collection() {
 	add_test("test_transport_struct_size", test_transport_struct_size, 1);
 	add_test("test_transport_quic_create_without_lsquic", test_transport_quic_create_without_lsquic, 1);
 	add_test("test_transport_ws_create_without_libwebsockets", test_transport_ws_create_without_libwebsockets, 1);
+	add_test("test_transport_registry_init_add_free", test_transport_registry_init_add_free, 1);
+	add_test("test_transport_registry_remove", test_transport_registry_remove, 1);
+	add_test("test_transport_registry_dial_no_match", test_transport_registry_dial_no_match, 1);
+	add_test("test_transport_registry_dial_match", test_transport_registry_dial_match, 1);
 	add_test("test_repo_lock_create_free", test_repo_lock_create_free, 1);
 	add_test("test_repo_lock_unlock_cycle", test_repo_lock_unlock_cycle, 1);
 	add_test("test_blockstore_shard_put_get", test_blockstore_shard_put_get, 1);
