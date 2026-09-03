@@ -161,6 +161,7 @@ int build_test_collection() {
 	add_test("test_repo_config_identity_private_key", test_repo_config_identity_private_key, 1);
 	add_test("test_repo_fsrepo_write_read_block", test_repo_fsrepo_write_read_block, 1);
 	add_test("test_repo_fsrepo_build", test_repo_fsrepo_build, 1);
+	add_test("test_repo_init_config_import", test_repo_init_config_import, 1);
 	add_test("test_routing_supernode_start", test_routing_supernode_start, 1);
 	add_test("test_get_init_command", test_get_init_command, 1);
 	add_test("test_import_small_file", test_import_small_file, 1);

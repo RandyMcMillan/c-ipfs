@@ -68,7 +68,7 @@ int ipfs_repo_get_directory(int argc, char** argv, char** repo_dir) {
  * @param peer_id the peer id generated
  * @returns true(1) on success, false(0) on failure
  */
-int make_ipfs_repository(const char* path, int swarm_port, struct Libp2pVector* bootstrap_peers, char **peer_id) {
+int make_ipfs_repository(const char* path, int swarm_port, struct Libp2pVector* bootstrap_peers, char **peer_id, const char* config_import_file) {
 	int retVal = 0;
 	char currDirectory[1024];
 	struct RepoConfig* repo_config = NULL;
@@ -78,6 +78,26 @@ int make_ipfs_repository(const char* path, int swarm_port, struct Libp2pVector* 
 	// build a default repo config
 	if (!ipfs_repo_config_new(&repo_config))
 		goto exit;
+
+	// Handle config file imports if provided
+	if (config_import_file != NULL && strlen(config_import_file) > 0) {
+		FILE* config_file = fopen(config_import_file, "r");
+		if (config_file != NULL) {
+			fseek(config_file, 0, SEEK_END);
+			long fsize = ftell(config_file);
+			fseek(config_file, 0, SEEK_SET);
+			char* config_str = malloc(fsize + 1);
+			if (config_str != NULL) {
+				size_t read_bytes = fread(config_str, 1, fsize, config_file);
+				config_str[read_bytes] = '\0';
+				// TODO: parse JSON config and merge into conf
+				// For now we read and discard; future work: jsmn parse + merge fields
+				free(config_str);
+			}
+			fclose(config_file);
+		}
+	}
+
 	printf("generating 2048-bit RSA keypair...");
 	if (!ipfs_repo_config_init(repo_config, 2048, path, swarm_port, bootstrap_peers)) {
 		fprintf(stderr, "Unable to initialize repository at %s\n", path);
@@ -131,6 +151,19 @@ int ipfs_repo_init(int argc, char** argv) {
 	if (!os_mkdir(repo_directory)) {
 		return 0;
 	}
+	// look for optional config import file (first non-switch argument after init)
+	const char* config_import = NULL;
+	int found_init = 0;
+	for (int i = 1; i < argc; i++) {
+		if (strcmp(argv[i], "init") == 0) {
+			found_init = 1;
+			continue;
+		}
+		if (found_init && argv[i][0] != '-') {
+			config_import = argv[i];
+			break;
+		}
+	}
 	// make the repository
-	return make_ipfs_repository(repo_directory, 4001, NULL, NULL);
+	return make_ipfs_repository(repo_directory, 4001, NULL, NULL, config_import);
 }

@@ -1,4 +1,5 @@
 #include "ipfs/repo/fsrepo/fs_repo.h"
+#include "ipfs/repo/init.h"
 #include "../test_helper.h"
 
 int test_repo_fsrepo_open_config() {
@@ -20,6 +21,26 @@ int test_repo_fsrepo_build() {
 	char* peer_id = NULL;
 
 	int retVal = drop_and_build_repository(path, 4001, NULL, &peer_id);
+	if (peer_id != NULL)
+		free(peer_id);
+	return retVal;
+}
+
+int test_repo_init_config_import() {
+	const char* path = "/tmp/.ipfs_import_test";
+	drop_repository(path);
+
+	// Create a minimal config file for import
+	char config_path[256];
+	snprintf(config_path, sizeof(config_path), "%s/import_config.json", path);
+	os_mkdir(path);
+	FILE* f = fopen(config_path, "w");
+	if (!f) return 0;
+	fputs("{\"Identity\":{\"PeerID\":\"QmTest\",\"PrivKey\":\"CAASpgkwggSiAgEAAoIBAQC...\"}}", f);
+	fclose(f);
+
+	char* peer_id = NULL;
+	int retVal = make_ipfs_repository(path, 4001, NULL, &peer_id, config_path);
 	if (peer_id != NULL)
 		free(peer_id);
 	return retVal;

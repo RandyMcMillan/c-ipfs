@@ -8,9 +8,10 @@
  * @param swarm_port the port that the swarm will run on
  * @param bootstrap_peers a Vector of MultiAddress of fellow peers
  * @param peer_id the peer id generated
+ * @param config_import_file optional path to a config file to import (can be NULL)
  * @returns true(1) on success, false(0) on failure
  */
-int make_ipfs_repository(const char* path, int swarm_port, struct Libp2pVector* bootstrap_peers, char **peer_id);
+int make_ipfs_repository(const char* path, int swarm_port, struct Libp2pVector* bootstrap_peers, char **peer_id, const char* config_import_file);
 
 /**
  * Initialize a repository, called from the command line

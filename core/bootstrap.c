@@ -10,26 +10,24 @@
 /***
  * Begin to connect to the swarm
  */
+/**
+ * NOTE: Bootstrap implementation has moved to core/bootstrap_impl.c.
+ * The functions below are legacy stubs kept for reference.
+ */
 /*
 void *ipfs_bootstrap_swarm(void* param) {
-	//TODO:
 	struct IpfsNode* local_node = (struct IpfsNode*)param;
-	// read the config file and get the bootstrap peers
-	for(int i = 0; i < local_node->repo->config->peer_addresses.num_peers; i++) { // loop through the peers
+	for(int i = 0; i < local_node->repo->config->peer_addresses.num_peers; i++) {
 		struct IPFSAddr* ipfs_addr = local_node->repo->config->peer_addresses.peers[i];
 		struct MultiAddress* ma = multiaddress_new_from_string(ipfs_addr->entire_string);
-		// get the id
 		char* ptr;
-		if ( (ptr = strstr(ipfs_addr->entire_string, "/ipfs/")) != NULL) { // look for the peer id
+		if ( (ptr = strstr(ipfs_addr->entire_string, "/ipfs/")) != NULL) {
 			ptr += 6;
-			if (ptr[0] == 'Q' && ptr[1] == 'm') { // things look good
+			if (ptr[0] == 'Q' && ptr[1] == 'm') {
 				struct Libp2pPeer* peer = libp2p_peer_new_from_data(ptr, strlen(ptr), ma);
 				libp2p_peerstore_add_peer(local_node->peerstore, peer);
 			}
-			// TODO: attempt to connect to the peer
-
-		} // we have a good peer ID
-
+		}
 	}
 	return (void*)1;
 }

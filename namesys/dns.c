@@ -11,13 +11,15 @@
 #include "ipfs/namesys/namesys.h"
 #include "ipfs/dnslink/dnslink.h"
 
+/**
+ * NOTE: The following block is Go reference code from Kubo.
+ * DNS caching is implemented separately in dnslink/dns_cache.c.
+ */
 /*type LookupTXTFunc func(name string) (txt []string, err error)
 
 // DNSResolver implements a Resolver on DNS domains
 type DNSResolver struct {
 	lookupTXT LookupTXTFunc
-	// TODO: maybe some sort of caching?
-	// cache would need a timeout
 }
 
 // NewDNSResolver constructs a name resolver using DNS TXT records.
