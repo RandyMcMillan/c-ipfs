@@ -2,6 +2,7 @@
 set -euo pipefail
 
 KUBO_VERSION="${KUBO_VERSION:-v0.43.0}"
+INTEROP_MODE="${INTEROP_MODE:-auto}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 
@@ -10,7 +11,23 @@ MANIFEST="${ROOT_DIR}/test/kubo_interop_vectors.json"
 TMP_DIR="$(mktemp -d /tmp/c_ipfs_kubo_interop.XXXXXX)"
 C_REPO="${TMP_DIR}/c_ipfs_repo"
 K_REPO="${TMP_DIR}/kubo_repo"
-KUBO_BIN="${TMP_DIR}/kubo_bin/ipfs"
+KUBO_BIN="${KUBO_BIN:-}"
+
+if [ "${INTEROP_MODE}" = "auto" ]; then
+    if [ "${ACT:-}" = "true" ] || [ "${CI:-}" = "true" ]; then
+        INTEROP_MODE="ci"
+    else
+        INTEROP_MODE="host"
+    fi
+fi
+
+if [ "${INTEROP_MODE}" = "ci" ]; then
+    CONNECT_WAIT_STEPS=20
+    API_WAIT_STEPS=60
+else
+    CONNECT_WAIT_STEPS=40
+    API_WAIT_STEPS=120
+fi
 
 c_ipfs_pid=""
 kubo_pid=""
@@ -20,7 +37,7 @@ wait_for_api() {
     local port="$2"
     local label="$3"
     local log_file="$4"
-    for _ in $(seq 1 60); do
+    for _ in $(seq 1 "${API_WAIT_STEPS}"); do
         if ! kill -0 "${pid}" 2>/dev/null; then
             echo "${label} daemon exited before the API became ready"
             tail -n 50 "${log_file}" || true
@@ -52,20 +69,28 @@ if [ ! -f "${MANIFEST}" ]; then
     exit 1
 fi
 
-echo "=== Setup: Installing Kubo ${KUBO_VERSION} ==="
-mkdir -p "${TMP_DIR}/kubo_bin"
-ARCH="$(uname -m)"
-OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
-case "${ARCH}" in
-    x86_64) GOARCH="amd64" ;;
-    arm64|aarch64) GOARCH="arm64" ;;
-    *) echo "Unsupported architecture: ${ARCH}"; exit 1 ;;
-esac
+if [ "${INTEROP_MODE}" = "ci" ]; then
+    echo "=== Setup: Installing Kubo ${KUBO_VERSION} ==="
+    mkdir -p "${TMP_DIR}/kubo_bin"
+    ARCH="$(uname -m)"
+    OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
+    case "${ARCH}" in
+        x86_64) GOARCH="amd64" ;;
+        arm64|aarch64) GOARCH="arm64" ;;
+        *) echo "Unsupported architecture: ${ARCH}"; exit 1 ;;
+    esac
 
-KUBO_TAR="kubo_${KUBO_VERSION}_${OS}-${GOARCH}.tar.gz"
-KUBO_URL="https://github.com/ipfs/kubo/releases/download/${KUBO_VERSION}/${KUBO_TAR}"
+    KUBO_TAR="kubo_${KUBO_VERSION}_${OS}-${GOARCH}.tar.gz"
+    KUBO_URL="https://github.com/ipfs/kubo/releases/download/${KUBO_VERSION}/${KUBO_TAR}"
 
-curl -fsSL "${KUBO_URL}" | tar -xz -C "${TMP_DIR}/kubo_bin" --strip-components=1
+    curl -fsSL "${KUBO_URL}" | tar -xz -C "${TMP_DIR}/kubo_bin" --strip-components=1
+    KUBO_BIN="${TMP_DIR}/kubo_bin/ipfs"
+else
+    if [ -z "${KUBO_BIN}" ]; then
+        echo "Host mode requires KUBO_BIN to point to an installed Kubo binary."
+        exit 1
+    fi
+fi
 
 echo "=== Initializing test repositories ==="
 IPFS_PATH="${C_REPO}" "${C_IPFS_BIN}" init
