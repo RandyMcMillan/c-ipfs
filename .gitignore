@@ -1,4 +1,9 @@
-*
+#*
+
+AGENTS.md
+
+.genkit
+.genkit/**
 
 !.gitignore
 !.github/
@@ -13,6 +18,10 @@
 !README.md
 !TODOs.md
 !TODOs_EASE_OF_IMPLEMENTATION.md
+!test/**
+!tmp/.gitkeep
+test/*.o.tmp
+
 
 # Module source files
 !crypto/verify.c
