@@ -8,8 +8,7 @@
 bool ipfs_validate_cid(const char *cid) {
     if (!cid) return false;
     size_t len = strlen(cid);
-    /* Typical CIDs: v0 is 46 chars (Qm...), v1 base32 is ~59 chars */
-    if (len < 40 || len > 128) return false;
+    if (len == 0 || len > 128) return false;
 
     for (size_t i = 0; i < len; i++) {
         char c = cid[i];

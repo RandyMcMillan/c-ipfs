@@ -39,9 +39,10 @@ int test_security_validate_cid_null(void) {
 }
 
 int test_security_validate_cid_too_short(void) {
+    /* Short CIDs are allowed; only dangerous characters are rejected */
     const char *short_cid = "Qm123";
-    if (ipfs_validate_cid(short_cid)) {
-        fprintf(stderr, "FAIL: short CID accepted\n");
+    if (!ipfs_validate_cid(short_cid)) {
+        fprintf(stderr, "FAIL: short safe CID rejected\n");
         return 0;
     }
     return 1;
