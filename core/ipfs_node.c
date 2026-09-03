@@ -109,6 +109,13 @@ int ipfs_node_online_new(const char* repo_path, struct IpfsNode** node) {
 	local_node->dialer = libp2p_conn_dialer_new(local_node->identity->peer, local_node->peerstore, &local_node->identity->private_key, local_node->swarm);
 	local_node->discovery = libp2p_discovery_new();
 	if (local_node->discovery != NULL) {
+		const char* local_multiaddr = NULL;
+		if (local_node->repo->config->addresses != NULL &&
+			local_node->repo->config->addresses->swarm_head != NULL &&
+			local_node->repo->config->addresses->swarm_head->item != NULL) {
+			local_multiaddr = (const char*)local_node->repo->config->addresses->swarm_head->item;
+		}
+		libp2p_discovery_set_identity(local_node->discovery, local_node->identity->peer->id, local_multiaddr);
 		libp2p_discovery_config_t discovery_config = {
 			.mdns_enabled = local_node->repo->config->discovery.mdns.enabled,
 			.mdns_interval = local_node->repo->config->discovery.mdns.interval,
@@ -171,6 +178,13 @@ int ipfs_node_offline_new(const char* repo_path, struct IpfsNode** node) {
 	local_node->dialer = libp2p_conn_dialer_new(local_node->identity->peer, local_node->peerstore, &local_node->identity->private_key, local_node->swarm);
 	local_node->discovery = libp2p_discovery_new();
 	if (local_node->discovery != NULL) {
+		const char* local_multiaddr = NULL;
+		if (local_node->repo->config->addresses != NULL &&
+			local_node->repo->config->addresses->swarm_head != NULL &&
+			local_node->repo->config->addresses->swarm_head->item != NULL) {
+			local_multiaddr = (const char*)local_node->repo->config->addresses->swarm_head->item;
+		}
+		libp2p_discovery_set_identity(local_node->discovery, local_node->identity->peer->id, local_multiaddr);
 		libp2p_discovery_config_t discovery_config = {
 			.mdns_enabled = local_node->repo->config->discovery.mdns.enabled,
 			.mdns_interval = local_node->repo->config->discovery.mdns.interval,
