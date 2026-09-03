@@ -7,7 +7,7 @@ endif
 
 LFLAGS = 
 DEPS = ../include/blocks/block.h ../include/blocks/blockstore.h
-OBJS = block.o blockstore.o
+OBJS = block.o blockstore.o blockstore_shard.o
 
 %.o: %.c $(DEPS)
 	$(CC) -c -o $@ $< $(CFLAGS)

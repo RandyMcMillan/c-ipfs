@@ -7,7 +7,7 @@ endif
 
 LFLAGS = 
 DEPS = ../include/ipfsdatastore/ds_helper.h
-OBJS = ds_helper.o 
+OBJS = ds_helper.o key_impl.o 
 
 %.o: %.c $(DEPS)
 	$(CC) -c -o $@ $< $(CFLAGS)

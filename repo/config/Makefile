@@ -7,7 +7,7 @@ endif
 
 LFLAGS = 
 DEPS = config.h datastore.h identity.h replication.h
-OBJS = config.o identity.o bootstrap_peers.o gateway.o addresses.o swarm.o peer.o replication.o
+OBJS = config.o identity.o bootstrap_peers.o gateway.o addresses.o swarm.o peer.o replication.o config_impl.o
 
 %.o: %.c $(DEPS)
 	$(CC) -c -o $@ $< $(CFLAGS)

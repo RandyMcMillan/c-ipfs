@@ -7,7 +7,7 @@ endif
 
 LFLAGS = 
 DEPS = 
-OBJS = importer.o exporter.o resolver.o
+OBJS = importer.o exporter.o resolver.o recursive.o progress.o
 
 %.o: %.c $(DEPS)
 	$(CC) -c -o $@ $< $(CFLAGS)

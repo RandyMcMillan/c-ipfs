@@ -7,7 +7,7 @@ endif
 
 LFLAGS = 
 DEPS = 
-OBJS = base.o dns.o isdomain.o namesys.o proquint.o publisher.o pb.o name.o resolver.o verify.o
+OBJS = base.o dns.o isdomain.o namesys.o proquint.o publisher.o pb.o name.o resolver.o verify.o namesys_resolve.o
 
 %.o: %.c $(DEPS)
 	$(CC) -c -o $@ $< $(CFLAGS)

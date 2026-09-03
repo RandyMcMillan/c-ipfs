@@ -12,7 +12,7 @@ endif
 
 LFLAGS += -lssl -lcrypto
 DEPS = 
-OBJS = verify.o
+OBJS = verify.o verify_impl.o
 
 %.o: %.c $(DEPS)
 	$(CC) -c -o $@ $< $(CFLAGS)

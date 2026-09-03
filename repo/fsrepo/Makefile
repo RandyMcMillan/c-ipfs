@@ -7,7 +7,7 @@ endif
 
 LFLAGS = 
 DEPS = 
-OBJS = fs_repo.o jsmn.o lmdb_datastore.o lmdb_journalstore.o lmdb_cursor.o
+OBJS = fs_repo.o jsmn.o lmdb_datastore.o lmdb_journalstore.o lmdb_cursor.o lock.o
 
 %.o: %.c $(DEPS)
 	$(CC) -c -o $@ $< $(CFLAGS)

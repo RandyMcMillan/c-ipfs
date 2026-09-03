@@ -16,12 +16,41 @@
 
 # Module source files
 !crypto/verify.c
+!crypto/verify_impl.c
 !crypto/Makefile
 !ipld/dag_cbor.c
 !ipld/Makefile
 !namesys/verify.c
+!namesys/namesys_resolve.c
+!namesys/Makefile
 !pubsub/ipns_pubsub.c
+!pubsub/gossipsub.c
 !pubsub/Makefile
+!transport/Makefile
+!transport/quic_transport.c
+!transport/ws_transport.c
+!include/ipfs/transport/*.h
+!include/ipfs/exchange/bitswap/future.h
+!exchange/bitswap/future.c
+!exchange/bitswap/want_manager_impl.c
+!exchange/bitswap/wantlist_queue_impl.c
+!repo/fsrepo/lock.c
+!cid/cid_v1.c
+!importer/recursive.c
+!importer/progress.c
+!blocks/blockstore_shard.c
+!core/net_interfaces.c
+!core/multipart.c
+!core/api_gzip.c
+!core/http_dht.c
+!core/http_query.c
+!core/bootstrap_impl.c
+!dnslink/dns_cache.c
+!pin/pin_gc.c
+!util/errs_impl.c
+!datastore/key_impl.c
+!merkledag/node_copy.c
+!repo/config/config_impl.c
 
 # Test files
 !test/crypto/test_crypto_verify.h
