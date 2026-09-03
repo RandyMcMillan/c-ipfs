@@ -49,6 +49,15 @@ IPFS_PATH="${K_REPO}" "${KUBO_BIN}" config Addresses.API "/ip4/127.0.0.1/tcp/501
 IPFS_PATH="${K_REPO}" "${KUBO_BIN}" config Addresses.Gateway "/ip4/127.0.0.1/tcp/8081"
 IPFS_PATH="${K_REPO}" "${KUBO_BIN}" config --json Pubsub.Enabled true
 
+echo "=== Starting c-ipfs daemon ==="
+IPFS_PATH="${C_REPO}" "${C_IPFS_BIN}" daemon > "${TMP_DIR}/c_ipfs.log" 2>&1 &
+c_ipfs_pid=$!
+
+echo "Waiting for c-ipfs daemon API..."
+until IPFS_PATH="${C_REPO}" "${C_IPFS_BIN}" id >/dev/null 2>&1; do
+    sleep 0.5
+done
+
 echo "=== Starting Kubo daemon with PubSub enabled ==="
 IPFS_PATH="${K_REPO}" "${KUBO_BIN}" daemon --enable-pubsub-experiment > "${TMP_DIR}/kubo.log" 2>&1 &
 kubo_pid=$!
@@ -66,6 +75,11 @@ echo "=== Test 4: IPNS record resolution ==="
 IPNS_TEST_FILE="${TMP_DIR}/ipns_target.txt"
 echo "IPNS Target Content Payload" > "${IPNS_TEST_FILE}"
 TARGET_CID=$(IPFS_PATH="${C_REPO}" "${C_IPFS_BIN}" add -q "${IPNS_TEST_FILE}" | tail -n 1)
+TARGET_CID=$(IPFS_PATH="${C_REPO}" "${C_IPFS_BIN}" add "${IPNS_TEST_FILE}" | awk '/^added / {print $2; exit}')
+if [ -z "${TARGET_CID}" ]; then
+    echo "Failed to parse CID from c-ipfs add output"
+    exit 1
+fi
 
 C_KEY_NAME="interop-ipns-key"
 IPFS_PATH="${C_REPO}" "${C_IPFS_BIN}" key gen "${C_KEY_NAME}" --type=ed25519
