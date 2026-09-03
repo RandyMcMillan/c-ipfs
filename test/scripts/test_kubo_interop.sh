@@ -14,6 +14,10 @@ C_REPO="${TMP_DIR}/c_ipfs_repo"
 K_REPO="${TMP_DIR}/kubo_repo"
 KUBO_BIN="${KUBO_BIN:-}"
 
+# Silence Kubo's one-time telemetry notice in CI and local harness runs.
+export IPFS_TELEMETRY="${IPFS_TELEMETRY:-off}"
+export DO_NOT_TRACK="${DO_NOT_TRACK:-1}"
+
 if [ "${INTEROP_MODE}" = "auto" ]; then
     if [ "${ACT_CI:-}" = "true" ] || [ "${ACT:-}" = "true" ] || [ "${CI:-}" = "true" ]; then
         INTEROP_MODE="ci"
