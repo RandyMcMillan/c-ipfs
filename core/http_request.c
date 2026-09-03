@@ -669,10 +669,21 @@ static int ipfs_core_http_process_repo_gc(struct IpfsNode* local_node, struct Ht
 static int ipfs_core_http_process_add(struct IpfsNode* local_node, struct HttpRequest* request, struct HttpResponse** response) {
 	if (!request->data || request->data_size == 0) return 0;
 
-	char tmpfile[] = "/tmp/ipfs_api_add_XXXXXX";
+	char tmpfile[512];
+	const char* tmpdir = getenv("TMPDIR");
+	if (!tmpdir) tmpdir = "/tmp";
+	int tmpfile_len = snprintf(tmpfile, sizeof(tmpfile), "%s/ipfs_api_add_XXXXXX", tmpdir);
+	if (tmpfile_len < 0 || (size_t)tmpfile_len >= sizeof(tmpfile)) {
+		libp2p_logger_error("http_request", "ipfs_core_http_process_add: temp path too long\n");
+		return 0;
+	}
 	int fd = mkstemp(tmpfile);
-	if (fd < 0) return 0;
+	if (fd < 0) {
+		libp2p_logger_error("http_request", "ipfs_core_http_process_add: mkstemp failed: %s\n", strerror(errno));
+		return 0;
+	}
 	if (write(fd, request->data, request->data_size) != (ssize_t)request->data_size) {
+		libp2p_logger_error("http_request", "ipfs_core_http_process_add: write failed: %s\n", strerror(errno));
 		close(fd);
 		unlink(tmpfile);
 		return 0;
