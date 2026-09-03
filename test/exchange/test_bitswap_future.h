@@ -4,25 +4,30 @@
 #include <string.h>
 #include <stdlib.h>
 #include "ipfs/exchange/bitswap/future.h"
+#include "ipfs/blocks/block.h"
 
 int test_bitswap_future_create_resolve(void) {
     bitswap_future_t *fut = bitswap_future_create();
     if (!fut) return 0;
 
-    block_t blk = { .data = (uint8_t*)"hello", .size = 5, .cid_str = "QmTest" };
+    struct Block blk;
+    memset(&blk, 0, sizeof(blk));
+    unsigned char data[] = "hello";
+    blk.data = data;
+    blk.data_length = 5;
     bitswap_future_resolve(fut, &blk);
 
-    block_t *result = NULL;
+    struct Block *result = NULL;
     int ret = bitswap_future_wait(fut, 1000, &result);
     bitswap_future_free(fut);
-    return ret && result && result->size == 5;
+    return ret && result && result->data_length == 5;
 }
 
 int test_bitswap_future_reject(void) {
     bitswap_future_t *fut = bitswap_future_create();
     if (!fut) return 0;
     bitswap_future_reject(fut, 42);
-    block_t *result = NULL;
+    struct Block *result = NULL;
     int ret = bitswap_future_wait(fut, 1000, &result);
     bitswap_future_free(fut);
     return !ret;

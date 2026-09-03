@@ -184,6 +184,7 @@ struct WantListQueueEntry* ipfs_bitswap_wantlist_queue_entry_new() {
 		entry->attempts = 0;
 		entry->asked_network = 0;
 		entry->next = NULL;
+		entry->future = NULL;
 		pthread_mutex_init(&entry->block_mutex, NULL);
 		pthread_cond_init(&entry->block_cond, NULL);
 	}
@@ -208,6 +209,10 @@ int ipfs_bitswap_wantlist_queue_entry_free(struct WantListQueueEntry* entry) {
 		if (entry->sessionsRequesting != NULL) {
 			libp2p_utils_vector_free(entry->sessionsRequesting);
 			entry->sessionsRequesting = NULL;
+		}
+		if (entry->future != NULL) {
+			bitswap_future_free(entry->future);
+			entry->future = NULL;
 		}
 		pthread_mutex_destroy(&entry->block_mutex);
 		pthread_cond_destroy(&entry->block_cond);
@@ -341,10 +346,12 @@ int ipfs_bitswap_wantlist_process_entry(struct BitswapContext* context, struct W
 		// okay we have the block.
 		// fulfill the requests
 		for(size_t i = 0; i < entry->sessionsRequesting->total; i++) {
-			// TODO: Review this code.
 			struct WantListSession* session = (struct WantListSession*) libp2p_utils_vector_get(entry->sessionsRequesting, i);
 			if (session->type == WANTLIST_SESSION_TYPE_LOCAL) {
-				//context->ipfsNode->exchange->HasBlock(context->ipfsNode->exchange, entry->block);
+				// Resolve async future if one was attached to this entry
+				if (entry->future != NULL) {
+					bitswap_future_resolve(entry->future, entry->block);
+				}
 			} else {
 				struct Libp2pPeer* peer = (struct Libp2pPeer*) session->context;
 				ipfs_bitswap_peer_request_queue_fill(context->peerRequestQueue, peer, entry->block);

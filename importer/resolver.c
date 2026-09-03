@@ -137,8 +137,16 @@ struct HashtableNode* ipfs_resolver_remote_get(const char* path, struct Hashtabl
 	// get the multiaddress for this
 	struct Libp2pPeer* peer = libp2p_peerstore_get_peer(ipfs_node->peerstore, (unsigned char*)id, id_size);
 	if (peer == NULL) {
-		//TODO: We don't have the peer address. Ask the swarm for the data related to the hash
-		return NULL;
+		// Attempt to discover peer via routing (DHT/kademlia)
+		if (ipfs_node->routing != NULL && ipfs_node->routing->FindPeer != NULL) {
+			if (ipfs_node->routing->FindPeer(ipfs_node->routing, (unsigned char*)id, id_size, &peer)) {
+				libp2p_peerstore_add_peer(ipfs_node->peerstore, peer);
+			} else {
+				return NULL;
+			}
+		} else {
+			return NULL;
+		}
 	}
 	if (!libp2p_peer_connect(ipfs_node->dialer, peer, ipfs_node->peerstore, ipfs_node->repo->config->datastore, 10))
 		return NULL;

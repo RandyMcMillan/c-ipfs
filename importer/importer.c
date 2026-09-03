@@ -435,7 +435,6 @@ size_t ipfs_import_chunk(FILE* file, struct HashtableNode* parent_node, struct F
  */
 int ipfs_import_print_node_results(const struct HashtableNode* node, const char* file_name) {
 	// give some results to the user
-	//TODO: if directory_entry is itself a directory, traverse and report files
 	int buffer_len = 100;
 	unsigned char buffer[buffer_len];
 	if (ipfs_cid_hash_to_base58(node->hash, node->hash_size, buffer, buffer_len) == 0) {
@@ -443,6 +442,17 @@ int ipfs_import_print_node_results(const struct HashtableNode* node, const char*
 		return 0;
 	}
 	printf("added %s %s\n", buffer, file_name);
+	// If this node is a directory, traverse and report child links
+	if (node->head_link != NULL) {
+		struct NodeLink* link = node->head_link;
+		while (link != NULL) {
+			unsigned char link_buffer[buffer_len];
+			if (ipfs_cid_hash_to_base58((unsigned char*)link->hash, link->hash_size, link_buffer, buffer_len) != 0) {
+				printf("added %s %s/%s\n", link_buffer, file_name, link->name);
+			}
+			link = link->next;
+		}
+	}
 	return 1;
 }
 

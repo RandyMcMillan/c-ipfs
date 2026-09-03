@@ -160,6 +160,9 @@ int ipfs_bitswap_has_block(struct Exchange* exchange, struct Block* block) {
 		pthread_mutex_lock(&queueEntry->block_mutex);
 		queueEntry->block = block;
 		pthread_cond_broadcast(&queueEntry->block_cond);
+		if (queueEntry->future != NULL) {
+			bitswap_future_resolve(queueEntry->future, block);
+		}
 		pthread_mutex_unlock(&queueEntry->block_mutex);
 	}
 	// Announce to connected peers that we now have the block (Bitswap 1.2.0 HAVE)
@@ -259,16 +262,21 @@ int ipfs_bitswap_get_block_async(struct Exchange* exchange, struct Cid* cid, str
 	struct BitswapContext* bitswapContext = (struct BitswapContext*)exchange->exchangeContext;
 	if (bitswapContext != NULL) {
 		// check locally first
-		struct Block* block;
-		if (bitswapContext->ipfsNode->blockstore->Get(bitswapContext->ipfsNode->blockstore->blockstoreContext, cid, &block)) {
+		struct Block* local_block = NULL;
+		if (bitswapContext->ipfsNode->blockstore->Get(bitswapContext->ipfsNode->blockstore->blockstoreContext, cid, &local_block)) {
+			if (block != NULL)
+				*block = local_block;
 			return 1;
 		}
 		// now ask the network
 		struct WantListSession* wantlist_session = ipfs_bitswap_wantlist_session_new();
 		wantlist_session->type = WANTLIST_SESSION_TYPE_LOCAL;
 		wantlist_session->context = (void*)bitswapContext->ipfsNode;
-		ipfs_bitswap_want_manager_add(bitswapContext, cid, wantlist_session);
-		// TODO: return something that they can watch
+		struct WantListQueueEntry* entry = ipfs_bitswap_want_manager_add(bitswapContext, cid, wantlist_session);
+		if (entry != NULL) {
+			// Attach an async future so callers can watch for completion
+			entry->future = bitswap_future_create();
+		}
 		return 1;
 	}
 	return 0;
@@ -278,6 +286,35 @@ int ipfs_bitswap_get_block_async(struct Exchange* exchange, struct Cid* cid, str
  * Implements the Exchange->GetBlocks method
  */
 int ipfs_bitswap_get_blocks(struct Exchange* exchange, struct Libp2pVector* Cids, struct Libp2pVector** blocks) {
-	// TODO: Implement this method
-	return 0;
+	if (exchange == NULL || Cids == NULL || blocks == NULL)
+		return 0;
+
+	struct BitswapContext* bitswapContext = (struct BitswapContext*)exchange->exchangeContext;
+	if (bitswapContext == NULL)
+		return 0;
+
+	*blocks = libp2p_utils_vector_new(1);
+	if (*blocks == NULL)
+		return 0;
+
+	for (int i = 0; i < Cids->total; i++) {
+		struct Cid* cid = (struct Cid*)libp2p_utils_vector_get(Cids, i);
+		if (cid == NULL)
+			continue;
+		struct Block* block = NULL;
+		if (ipfs_bitswap_get_block(exchange, cid, &block)) {
+			libp2p_utils_vector_add(*blocks, block);
+		} else {
+			// Partial failure: clean up collected blocks and report failure
+			for (int j = 0; j < (*blocks)->total; j++) {
+				struct Block* b = (struct Block*)libp2p_utils_vector_get(*blocks, j);
+				if (b != NULL)
+					ipfs_block_free(b);
+			}
+			libp2p_utils_vector_free(*blocks);
+			*blocks = NULL;
+			return 0;
+		}
+	}
+	return 1;
 }

@@ -6,6 +6,7 @@
 #include "libp2p/crypto/encoding/base58.h"
 #include "libp2p/os/utils.h"
 #include "libp2p/utils/logger.h"
+#include "libp2p/net/connectionstream.h"
 #include "ipfs/journal/journal.h"
 #include "ipfs/journal/journal_message.h"
 #include "ipfs/journal/journal_entry.h"
@@ -265,9 +266,46 @@ int ipfs_journal_build_todo(struct IpfsNode* local_node, struct JournalMessage* 
 		}
 		libp2p_datastore_record_free(datastore_record);
 	}
-	// TODO: get all files of same second
-	// are they perhaps missing something?
-	//struct Libp2pVector* local_records_for_second;
+	// Query local records to find entries the remote peer may be missing
+	// within the same timestamp second as the incoming entries
+	struct Libp2pVector* local_records = ipfs_journal_get_last(local_node->repo->config->datastore, 100);
+	if (local_records != NULL) {
+		for(int j = 0; j < local_records->total; j++) {
+			struct JournalRecord* local_rec = (struct JournalRecord*)libp2p_utils_vector_get(local_records, j);
+			if (local_rec == NULL) continue;
+			int found = 0;
+			for(int k = 0; k < incoming->journal_entries->total; k++) {
+				struct JournalEntry* remote_entry = (struct JournalEntry*)libp2p_utils_vector_get(incoming->journal_entries, k);
+				if (remote_entry == NULL) continue;
+				if (local_rec->hash_size == remote_entry->hash_size &&
+				    memcmp(local_rec->hash, remote_entry->hash, local_rec->hash_size) == 0) {
+					found = 1;
+					break;
+				}
+			}
+			if (!found) {
+				// Check if this local record shares a timestamp second with any remote entry
+				for(int k = 0; k < incoming->journal_entries->total; k++) {
+					struct JournalEntry* remote_entry = (struct JournalEntry*)libp2p_utils_vector_get(incoming->journal_entries, k);
+					if (remote_entry == NULL) continue;
+					if (local_rec->timestamp / 1000 == remote_entry->timestamp / 1000) {
+						struct JournalToDo* td = ipfs_journal_todo_new();
+						td->action = JOURNAL_REMOTE_NEEDS;
+						td->hash = malloc(local_rec->hash_size);
+						if (td->hash != NULL) {
+							memcpy(td->hash, local_rec->hash, local_rec->hash_size);
+							td->hash_size = local_rec->hash_size;
+							libp2p_utils_vector_add(todos, td);
+						} else {
+							ipfs_journal_todo_free(td);
+						}
+						break;
+					}
+				}
+			}
+		}
+		ipfs_journal_free_records(local_records);
+	}
 	return 0;
 }
 
@@ -378,7 +416,22 @@ int ipfs_journal_handle_message(const struct StreamMessage* incoming_msg, struct
 			break;
 		}
 	}
-	//TODO: set new values in their ReplicationPeer struct
+	// Update replication peer sync metadata
+	struct SessionContext* session = libp2p_net_connection_get_session_context(stream);
+	if (session != NULL && session->remote_peer_id != NULL && local_node->repo->config->replication != NULL) {
+		struct Libp2pPeer* peer = libp2p_peerstore_get_peer(local_node->peerstore,
+			(unsigned char*)session->remote_peer_id, strlen(session->remote_peer_id));
+		if (peer != NULL) {
+			struct ReplicationPeer* rep_peer = repo_config_get_replication_peer(
+				local_node->repo->config->replication, peer);
+			if (rep_peer != NULL) {
+				rep_peer->lastConnect = os_utils_gmtime();
+				rep_peer->lastJournalTime = message->current_epoch;
+				libp2p_logger_debug("journal", "Updated ReplicationPeer lastConnect=%llu lastJournalTime=%llu\n",
+					rep_peer->lastConnect, rep_peer->lastJournalTime);
+			}
+		}
+	}
 
 	ipfs_journal_message_free(message);
 

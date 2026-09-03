@@ -9,6 +9,7 @@
 #include "ipfs/cid/cid.h"
 #include "ipfs/blocks/block.h"
 #include "ipfs/exchange/bitswap/bitswap.h"
+#include "ipfs/exchange/bitswap/future.h"
 
 enum WantListSessionType { WANTLIST_SESSION_TYPE_LOCAL, WANTLIST_SESSION_TYPE_REMOTE };
 
@@ -28,6 +29,7 @@ struct WantListQueueEntry {
 	struct WantListQueueEntry* next;
 	pthread_mutex_t block_mutex;
 	pthread_cond_t block_cond;
+	bitswap_future_t* future;
 };
 
 struct WantListQueue {

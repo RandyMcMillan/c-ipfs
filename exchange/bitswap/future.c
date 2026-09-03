@@ -6,6 +6,7 @@
 #include <sys/time.h>
 
 #include "ipfs/exchange/bitswap/future.h"
+#include "ipfs/blocks/block.h"
 
 typedef enum {
     FUTURE_PENDING,
@@ -16,7 +17,7 @@ typedef enum {
 
 struct bitswap_future {
     future_state_t state;
-    block_t *result_block;
+    struct Block *result_block;
     int error_code;
     bitswap_callback_t callback;
     void *user_data;
@@ -45,7 +46,7 @@ void bitswap_future_set_callback(bitswap_future_t *fut, bitswap_callback_t cb, v
     pthread_mutex_unlock(&fut->mtx);
 }
 
-void bitswap_future_resolve(bitswap_future_t *fut, block_t *block) {
+void bitswap_future_resolve(bitswap_future_t *fut, struct Block *block) {
     pthread_mutex_lock(&fut->mtx);
     if (fut->state != FUTURE_PENDING) {
         pthread_mutex_unlock(&fut->mtx);
@@ -84,7 +85,7 @@ void bitswap_future_cancel(bitswap_future_t *fut) {
     pthread_mutex_unlock(&fut->mtx);
 }
 
-int bitswap_future_wait(bitswap_future_t *fut, uint32_t timeout_ms, block_t **out_block) {
+int bitswap_future_wait(bitswap_future_t *fut, uint32_t timeout_ms, struct Block **out_block) {
     pthread_mutex_lock(&fut->mtx);
 
     if (fut->state == FUTURE_PENDING) {
