@@ -24,8 +24,9 @@ cleanup() {
         docker rm -f "${CONTAINER_NAME}" >/dev/null 2>&1 || true
     fi
     if [ -d "${TMP_DIR}" ]; then
-        chmod -R +w "${TMP_DIR}" 2>/dev/null || true
-        rm -rf "${TMP_DIR}"
+        # Docker may have created root-owned files in the bind mount;
+        # use sudo when available (GitHub Actions Ubuntu runners have passwordless sudo)
+        sudo rm -rf "${TMP_DIR}" 2>/dev/null || rm -rf "${TMP_DIR}" 2>/dev/null || true
     fi
 }
 trap cleanup EXIT
