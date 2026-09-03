@@ -102,8 +102,8 @@
 **Fix:** Added `peerstore_has_active_connection` dedup check before dialing.
 
 ### 20. `core/bootstrap.c:29` — Attempt to connect to bootstrap peer
-**Status:** Partial (dead code)
-**Note:** `core/bootstrap.c` is currently commented out; `bootstrap_connect_peer` helper exists in user's provided snippets.
+**Status:** ✅ Done
+**Fix:** `bootstrap_connect_peer` implemented in `core/bootstrap_impl.c`; dead code TODOs removed from `core/bootstrap.c`.
 
 ### 21. `exchange/bitswap/bitswap.c:161` — Announce block to network
 **Status:** ✅ Done
@@ -157,9 +157,9 @@
 **Status:** ✅ Done
 **Fix:** Implemented `ipfs_core_net_listen` (TCP socket bind/listen) and `ipfs_core_net_accept` (socket accept).
 
-### 33. `cmd/ipfs/init.c` — Multiple init completeness TODOs (10 items)
-**Status:** Mostly Done
-**Completed:** Daemon lock check, IPNS keyspace publish, parameter validation (bits >= 1024), default README asset, config file import stub.
+### 33. `cmd/ipfs/init.c` / `repo/init.c` — Init completeness and config import
+**Status:** ✅ Done
+**Completed:** Daemon lock check, IPNS keyspace publish, parameter validation (bits >= 1024), default README asset, config file import stub, config import plumbing wired through `make_ipfs_repository`.
 
 ### 34. `path/resolver.c:104` — Complete path resolver
 **Status:** ✅ Done
@@ -168,6 +168,18 @@
 ### 35. `journal/journal.c:268,381` — Journal file grouping and replication
 **Status:** ✅ Done
 **Fix:** Implemented time-based local record scan for missing entries; `ReplicationPeer` lastConnect/lastJournalTime updates after sync.
+
+### 36. `repo/fsrepo/fs_repo.c` — `_read_file` missing `fopen` check
+**Status:** ✅ Done
+**Fix:** Added `fopen` NULL check, `fread` size verification, and safe buffer cleanup.
+
+### 37. `repo/fsrepo/fs_repo.c` — `fs_repo_open_config` silent failures
+**Status:** ✅ Done
+**Fix:** Added `libp2p_logger_error` diagnostic logging before every `return 0` path.
+
+### 38. `repo/fsrepo/fs_repo.c` — JSON config missing commas
+**Status:** ✅ Done
+**Fix:** Added trailing commas after `RootRedirect` and `Writable` fields in `repo_config_write_config_file`.
 
 ---
 
