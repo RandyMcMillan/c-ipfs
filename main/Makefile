@@ -1,13 +1,14 @@
 CC = gcc
 CFLAGS = -O0 -I../include -I../c-libp2p/include -I../c-libp2p/c-multihash/include -I../c-libp2p/c-multiaddr/include -I../c-libp2p/c-protobuf -I../lmdb/libraries/liblmdb -I../nostril -I../nostril/deps/secp256k1/include -g3 -Wall -std=gnu99
-LFLAGS = -L../c-libp2p -L../c-libp2p/c-multihash -L../c-libp2p/c-multiaddr -lp2p -lm -lmultihash -lmultiaddr -lpthread -lresolv -lcurl -lz
+LWS_LIB = ../libwebsockets/build-c-ipfs/lib/libwebsockets.a
+LFLAGS = -L../c-libp2p -L../c-libp2p/c-multihash -L../c-libp2p/c-multiaddr -lp2p -lm -lmultihash -lmultiaddr -lpthread -lresolv -lcurl -lz $(LWS_LIB)
 SECP256K1_AR = ../nostril/libsecp256k1.a
 $(SECP256K1_AR):
 	$(MAKE) -C ../nostril libsecp256k1.a
 
 ifeq ($(shell uname -s),Darwin)
 CFLAGS += -I/opt/homebrew/opt/openssl/include
-LFLAGS += -Wl,-rpath,@loader_path/../c-libp2p -L/opt/homebrew/opt/openssl/lib
+LFLAGS += -Wl,-rpath,@loader_path/../c-libp2p -L/opt/homebrew/opt/openssl/lib -framework SystemConfiguration -framework CoreFoundation
 else
 LFLAGS += -Wl,-rpath,'$$ORIGIN/../c-libp2p'
 endif

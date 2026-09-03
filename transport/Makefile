@@ -5,14 +5,24 @@ ifdef DEBUG
 CFLAGS += -g3
 endif
 
+# libwebsockets submodule build
+LWS_BUILD_DIR = ../libwebsockets/build-c-ipfs
+LWS_LIB = $(LWS_BUILD_DIR)/lib/libwebsockets.a
+LWS_INC = -I$(LWS_BUILD_DIR)/include -I../libwebsockets/include
+
+# lsquic submodule build (requires BoringSSL; OpenSSL is not fully compatible)
+LSQUIC_BUILD_DIR = ../lsquic/build-c-ipfs
+LSQUIC_LIB = $(LSQUIC_BUILD_DIR)/src/liblsquic/liblsquic.a
+LSQUIC_INC = -I../lsquic/include
+
 ifdef HAS_LSQUIC
-CFLAGS += -DHAS_LSQUIC $(shell pkg-config --cflags lsquic 2>/dev/null || echo "")
-LFLAGS += $(shell pkg-config --libs lsquic 2>/dev/null || echo "-llsquic -lssl -lcrypto")
+CFLAGS += -DHAS_LSQUIC $(LSQUIC_INC)
+LFLAGS += $(LSQUIC_LIB) -lssl -lcrypto -lz
 endif
 
 ifdef HAS_LIBWEBSOCKETS
-CFLAGS += -DHAS_LIBWEBSOCKETS $(shell pkg-config --cflags libwebsockets 2>/dev/null || echo "")
-LFLAGS += $(shell pkg-config --libs libwebsockets 2>/dev/null || echo "-lwebsockets")
+CFLAGS += -DHAS_LIBWEBSOCKETS $(LWS_INC)
+LFLAGS += $(LWS_LIB)
 endif
 
 DEPS =

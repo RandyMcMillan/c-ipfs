@@ -7,7 +7,7 @@ export DEBUG
 MODULES := blocks cid cmd commands core crypto exchange importer ipld journal merkledag multibase pin pubsub repo flatfs datastore thirdparty unixfs routing dnslink namesys path util rbsr nostr main transport
 
 # External submodules
-SUBMODULES := c-libp2p lmdb nostril
+SUBMODULES := c-libp2p lmdb nostril libwebsockets lsquic
 
 # Utility scripts
 SCRIPTS := scripts
@@ -51,11 +51,22 @@ lmdb:
 nostril:
 	cd nostril && $(MAKE) config.h libsecp256k1.a
 
+libwebsockets:
+	@if [ ! -f libwebsockets/build-c-ipfs/lib/libwebsockets.a ]; then \
+		cmake -B libwebsockets/build-c-ipfs -S libwebsockets -DLWS_WITH_SSL=OFF -DLWS_WITHOUT_TESTAPPS=ON -DLWS_WITHOUT_TEST_SERVER=ON -DLWS_WITHOUT_TEST_CLIENT=ON -DLWS_WITHOUT_EXTENSIONS=ON -DCMAKE_BUILD_TYPE=Release -DLWS_STATIC_PIC=ON && \
+		cmake --build libwebsockets/build-c-ipfs -j$(shell sysctl -n hw.ncpu 2>/dev/null || echo 4); \
+	fi
+
+lsquic:
+	@echo "lsquic requires BoringSSL; skipping automatic build with OpenSSL"
+
 # ---------------------------------------------------------------------------
 # Module builds
 # ---------------------------------------------------------------------------
 $(MODULES):
 	cd $@ && $(MAKE) all
+
+transport: libwebsockets
 
 # ---------------------------------------------------------------------------
 # Clean targets
@@ -68,6 +79,12 @@ clean-lmdb:
 
 clean-nostril:
 	cd nostril && $(MAKE) clean
+
+clean-libwebsockets:
+	rm -rf libwebsockets/build-c-ipfs
+
+clean-lsquic:
+	rm -rf lsquic/build-c-ipfs
 
 scripts:
 	cd scripts && $(MAKE) all
