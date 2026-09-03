@@ -7,4 +7,5 @@
 	branch = mdb.master
 [submodule "nostril"]
 	path = nostril
-	url = https://github.com/RandyMcMillan/nostril.git
+    url = https://github.com/RandyMcMillan/nostril.git
+    ignore = dirty
