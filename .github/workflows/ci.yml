@@ -85,10 +85,23 @@ jobs:
         run: cd lmdb/libraries/liblmdb && make all
 
       - name: Build c-ipfs
-        run: make clean all
+        run: |
+          if [ "${REUSE:-${ACT_REUSE:-false}}" = "true" ] && [ -f .act-reuse-ready ]; then
+            make all
+          else
+            make clean all
+          fi
+          if [ "${REUSE:-${ACT_REUSE:-false}}" = "true" ]; then
+            touch .act-reuse-ready
+          fi
 
       - name: Build tests
-        run: cd test && make clean all
+        run: |
+          if [ "${REUSE:-${ACT_REUSE:-false}}" = "true" ] && [ -f ../.act-reuse-ready ]; then
+            cd test && make all
+          else
+            cd test && make clean all
+          fi
 
       - name: Smoke test — ipfs init + id
         run: |
