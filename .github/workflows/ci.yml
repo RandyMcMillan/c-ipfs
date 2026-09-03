@@ -164,7 +164,12 @@ jobs:
           cd main
           mkdir -p ../tmp
           echo "sync payload" > ../tmp/sync_payload.txt
-          CID=$(IPFS_PATH=../tmp/ipfs_test ./ipfs add ../tmp/sync_payload.txt 2>&1 | awk '{print $2}')
+          IPFS_PATH=../tmp/ipfs_test ./ipfs init
+          CID=$(IPFS_PATH=../tmp/ipfs_test ./ipfs add -q ../tmp/sync_payload.txt | tail -n 1)
+          if [ -z "$CID" ]; then
+            echo "Failed to capture CID"
+            exit 1
+          fi
           SHA256=$(shasum -a 256 ../tmp/sync_payload.txt | awk '{print $1}')
           IPFS_PATH=../tmp/ipfs_test ./ipfs daemon > ../tmp/ipfs_sync_daemon.log 2>&1 &
           DAEMON_PID=$!
