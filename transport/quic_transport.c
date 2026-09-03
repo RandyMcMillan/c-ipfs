@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <sys/socket.h>
 #include <arpa/inet.h>
 
 #include "ipfs/transport/stream.h"
@@ -16,6 +17,7 @@ typedef struct {
     libp2p_transport_t base;
     lsquic_engine_t *engine;
     SSL_CTX *ssl_ctx;
+    int listen_fd;
 } libp2p_quic_transport_t;
 
 typedef struct {
@@ -94,13 +96,70 @@ static int quic_dial(libp2p_transport_t *self, const char *multiaddr, libp2p_str
     return 0;
 }
 
+static int quic_listen(libp2p_transport_t *self, const char *multiaddr) {
+    libp2p_quic_transport_t *quic = (libp2p_quic_transport_t *)self;
+
+    char ip[64];
+    int port;
+    if (sscanf(multiaddr, "/ip4/%63[^/]/udp/%d/quic-v1", ip, &port) != 2) {
+        fprintf(stderr, "[QUIC] Invalid QUIC listen multiaddr\n");
+        return -1;
+    }
+
+    int fd = socket(AF_INET, SOCK_DGRAM, 0);
+    if (fd < 0) {
+        perror("[QUIC] socket");
+        return -1;
+    }
+
+    int reuse = 1;
+    setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse));
+
+    struct sockaddr_in addr;
+    memset(&addr, 0, sizeof(addr));
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(port);
+    if (inet_pton(AF_INET, ip, &addr.sin_addr) != 1) {
+        fprintf(stderr, "[QUIC] Invalid listen IP\n");
+        close(fd);
+        return -1;
+    }
+
+    if (bind(fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
+        perror("[QUIC] bind");
+        close(fd);
+        return -1;
+    }
+
+    quic->listen_fd = fd;
+    printf("[QUIC] Listening on %s:%d (fd=%d)\n", ip, port, fd);
+    return 0;
+}
+
+static void quic_transport_close(libp2p_transport_t *self) {
+    libp2p_quic_transport_t *quic = (libp2p_quic_transport_t *)self;
+    if (quic->engine) {
+        lsquic_engine_destroy(quic->engine);
+        quic->engine = NULL;
+    }
+    if (quic->listen_fd >= 0) {
+        close(quic->listen_fd);
+        quic->listen_fd = -1;
+    }
+    if (quic->ssl_ctx) {
+        SSL_CTX_free(quic->ssl_ctx);
+        quic->ssl_ctx = NULL;
+    }
+}
+
 libp2p_transport_t *libp2p_quic_transport_create(void *tls_ctx) {
     libp2p_quic_transport_t *t = calloc(1, sizeof(libp2p_quic_transport_t));
     t->base.name = "quic-v1";
     t->base.dial = quic_dial;
-    t->base.listen = NULL; /* TODO: implement QUIC listen */
-    t->base.close = NULL;  /* TODO: implement QUIC transport close */
+    t->base.listen = quic_listen;
+    t->base.close = quic_transport_close;
     t->ssl_ctx = (SSL_CTX *)tls_ctx;
+    t->listen_fd = -1;
 
     struct lsquic_engine_api api;
     memset(&api, 0, sizeof(api));

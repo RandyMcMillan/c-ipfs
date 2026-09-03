@@ -57,15 +57,18 @@ static int ws_callback(struct lws *wsi, enum lws_callback_reasons reason, void *
     ws_stream_impl_t *stream = (ws_stream_impl_t *)user;
 
     switch (reason) {
+        case LWS_CALLBACK_ESTABLISHED:
         case LWS_CALLBACK_CLIENT_ESTABLISHED:
             printf("[WS] Connection established with peer.\n");
             break;
+        case LWS_CALLBACK_RECEIVE:
         case LWS_CALLBACK_CLIENT_RECEIVE:
             if (stream && (stream->head + len < sizeof(stream->buffer))) {
                 memcpy(stream->buffer + stream->head, in, len);
                 stream->head += len;
             }
             break;
+        case LWS_CALLBACK_CLOSED:
         case LWS_CALLBACK_CLIENT_CLOSED:
             printf("[WS] Socket connection closed.\n");
             break;
@@ -122,10 +125,34 @@ static int ws_dial(libp2p_transport_t *self, const char *multiaddr, libp2p_strea
 }
 
 static int ws_listen(libp2p_transport_t *self, const char *multiaddr) {
-    (void)self;
-    (void)multiaddr;
-    fprintf(stderr, "[WS] listen not yet implemented\n");
-    return -1;
+    libp2p_ws_transport_t *ws_trans = (libp2p_ws_transport_t *)self;
+
+    char ip[64];
+    int port;
+    if (sscanf(multiaddr, "/ip4/%63[^/]/tcp/%d/ws", ip, &port) != 2) {
+        fprintf(stderr, "[WS] Invalid WebSocket listen multiaddr format\n");
+        return -1;
+    }
+
+    // Replace the client-only context with a listening context
+    if (ws_trans->lws_ctx) {
+        lws_context_destroy(ws_trans->lws_ctx);
+        ws_trans->lws_ctx = NULL;
+    }
+
+    struct lws_context_creation_info info;
+    memset(&info, 0, sizeof(info));
+    info.port = port;
+    info.protocols = ws_protocols;
+
+    ws_trans->lws_ctx = lws_create_context(&info);
+    if (!ws_trans->lws_ctx) {
+        fprintf(stderr, "[WS] Failed to create listening context on %s:%d\n", ip, port);
+        return -1;
+    }
+
+    printf("[WS] Listening on %s:%d\n", ip, port);
+    return 0;
 }
 
 static void ws_transport_close(libp2p_transport_t *self) {
