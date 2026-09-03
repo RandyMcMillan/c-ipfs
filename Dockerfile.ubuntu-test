@@ -5,6 +5,11 @@ RUN apt-get update && apt-get install -y build-essential libcurl4-openssl-dev au
 WORKDIR /workspace
 COPY . /workspace/
 
+RUN find . -type f \( \
+    -name '*.o' -o -name '*.a' -o -name '*.so' -o -name '*.so.*' -o \
+    -name '*.dylib' -o -name '*.la' -o -name '*.lo' \
+    \) -delete
+
 RUN cd nostril/deps/secp256k1 && ./autogen.sh && \
     ./configure --disable-shared --enable-module-ecdh --enable-module-schnorrsig --enable-module-extrakeys && \
     make -j libsecp256k1.la && \
@@ -15,4 +20,4 @@ RUN cd lmdb/libraries/liblmdb && make all
 RUN make all
 RUN cd test && make all
 
-RUN cd test/scripts && bash -x ./test_http_api.sh 2>&1
+RUN cd test/scripts && bash -x ./run_tests.sh 2>&1
