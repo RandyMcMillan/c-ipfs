@@ -249,9 +249,9 @@ int repo_config_write_config_file(char* full_filename, struct RepoConfig* config
 		}
 	}
 	if (write_ok)
-		write_ok = (fprintf(out_file, "  \"RootRedirect\": \"%s\"\n", config->gateway->root_redirect) > 0);
+		write_ok = (fprintf(out_file, "  \"RootRedirect\": \"%s\",\n", config->gateway->root_redirect) > 0);
 	if (write_ok)
-		write_ok = (fprintf(out_file, "  \"Writable\": %s\n", config->gateway->writable ? "true" : "false") > 0);
+		write_ok = (fprintf(out_file, "  \"Writable\": %s,\n", config->gateway->writable ? "true" : "false") > 0);
 	if (write_ok)
 		write_ok = (fprintf(out_file, "  \"PathPrefixes\": []\n") > 0);
 	if (write_ok)
@@ -414,12 +414,18 @@ int _read_file(const char* path, char** buffer) {
 
 	// open file
 	FILE* in_file = fopen(path, "r");
+	if (in_file == NULL) {
+		free(*buffer);
+		*buffer = NULL;
+		return 0;
+	}
 	// read data
-	fread(*buffer, file_size, 1, in_file);
+	size_t read_bytes = fread(*buffer, 1, file_size, in_file);
+	(*buffer)[read_bytes] = '\0';
 
 	// cleanup
 	fclose(in_file);
-	return 1;
+	return read_bytes == (size_t)file_size;
 }
 
 /**
@@ -536,9 +542,15 @@ int fs_repo_open_config(struct FSRepo* repo) {
 	size_t full_filename_length = strlen(repo->path) + 8;
 	char full_filename[full_filename_length];
 	retVal = os_utils_filepath_join(repo->path, "config", full_filename, full_filename_length);
-	if (retVal == 0)
+	if (retVal == 0) {
+		libp2p_logger_error("fs_repo", "fs_repo_open_config: filepath_join failed for %s/config\n", repo->path);
 		return 0;
+	}
 	retVal = _read_file(full_filename, &data);
+	if (retVal == 0) {
+		libp2p_logger_error("fs_repo", "fs_repo_open_config: _read_file failed for %s\n", full_filename);
+		return 0;
+	}
 	// parse the data
 	jsmn_parser parser;
 	jsmn_init(&parser);
@@ -546,6 +558,7 @@ int fs_repo_open_config(struct FSRepo* repo) {
 	jsmntok_t tokens[num_tokens];
 	num_tokens = jsmn_parse(&parser, data, strlen(data), tokens, 256);
 	if (num_tokens <= 0) {
+		libp2p_logger_error("fs_repo", "fs_repo_open_config: jsmn_parse failed with %d for %s\n", num_tokens, full_filename);
 		free(data);
 		return 0;
 	}
@@ -554,6 +567,7 @@ int fs_repo_open_config(struct FSRepo* repo) {
 	// Identity
 	int curr_pos = _find_token(data, tokens, num_tokens, 0, "Identity");
 	if (curr_pos < 0) {
+		libp2p_logger_error("fs_repo", "fs_repo_open_config: Identity token not found in %s\n", full_filename);
 		free(data);
 		return 0;
 	}
@@ -569,6 +583,9 @@ int fs_repo_open_config(struct FSRepo* repo) {
 	if (retVal == 0
 			|| strlen((char*)test_peer_id) != repo->config->identity->peer->id_size
 			|| strcmp((char*)test_peer_id, repo->config->identity->peer->id) != 0) {
+		libp2p_logger_error("fs_repo", "fs_repo_open_config: identity mismatch or build failed in %s (retVal=%d, test_peer_id=%s, computed=%s)\n",
+			full_filename, retVal, test_peer_id ? (char*)test_peer_id : "(null)",
+			repo->config->identity->peer->id ? repo->config->identity->peer->id : "(null)");
 		free(data);
 		free(priv_key_base64);
 		free(test_peer_id);
@@ -614,13 +631,17 @@ int fs_repo_open_config(struct FSRepo* repo) {
 	// get addresses. First is Swarm array, then Api, then Gateway
 	curr_pos = _find_token(data, tokens, num_tokens, curr_pos, "Addresses");
 	if (curr_pos < 0) {
+		libp2p_logger_error("fs_repo", "fs_repo_open_config: Addresses token not found in %s\n", full_filename);
 		free(data);
 		return 0;
 	}
 	// get swarm addresses
 	int swarm_pos = _find_token(data, tokens, num_tokens, curr_pos, "Swarm") + 1;
-	if (tokens[swarm_pos].type != JSMN_ARRAY)
+	if (tokens[swarm_pos].type != JSMN_ARRAY) {
+		libp2p_logger_error("fs_repo", "fs_repo_open_config: Swarm is not an array in %s\n", full_filename);
+		free(data);
 		return 0;
+	}
 	int swarm_size = tokens[swarm_pos].size;
 	swarm_pos++;
 	repo->config->addresses->swarm_head = NULL;
