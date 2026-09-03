@@ -8,4 +8,4 @@
 [submodule "nostril"]
 	path = nostril
     url = https://github.com/RandyMcMillan/nostril.git
-    ignore = dirty
+    #ignore = dirty
