@@ -86,7 +86,7 @@ int initialize_ipns_keyspace(struct FSRepo* repo) {
  * @param conf the configuration struct
  * @returns 0 on error, 1 on success
  */
-int do_init(FILE* out_file, char* repo_root, int empty, int num_bits_for_keypair, struct RepoConfig* conf) {
+int do_init(FILE* out_file, char* repo_root, int empty, int num_bits_for_keypair, struct RepoConfig* conf, const char* import_json) {
 	// make sure the directory is writable
 	if (!os_utils_directory_writeable(repo_root))
 		return 0;
@@ -102,6 +102,12 @@ int do_init(FILE* out_file, char* repo_root, int empty, int num_bits_for_keypair
 		int retVal = ipfs_repo_config_init(conf, num_bits_for_keypair, repo_root, 4001, NULL);
 		if (retVal == 0)
 			return 0;
+	}
+	// Overlay imported config values on top of defaults
+	if (import_json != NULL && strlen(import_json) > 0) {
+		if (!repo_config_merge_json(conf, import_json)) {
+			fprintf(stderr, "Warning: failed to merge imported config JSON\n");
+		}
 	}
 	// initialize the fs repo
 	struct FSRepo* repo;
@@ -141,18 +147,17 @@ int init_run(struct Request* request) {
 		return 0;
 
 	// Handle config file imports passed in request arguments
+	char* config_str = NULL;
 	if (request->arguments != NULL && strlen(request->arguments) > 0) {
 		FILE* config_file = fopen(request->arguments, "r");
 		if (config_file != NULL) {
 			fseek(config_file, 0, SEEK_END);
 			long fsize = ftell(config_file);
 			fseek(config_file, 0, SEEK_SET);
-			char* config_str = malloc(fsize + 1);
+			config_str = malloc(fsize + 1);
 			if (config_str != NULL) {
 				size_t read_bytes = fread(config_str, 1, fsize, config_file);
 				config_str[read_bytes] = '\0';
-				// TODO: parse JSON config and merge into conf
-				free(config_str);
 			}
 			fclose(config_file);
 		}
@@ -161,10 +166,13 @@ int init_run(struct Request* request) {
 	int num_bits_for_key_pair = request->cmd.options[0]->default_int_val;
 	if (num_bits_for_key_pair < 1024) {
 		fprintf(stderr, "Error: key size must be at least 1024 bits.\n");
+		free(config_str);
 		return 0;
 	}
 
-	return do_init(stdout, request->invoc_context->config_root, 1, num_bits_for_key_pair, conf);
+	int ret = do_init(stdout, request->invoc_context->config_root, 1, num_bits_for_key_pair, conf, config_str);
+	free(config_str);
+	return ret;
 }
 
 /***

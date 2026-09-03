@@ -742,6 +742,160 @@ int fs_repo_open_config(struct FSRepo* repo) {
 }
 
 /***
+ * Merge JSON config values into an existing RepoConfig.
+ * Overlays import values on top of existing defaults.
+ * @param config the configuration to update
+ * @param json_str the JSON string to parse and merge
+ * @returns true(1) on success, false(0) on parse failure
+ */
+int repo_config_merge_json(struct RepoConfig* config, const char* json_str) {
+	if (!config || !json_str)
+		return 0;
+
+	jsmn_parser parser;
+	jsmn_init(&parser);
+	int num_tokens = 256;
+	jsmntok_t tokens[256];
+	num_tokens = jsmn_parse(&parser, json_str, strlen(json_str), tokens, 256);
+	if (num_tokens <= 0) {
+		libp2p_logger_error("fs_repo", "repo_config_merge_json: jsmn_parse failed with %d\n", num_tokens);
+		return 0;
+	}
+
+	char* data = (char*)json_str;
+
+	// Datastore overlay
+	int curr_pos = _find_token(data, tokens, num_tokens, 0, "Datastore");
+	if (curr_pos >= 0) {
+		char* val = NULL;
+		if (_get_json_string_value(data, tokens, num_tokens, curr_pos, "Type", &val)) {
+			if (config->datastore->type) free(config->datastore->type);
+			config->datastore->type = val;
+		}
+		if (_get_json_string_value(data, tokens, num_tokens, curr_pos, "Path", &val)) {
+			if (config->datastore->path) free(config->datastore->path);
+			config->datastore->path = val;
+		}
+		if (_get_json_string_value(data, tokens, num_tokens, curr_pos, "StorageMax", &val)) {
+			if (config->datastore->storage_max) free(config->datastore->storage_max);
+			config->datastore->storage_max = val;
+		}
+		if (_get_json_string_value(data, tokens, num_tokens, curr_pos, "GCPeriod", &val)) {
+			if (config->datastore->gc_period) free(config->datastore->gc_period);
+			config->datastore->gc_period = val;
+		}
+		if (_get_json_string_value(data, tokens, num_tokens, curr_pos, "Params", &val)) {
+			if (config->datastore->params) free(config->datastore->params);
+			config->datastore->params = val;
+		}
+		_get_json_int_value(data, tokens, num_tokens, curr_pos, "StorageGCWatermark", &config->datastore->storage_gc_watermark);
+		_get_json_int_value(data, tokens, num_tokens, curr_pos, "NoSync", &config->datastore->no_sync);
+		_get_json_int_value(data, tokens, num_tokens, curr_pos, "HashOnRead", &config->datastore->hash_on_read);
+		_get_json_int_value(data, tokens, num_tokens, curr_pos, "BloomFilterSize", &config->datastore->bloom_filter_size);
+	}
+
+	// Addresses overlay
+	curr_pos = _find_token(data, tokens, num_tokens, 0, "Addresses");
+	if (curr_pos >= 0) {
+		int swarm_pos = _find_token(data, tokens, num_tokens, curr_pos, "Swarm") + 1;
+		if (swarm_pos > 0 && tokens[swarm_pos].type == JSMN_ARRAY) {
+			int swarm_size = tokens[swarm_pos].size;
+			swarm_pos++;
+			libp2p_utils_linked_list_free(config->addresses->swarm_head);
+			config->addresses->swarm_head = NULL;
+			struct Libp2pLinkedList* last = NULL;
+			for (int i = 0; i < swarm_size; i++) {
+				struct Libp2pLinkedList* current = libp2p_utils_linked_list_new();
+				if (!_get_json_string_value(data, tokens, num_tokens, swarm_pos + i, NULL, (char**)&current->item)) {
+					libp2p_utils_linked_list_free(current);
+					break;
+				}
+				if (config->addresses->swarm_head == NULL) {
+					config->addresses->swarm_head = current;
+				} else {
+					last->next = current;
+				}
+				last = current;
+			}
+		}
+		char* api_val = NULL;
+		if (_get_json_string_value(data, tokens, num_tokens, curr_pos, "API", &api_val)) {
+			if (config->addresses->api) free(config->addresses->api);
+			config->addresses->api = api_val;
+		}
+		char* gw_val = NULL;
+		if (_get_json_string_value(data, tokens, num_tokens, curr_pos, "Gateway", &gw_val)) {
+			if (config->addresses->gateway) free(config->addresses->gateway);
+			config->addresses->gateway = gw_val;
+		}
+	}
+
+	// Bootstrap overlay
+	int bootstrap_pos = _find_token(data, tokens, num_tokens, 0, "Bootstrap");
+	if (bootstrap_pos >= 0) {
+		bootstrap_pos++;
+		if (tokens[bootstrap_pos].type == JSMN_ARRAY) {
+			int bootstrap_size = tokens[bootstrap_pos].size;
+			bootstrap_pos++;
+			if (config->bootstrap_peers) {
+				repo_config_bootstrap_peers_free(config->bootstrap_peers);
+			}
+			config->bootstrap_peers = libp2p_utils_vector_new(bootstrap_size);
+			for (int i = 0; i < bootstrap_size; i++) {
+				char* val = NULL;
+				if (!_get_json_string_value(data, tokens, num_tokens, bootstrap_pos + i, NULL, &val))
+					break;
+				struct MultiAddress* cur = multiaddress_new_from_string(val);
+				if (cur == NULL) {
+					free(val);
+					continue;
+				}
+				libp2p_utils_vector_add(config->bootstrap_peers, cur);
+				free(val);
+			}
+		}
+	}
+
+	// Replication overlay
+	curr_pos = _find_token(data, tokens, num_tokens, 0, "Replication");
+	if (curr_pos >= 0) {
+		curr_pos++;
+		_get_json_int_value(data, tokens, num_tokens, curr_pos, "AnnounceMinutes", &config->replication->announce_minutes);
+		_get_json_int_value(data, tokens, num_tokens, curr_pos, "Announce", &config->replication->announce);
+		int nodes_pos = _find_token(data, tokens, num_tokens, curr_pos, "Peers");
+		if (nodes_pos >= 0) {
+			nodes_pos++;
+			if (tokens[nodes_pos].type == JSMN_ARRAY) {
+				int nodes_size = tokens[nodes_pos].size;
+				nodes_pos++;
+				if (config->replication->replication_peers) {
+					libp2p_utils_vector_free(config->replication->replication_peers);
+				}
+				config->replication->replication_peers = libp2p_utils_vector_new(nodes_size);
+				for (int i = 0; i < nodes_size; i++) {
+					char* val = NULL;
+					if (!_get_json_string_value(data, tokens, num_tokens, nodes_pos, NULL, &val))
+						break;
+					struct MultiAddress* cur = multiaddress_new_from_string(val);
+					if (cur == NULL) {
+						free(val);
+						continue;
+					}
+					struct Libp2pPeer* peer = libp2p_peer_new_from_multiaddress(cur);
+					multiaddress_free(cur);
+					struct ReplicationPeer* rp = repo_config_replication_peer_new();
+					rp->peer = peer;
+					libp2p_utils_vector_add(config->replication->replication_peers, rp);
+					free(val);
+				}
+			}
+		}
+	}
+
+	return 1;
+}
+
+/***
  * set function pointers in the datastore struct to lmdb
  * @param repo contains the information
  * @returns true(1) on success

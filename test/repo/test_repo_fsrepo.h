@@ -46,6 +46,82 @@ int test_repo_init_config_import() {
 	return retVal;
 }
 
+int test_repo_config_merge_json() {
+	struct RepoConfig* config = NULL;
+	if (!ipfs_repo_config_new(&config))
+		return 0;
+
+	// Initialize with defaults
+	if (!ipfs_repo_config_init(config, 2048, "/tmp/.ipfs_merge_test", 4001, NULL)) {
+		ipfs_repo_config_free(config);
+		return 0;
+	}
+
+	// Verify defaults before merge
+	if (config->addresses->api == NULL || strcmp(config->addresses->api, "/ip4/127.0.0.1/tcp/5001") != 0) {
+		ipfs_repo_config_free(config);
+		return 0;
+	}
+
+	const char* import_json = "{"
+		"\"Addresses\":{"
+			"\"Swarm\":[\"/ip4/0.0.0.0/tcp/9999\"],"
+			"\"API\":\"/ip4/127.0.0.1/tcp/9998\","
+			"\"Gateway\":\"/ip4/127.0.0.1/tcp/9997\""
+		"},"
+		"\"Datastore\":{"
+			"\"Type\":\"flatfs\","
+			"\"StorageMax\":\"5GB\""
+		"},"
+		"\"Bootstrap\":[\"/ip4/104.131.131.82/tcp/4001\"]"
+	"}";
+
+	if (!repo_config_merge_json(config, import_json)) {
+		ipfs_repo_config_free(config);
+		return 0;
+	}
+
+	// Verify merged Addresses
+	if (config->addresses->api == NULL || strcmp(config->addresses->api, "/ip4/127.0.0.1/tcp/9998") != 0) {
+		fprintf(stderr, "API merge failed: expected /ip4/127.0.0.1/tcp/9998, got %s\n", config->addresses->api ? config->addresses->api : "(null)");
+		ipfs_repo_config_free(config);
+		return 0;
+	}
+	if (config->addresses->gateway == NULL || strcmp(config->addresses->gateway, "/ip4/127.0.0.1/tcp/9997") != 0) {
+		fprintf(stderr, "Gateway merge failed: expected /ip4/127.0.0.1/tcp/9997, got %s\n", config->addresses->gateway ? config->addresses->gateway : "(null)");
+		ipfs_repo_config_free(config);
+		return 0;
+	}
+	if (config->addresses->swarm_head == NULL || config->addresses->swarm_head->item == NULL ||
+	    strcmp((char*)config->addresses->swarm_head->item, "/ip4/0.0.0.0/tcp/9999") != 0) {
+		fprintf(stderr, "Swarm merge failed\n");
+		ipfs_repo_config_free(config);
+		return 0;
+	}
+
+	// Verify merged Datastore
+	if (config->datastore->type == NULL || strcmp(config->datastore->type, "flatfs") != 0) {
+		fprintf(stderr, "Datastore type merge failed: expected flatfs, got %s\n", config->datastore->type ? config->datastore->type : "(null)");
+		ipfs_repo_config_free(config);
+		return 0;
+	}
+	if (config->datastore->storage_max == NULL || strcmp(config->datastore->storage_max, "5GB") != 0) {
+		fprintf(stderr, "Datastore StorageMax merge failed: expected 5GB, got %s\n", config->datastore->storage_max ? config->datastore->storage_max : "(null)");
+		ipfs_repo_config_free(config);
+		return 0;
+	}
+
+	// Verify merged Bootstrap
+	if (config->bootstrap_peers == NULL || config->bootstrap_peers->total != 1) {
+		fprintf(stderr, "Bootstrap merge failed: expected 1 peer, got %d\n", config->bootstrap_peers ? config->bootstrap_peers->total : -1);
+		ipfs_repo_config_free(config);
+		return 0;
+	}
+
+	ipfs_repo_config_free(config);
+	return 1;
+}
+
 int test_repo_fsrepo_write_read_block() {
 	struct Block* block = NULL;
 	struct FSRepo* fs_repo = NULL;

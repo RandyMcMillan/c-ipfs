@@ -77,6 +77,15 @@ int ipfs_repo_fsrepo_free(struct FSRepo* config);
 int ipfs_repo_fsrepo_init(struct FSRepo* config);
 
 /***
+ * Merge JSON config values into an existing RepoConfig.
+ * Overlays import values on top of existing defaults.
+ * @param config the configuration to update
+ * @param json_str the JSON string to parse and merge
+ * @returns true(1) on success, false(0) on parse failure
+ */
+int repo_config_merge_json(struct RepoConfig* config, const char* json_str);
+
+/***
  * Write a block to the datastore and blockstore
  * @param block the block to write
  * @param fs_repo the repo to write to

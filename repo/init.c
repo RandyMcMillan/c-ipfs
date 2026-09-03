@@ -80,19 +80,17 @@ int make_ipfs_repository(const char* path, int swarm_port, struct Libp2pVector* 
 		goto exit;
 
 	// Handle config file imports if provided
+	char* config_str = NULL;
 	if (config_import_file != NULL && strlen(config_import_file) > 0) {
 		FILE* config_file = fopen(config_import_file, "r");
 		if (config_file != NULL) {
 			fseek(config_file, 0, SEEK_END);
 			long fsize = ftell(config_file);
 			fseek(config_file, 0, SEEK_SET);
-			char* config_str = malloc(fsize + 1);
+			config_str = malloc(fsize + 1);
 			if (config_str != NULL) {
 				size_t read_bytes = fread(config_str, 1, fsize, config_file);
 				config_str[read_bytes] = '\0';
-				// TODO: parse JSON config and merge into conf
-				// For now we read and discard; future work: jsmn parse + merge fields
-				free(config_str);
 			}
 			fclose(config_file);
 		}
@@ -102,6 +100,15 @@ int make_ipfs_repository(const char* path, int swarm_port, struct Libp2pVector* 
 	if (!ipfs_repo_config_init(repo_config, 2048, path, swarm_port, bootstrap_peers)) {
 		fprintf(stderr, "Unable to initialize repository at %s\n", path);
 		goto exit;
+	}
+
+	// Overlay imported config values on top of defaults
+	if (config_str != NULL) {
+		if (!repo_config_merge_json(repo_config, config_str)) {
+			fprintf(stderr, "Warning: failed to merge imported config from %s\n", config_import_file);
+		}
+		free(config_str);
+		config_str = NULL;
 	}
 	printf("done\n");
 	// now the fs_repo
