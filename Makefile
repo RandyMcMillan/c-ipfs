@@ -1,7 +1,7 @@
 
 DEBUG = true
 export DEBUG
-.DEFAULT_GOAL := all
+.DEFAULT_GOAL := help
 
 # Modules that are part of the main project
 MODULES := blocks cid cmd commands core crypto exchange importer ipld journal merkledag multibase pin pubsub repo flatfs datastore thirdparty unixfs routing dnslink namesys path util rbsr nostr main transport
@@ -11,6 +11,9 @@ SUBMODULES := c-libp2p lmdb nostril
 
 # Utility scripts
 SCRIPTS := scripts
+
+# Local act helpers
+include ACT.mk
 
 prepare:
 	@case "$$(uname -s)" in \
@@ -117,6 +120,11 @@ help:
 	@echo "  make clean              Remove all build artifacts"
 	@echo "  make rebuild            clean + all"
 	@echo "  make selfhost           Build then run self-host script"
+	@echo "  make act-build          Run the CI build job locally"
+	@echo "  make act-kubo-interop   Run the Kubo interop job locally"
+	@echo "  make act-list           List workflows and jobs"
+	@echo "  make act-watch          Watch repo changes and rerun the workflow"
+	@echo "  make act-job            Run any workflow job with ACT_JOB=<job>"
 	@echo ""
 	@echo "Submodule targets:"
 	@echo "  make c-libp2p           Build c-libp2p submodule"
@@ -131,6 +139,14 @@ help:
 	@echo "  make test-build         Build tests only"
 	@echo "  make test-run           Run tests without rebuilding"
 	@echo "  make test TESTS='t1'    Build and run specific test(s)"
+	@echo ""
+	@echo "Act flags:"
+	@echo "  ACT_REUSE=true          Keep containers after successful runs"
+	@echo "  ACT_REBUILD=true        Rebuild local action images"
+	@echo "  ACT_QUIET=true          Silence step output"
+	@echo "  ACT_PRIVILEGED=true     Run containers in privileged mode"
+	@echo "  ACT_LIST=true           List workflows and jobs"
+	@echo "  ACT_WATCH=true          Watch files and rerun workflows"
 	@echo ""
 	@echo "Clean targets:"
 	@echo "  make clean-<name>       Clean a specific submodule or module"

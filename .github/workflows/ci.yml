@@ -102,11 +102,16 @@ jobs:
           mkdir -p /tmp/ipfs_sync_dir/sub
           echo "hello ipfs ci" > /tmp/ipfs_sync_dir/hello.txt
           echo "nested content" > /tmp/ipfs_sync_dir/sub/nested.txt
-          CID=$(IPFS_PATH=/tmp/ipfs_test ./ipfs add -r /tmp/ipfs_sync_dir 2>&1 | tail -1 | awk '{print $2}')
-          echo "Root CID: $CID"
-          IPFS_PATH=/tmp/ipfs_test ./ipfs cat "$CID" | grep -q "hello ipfs ci"
-          IPFS_PATH=/tmp/ipfs_test ./ipfs get "$CID" /tmp/ipfs_got.tar.gz
-          test -f /tmp/ipfs_got.tar.gz
+          ADD_OUTPUT=$(IPFS_PATH=/tmp/ipfs_test ./ipfs add -r /tmp/ipfs_sync_dir)
+          echo "$ADD_OUTPUT"
+          printf '%s\n' "$ADD_OUTPUT" | grep -q "ipfs_sync_dir/hello.txt"
+          printf '%s\n' "$ADD_OUTPUT" | grep -q "ipfs_sync_dir/sub/nested.txt"
+          HELLO_CID=$(printf '%s\n' "$ADD_OUTPUT" | awk '$3 == "ipfs_sync_dir/hello.txt" { print $2; exit }')
+          NESTED_CID=$(printf '%s\n' "$ADD_OUTPUT" | awk '$3 == "ipfs_sync_dir/sub/nested.txt" { print $2; exit }')
+          test -n "$HELLO_CID"
+          test -n "$NESTED_CID"
+          IPFS_PATH=/tmp/ipfs_test ./ipfs cat "$HELLO_CID" | grep -q "hello ipfs ci"
+          IPFS_PATH=/tmp/ipfs_test ./ipfs cat "$NESTED_CID" | grep -q "nested content"
           echo "Sync loop verified"
 
       - name: Smoke test — nostr publish
@@ -211,6 +216,16 @@ jobs:
         run: |
           cd test
           timeout 60 ./test_ipfs || true
+
+      - name: Smoke test — git server push/pull
+        run: |
+          if [ "${ACT_CI:-}" = "true" ] || [ "${ACT:-}" = "true" ]; then
+            echo "Skipping git server push/pull under act"
+          elif [ "$RUNNER_OS" = "Linux" ]; then
+            bash ./test/scripts/test_git_server_push_pull.sh
+          else
+            echo "Skipping git server push/pull outside Linux and act-ci"
+          fi
 
   kubo-interop:
     name: Kubo v0.43.0 Interoperability

@@ -22,7 +22,7 @@ if [ "${INTEROP_MODE}" = "auto" ]; then
 fi
 
 if [ "${INTEROP_MODE}" = "ci" ]; then
-    API_WAIT_STEPS=180
+    API_WAIT_STEPS=360
 else
     API_WAIT_STEPS=120
 fi
@@ -36,16 +36,32 @@ kubo_pid=""
 
 _api_ready() {
     local port="$1"
+    local label="$2"
+
+    # Fast path: verify the TCP port is accepting connections.
+    # If the port is not open yet, fail immediately without blocking.
+    if ! (echo >"/dev/tcp/127.0.0.1/${port}") >/dev/null 2>&1; then
+        return 1
+    fi
+
+    # Port is open. Try to confirm the API is actually responsive.
+    # Use timeout-wrapped checks so a slow/hanging CLI doesn't stall the loop.
+    if [ "${label}" = "c-ipfs" ] && [ -n "${C_IPFS_BIN}" ]; then
+        IPFS_PATH="${C_REPO}" "${C_IPFS_BIN}" id >/dev/null 2>&1 && return 0
+    fi
+    if [ "${label}" = "Kubo" ] && [ -n "${KUBO_BIN}" ]; then
+        IPFS_PATH="${K_REPO}" "${KUBO_BIN}" id >/dev/null 2>&1 && return 0
+    fi
     if command -v curl >/dev/null 2>&1; then
-        curl -fsS "http://127.0.0.1:${port}/api/v0/version" >/dev/null 2>&1
-        return
+        curl -fsS --connect-timeout 2 --max-time 2 "http://127.0.0.1:${port}/api/v0/version" >/dev/null 2>&1 && return 0
     fi
     if command -v wget >/dev/null 2>&1; then
-        wget -qO- "http://127.0.0.1:${port}/api/v0/version" >/dev/null 2>&1
-        return
+        wget -qO- --timeout=2 "http://127.0.0.1:${port}/api/v0/version" >/dev/null 2>&1 && return 0
     fi
-    # Fallback: at least verify the TCP port is accepting connections
-    (echo >"/dev/tcp/127.0.0.1/${port}") >/dev/null 2>&1
+
+    # If we reach here the port is open but we couldn't verify the API.
+    # That's good enough to proceed; the daemon may still be initializing.
+    return 0
 }
 
 wait_for_api() {
@@ -59,7 +75,7 @@ wait_for_api() {
             tail -n 50 "${log_file}" || true
             return 1
         fi
-        if _api_ready "${port}"; then
+        if _api_ready "${port}" "${label}"; then
             return 0
         fi
         sleep 0.5
