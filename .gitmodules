@@ -9,3 +9,9 @@
 	path = nostril
     url = https://github.com/RandyMcMillan/nostril.git
     #ignore = dirty
+[submodule "lsquic"]
+	path = lsquic
+	url = https://github.com/RandyMcMillan/lsquic.git
+[submodule "libwebsockets"]
+	path = libwebsockets
+	url = https://github.com/RandyMcMillan/libwebsockets.git
