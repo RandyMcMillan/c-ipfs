@@ -175,6 +175,33 @@ CID, multihash, and multibase correctness are prerequisites for IPLD, UnixFS, Bi
 7. HTTP API, gateway, and CLI.
 8. Security and verification.
 
+## Research Notes: Hybrid Protocol Extensions
+
+### Nostr NIP-34 (Git Integration)
+NIP-34 defines event kinds for decentralized git workflows over Nostr:
+- **kind 1617** — Patches
+- **kind 1618** — Pull Requests
+- **kind 1619** — Pull Request Updates
+- **kind 1621** — Issues
+- **kind 1630-1633** — Repository Status
+- **kind 30617** — Repository Announcements
+- **kind 30618** — Repository State Announcements
+
+These map directly to the c-ipfs `nostr/` module's event kinds and can be wired into the `git.c` importer for verifiable source-code distribution. The secp256k1 Schnorr signatures from `nostril/` are already compatible.
+
+### Iroh (n0-computer) Transport Patterns
+Iroh is a modern Rust implementation that simplifies IPFS-like networking:
+- **Dial-by-public-key** instead of multiaddr-heavy connection setup.
+- **Built on QUIC** (via `noq`) with authenticated encryption and stream priorities.
+- **Hole-punching and relay fallback** are first-class, not bolted-on.
+- **Content-addressed blobs** use BLAKE3 rather than SHA-256.
+- **Protocols**: `iroh-blobs`, `iroh-gossip` (pubsub), `iroh-docs` (KV store).
+
+Lessons for c-ipfs:
+1. The transport abstraction in `core/net.c` should move toward "dial by NodeId" rather than manual multiaddr parsing.
+2. QUIC should be the default transport; TCP+yamux is legacy.
+3. Bitswap wantlist management can borrow Iroh's session-per-peer pattern for cleaner concurrency.
+
 ## Working rule for completion
 
 Do not mark a capability as complete until a Kubo interoperability test exists for it. Source support alone is not enough for conformance.

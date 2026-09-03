@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0",
   "profile": "ipfs-compatibility-profile.json",
-  "last_audited_commit": "8d7c224",
+  "last_audited_commit": "2231f37",
   "evidence_policy": "Source evidence shows only that an implementation exists. Interoperability evidence is required before a feature becomes conformant.",
   "features": [
     {
@@ -27,8 +27,8 @@
       "phase": 3,
       "status": "partial",
       "specifications": ["https://specs.ipfs.tech/unixfs/", "https://github.com/ipfs/kubo/tree/v0.43.0/docs/specifications"],
-      "source_evidence": ["unixfs/unixfs.c", "unixfs/hamt.c", "importer/importer.c", "importer/exporter.c", "flatfs/flatfs.c", "repo/fsrepo/fs_repo.c", "pin/pin.c", "blocks/blockstore.c"],
-      "test_evidence": ["test/node/test_importer.h", "test/flatfs/test_flatfs.h", "test/pin/test_pin.h", "test/storage/test_unixfs.h", "test/repo/test_repo_config.h"],
+      "source_evidence": ["unixfs/unixfs.c", "unixfs/hamt.c", "importer/importer.c", "importer/exporter.c", "flatfs/flatfs.c", "repo/fsrepo/fs_repo.c", "repo/fsrepo/lock.c", "pin/pin.c", "blocks/blockstore.c", "blocks/blockstore_shard.c"],
+      "test_evidence": ["test/node/test_importer.h", "test/flatfs/test_flatfs.h", "test/pin/test_pin.h", "test/storage/test_unixfs.h", "test/repo/test_repo_config.h", "test/repo/test_repo_lock.h", "test/blocks/test_blockstore_shard.h"],
       "gaps": ["Kubo v0.43.0 interoperability tests for UnixFS storage"]
     },
     {
@@ -45,27 +45,27 @@
       "phase": 5,
       "status": "partial",
       "specifications": ["https://specs.ipfs.tech/bitswap-protocol/", "https://github.com/libp2p/specs/tree/master/kad-dht"],
-      "source_evidence": ["routing/k_routing.c", "routing/online.c", "exchange/bitswap/bitswap.c", "exchange/bitswap/message.c"],
-      "test_evidence": ["test/exchange/test_bitswap.h", "test/exchange/test_bitswap_request_queue.h"],
-      "gaps": ["standards-compatible iterative DHT", "modern Bitswap messages and sessions", "provider fallback", "Kubo interoperability tests"]
+      "source_evidence": ["routing/k_routing.c", "routing/online.c", "exchange/bitswap/bitswap.c", "exchange/bitswap/message.c", "exchange/bitswap/wantlist_queue.c", "exchange/bitswap/want_manager.c", "exchange/bitswap/future.c"],
+      "test_evidence": ["test/exchange/test_bitswap.h", "test/exchange/test_bitswap_request_queue.h", "test/exchange/test_bitswap_future.h"],
+      "gaps": ["standards-compatible iterative DHT", "provider fallback", "Kubo interoperability tests"]
     },
     {
       "id": "ipns-dnslink",
       "phase": 6,
       "status": "partial",
       "specifications": ["https://specs.ipfs.tech/ipns/", "https://dnslink.dev/"],
-      "source_evidence": ["namesys/publisher.c", "namesys/resolver.c", "namesys/routing.c", "dnslink/dnslink.c", "path/resolver.c"],
-      "test_evidence": ["test/namesys/test_namesys.h"],
-      "gaps": ["modern signed IPNS records", "pubsub distribution", "cache policy", "complete path resolution"]
+      "source_evidence": ["namesys/publisher.c", "namesys/resolver.c", "namesys/routing.c", "dnslink/dnslink.c", "dnslink/dns_cache.c", "path/resolver.c", "pubsub/ipns_pubsub.c", "pubsub/gossipsub.c"],
+      "test_evidence": ["test/namesys/test_namesys.h", "test/dnslink/test_dns_cache.h", "test/pubsub/test_gossipsub.h"],
+      "gaps": ["modern signed IPNS records", "pubsub distribution", "complete path resolution"]
     },
     {
       "id": "daemon-api-cli",
       "phase": 7,
       "status": "partial",
       "specifications": ["https://specs.ipfs.tech/http-gateways/", "https://docs.ipfs.tech/reference/kubo/rpc/"],
-      "source_evidence": ["core/daemon.c", "core/api.c", "core/http_request.c", "cmd/cli.c", "cmd/ipfs/main.c"],
-      "test_evidence": ["test/core/test_api.h", "test/core/test_daemon.h"],
-      "gaps": ["gateway behavior", "Kubo v0.43.0 interoperability tests for HTTP API", "stable CLI output", "authentication and origin policy"]
+      "source_evidence": ["core/daemon.c", "core/api.c", "core/http_request.c", "core/ping.c", "cmd/cli.c", "cmd/ipfs/main.c", "cmd/ipfs/init.c"],
+      "test_evidence": ["test/core/test_api.h", "test/core/test_daemon.h", "test/transport/test_transport.h"],
+      "gaps": ["gateway behavior", "Kubo v0.43.0 interoperability tests for HTTP API", "authentication and origin policy"]
     },
     {
       "id": "security-verification",

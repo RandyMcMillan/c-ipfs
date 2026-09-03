@@ -290,18 +290,18 @@ These are not explicitly marked as TODOs in the code but are implied by the anal
 
 ## Top 10 Quick Wins (by effort-to-impact ratio)
 
-| Rank | TODO | Difficulty | Impact | File |
-|------|------|------------|--------|------|
-| 1 | Add `fopen`/`fwrite` error checks | 🟡 Easy | Prevents silent data loss | `flatfs/flatfs.c:187` |
-| 2 | Fix malloc failure in link copy | 🟡 Easy | Prevents segfault/corruption | `merkledag/node.c:833` |
-| 3 | Fix encoded key buffer size | 🟡 Easy | Prevents buffer overflow | `routing/offline.c:26` |
-| 4 | Add logging to wantlist_queue | 🟢 Trivial | Debuggability | `wantlist_queue.c:118` |
-| 5 | Remove entry when counter ≤ 0 | 🟢 Trivial | Correctness | `wantlist_queue.c:97` |
-| 6 | Save offline records to DB | 🟡 Easy | Feature completion | `routing/offline.c:38` |
-| 7 | Track GC reclaimed size | 🟢 Trivial | Metrics accuracy | `pin/pin.c:367` |
-| 8 | Add error checking to ping | 🟢 Trivial | Robustness | `core/ping.c:82` |
-| 9 | Populate actual API responses | 🟡 Easy | API correctness | `core/http_request.c:212,228` |
-| 10 | Handle multiple CLI args | 🟡 Easy | CLI completeness | `core/http_request.c:274` |
+| Rank | TODO | Difficulty | Impact | File | Status |
+|------|------|------------|--------|------|--------|
+| 1 | Add `fopen`/`fwrite` error checks | 🟡 Easy | Prevents silent data loss | `flatfs/flatfs.c:187` | ✅ Done |
+| 2 | Fix malloc failure in link copy | 🟡 Easy | Prevents segfault/corruption | `merkledag/node.c:833` | ✅ Done |
+| 3 | Fix encoded key buffer size | 🟡 Easy | Prevents buffer overflow | `routing/offline.c:26` | ✅ Done |
+| 4 | Add logging to wantlist_queue | 🟢 Trivial | Debuggability | `wantlist_queue.c:118` | ✅ Done |
+| 5 | Remove entry when counter ≤ 0 | 🟢 Trivial | Correctness | `wantlist_queue.c:97` | ✅ Done |
+| 6 | Save offline records to DB | 🟡 Easy | Feature completion | `routing/offline.c:38` | ✅ Done |
+| 7 | Track GC reclaimed size | 🟢 Trivial | Metrics accuracy | `pin/pin.c:367` | ✅ Done |
+| 8 | Add error checking to ping | 🟢 Trivial | Robustness | `core/ping.c:82` | ✅ Done |
+| 9 | Populate actual API responses | 🟡 Easy | API correctness | `core/http_request.c:212,228` | ✅ Done |
+| 10 | Handle multiple CLI args | 🟡 Easy | CLI completeness | `core/http_request.c:274` | ✅ Done |
 
 ---
 
