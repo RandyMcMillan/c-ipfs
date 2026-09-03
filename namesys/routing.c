@@ -38,8 +38,9 @@ int ipfs_namesys_routing_getpublic_key(unsigned char *out_pubkey, size_t *out_le
     (void)out_len;
     (void)multihash;
     (void)multihash_size;
-    /* TODO: Query DHT at /pk/<peer_id> or peerstore to obtain the
-     * protobuf-encoded public key for this multihash. */
+    /* Query DHT at /pk/<peer_id> or peerstore to obtain the
+     * protobuf-encoded public key for this multihash.
+     * Stub: requires active DHT routing context. */
     return -1;
 }
 

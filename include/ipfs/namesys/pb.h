@@ -16,7 +16,7 @@ struct ipns_entry {
     struct timespec *eol;
 };
 struct namesys_pb {
-    // TODO
+    // IPNS protobuf entry container
     struct ipns_entry *IpnsEntry;
 };
 

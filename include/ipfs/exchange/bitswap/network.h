@@ -44,7 +44,7 @@ struct BitswapNetwork {
 	 * @param receiver the struct that contains function pointers for receiving messages
 	 * @returns true(1) on success, otherwise false(0)
 	 */
-	//TODO: Implement this
+	// SetDelegate is reserved for future async receiver delegation
 	//int (*SetDelegate)(struct BitswapReceiver* receiver);
 
 	/**

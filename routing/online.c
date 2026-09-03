@@ -593,32 +593,36 @@ int ipfs_routing_online_bootstrap(struct IpfsRouting* routing) {
 		peer_id = multiaddress_get_peer_id(address);
 		if (peer_id != NULL) {
 			peer_id_size = strlen(peer_id);
-			peer = libp2p_peer_new();
-			peer->id_size = peer_id_size;
-			peer->id = malloc(peer->id_size + 1);
-			if (peer->id == NULL) { // out of memory?
-				libp2p_peer_free(peer);
-				free(peer_id);
-				return -1;
-			}
-			memcpy(peer->id, peer_id, peer->id_size);
-			peer->id[peer->id_size] = 0;
-			peer->addr_head = libp2p_utils_linked_list_new();
-			if (peer->addr_head == NULL) { // out of memory?
-				libp2p_peer_free(peer);
-				free(peer_id);
-				return -1;
-			}
-			peer->addr_head->item = multiaddress_copy(address);
-			libp2p_peerstore_add_peer(routing->local_node->peerstore, peer);
-			libp2p_peer_free(peer);
-			// now find it and attempt to connect
+			// Check if peer already exists to prevent duplicates
 			peer = libp2p_peerstore_get_peer(routing->local_node->peerstore, (const unsigned char*)peer_id, peer_id_size);
+			if (peer == NULL) {
+				peer = libp2p_peer_new();
+				peer->id_size = peer_id_size;
+				peer->id = malloc(peer->id_size + 1);
+				if (peer->id == NULL) { // out of memory?
+					libp2p_peer_free(peer);
+					free(peer_id);
+					return -1;
+				}
+				memcpy(peer->id, peer_id, peer->id_size);
+				peer->id[peer->id_size] = 0;
+				peer->addr_head = libp2p_utils_linked_list_new();
+				if (peer->addr_head == NULL) { // out of memory?
+					libp2p_peer_free(peer);
+					free(peer_id);
+					return -1;
+				}
+				peer->addr_head->item = multiaddress_copy(address);
+				libp2p_peerstore_add_peer(routing->local_node->peerstore, peer);
+				libp2p_peer_free(peer);
+				// now find it and attempt to connect
+				peer = libp2p_peerstore_get_peer(routing->local_node->peerstore, (const unsigned char*)peer_id, peer_id_size);
+			}
 			free(peer_id);
 			if (peer == NULL) {
 				return -1; // this should never happen
 			}
-			if (peer->sessionContext == NULL) { // should always be true unless we added it twice (TODO: we should prevent that earlier)
+			if (peer->sessionContext == NULL) {
 				if (!libp2p_peer_connect(routing->local_node->dialer, peer, routing->local_node->peerstore, routing->local_node->repo->config->datastore, 2)) {
 					libp2p_logger_debug("online", "Attempted to bootstrap and connect to %s but failed. Continuing.\n", libp2p_peer_id_to_string(peer));
 				}

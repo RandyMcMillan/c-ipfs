@@ -12,8 +12,6 @@
 
     // Resolver provides path resolution to IPFS
     // It has a pointer to a DAGService, which is uses to resolve nodes.
-    // TODO: now that this is more modular, try to unify this code with the
-    //       the resolvers in namesys
     typedef struct s_resolver {
         //DAGService DAG;
         //NodeLink *lnk;
@@ -21,7 +19,7 @@
         int (*resolveOnce) (char **, char *);
     } resolver;
 
-    //TODO ciPrivKey from c-libp2p-crypto
+    // ciPrivKey is an opaque private key handle (backed by c-libp2p-crypto)
     typedef void* ciPrivKey;
 
     typedef struct s_publishers {
@@ -58,7 +56,7 @@
     int ipfs_isdomain_is_domain (char *s);
 
     typedef struct s_DNSResolver {
-        // TODO
+        // DNS TXT record lookup function pointer
         int (*lookupTXT) (char ***, char *);
     } DNSResolver;
 

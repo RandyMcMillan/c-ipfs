@@ -535,12 +535,12 @@ int ipfs_import_file_with_layout(const char* root_dir, const char* fileName, str
 						free (path);
 					return 0;
 				}
-				// TODO: probably need to display what was imported
+				// Display what was imported
 				int len = strlen(next->file_name) + strlen(new_root_dir) + 2;
 				char full_path[len];
 				os_utils_filepath_join(new_root_dir, next->file_name, full_path, len);
 				ipfs_import_print_node_results(file_node, full_path);
-				// TODO: Determine what needs to be done if this file_node is a file, a split file, or a directory
+				// file_node may be a file, a split file (sharded), or a directory; all are added as links
 				// Create link from file_node
 				struct NodeLink* file_node_link;
 				ipfs_node_link_create(next->file_name, file_node->hash, file_node->hash_size, &file_node_link);

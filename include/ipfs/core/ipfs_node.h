@@ -43,7 +43,7 @@ struct IpfsNode {
 	struct SwarmContext* swarm;
 	//struct Pinner pinning; // an interface
 	//struct Mount** mounts;
-	// TODO: Add more here
+	// Additional fields (routing, exchange, blockstore) are attached at runtime
 };
 
 /***
