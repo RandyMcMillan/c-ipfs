@@ -48,6 +48,7 @@ OBJS = testit.o test_helper.o \
 	../routing/k_routing.o \
 	../routing/supernode.o \
 	../thirdparty/ipfsaddr/ipfs_addr.o \
+	../transport/*.o \
 	../unixfs/unixfs.o ../unixfs/hamt.o \
 	../util/thread_pool.o ../util/time.o ../util/errs.o ../util/errs_impl.o \
 	../c-libp2p/c-protobuf/protobuf.o ../c-libp2p/c-protobuf/varint.o
