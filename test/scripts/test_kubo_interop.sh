@@ -155,6 +155,10 @@ for attempt in $(seq 1 "${CONNECT_WAIT_STEPS}"); do
     if [ "${VERBOSE}" = "true" ]; then
         echo "connect attempt ${attempt}/${CONNECT_WAIT_STEPS}"
     fi
+    if IPFS_PATH="${C_REPO}" "${C_IPFS_BIN}" swarm connect "${KUBO_ADDR}"; then
+        CONNECTED=1
+        break
+    fi
     if IPFS_PATH="${K_REPO}" "${KUBO_BIN}" swarm connect "${C_PEER_ADDR}"; then
         CONNECTED=1
         break
@@ -162,6 +166,8 @@ for attempt in $(seq 1 "${CONNECT_WAIT_STEPS}"); do
     if [ "${VERBOSE}" = "true" ]; then
         echo "current Kubo swarm peers:"
         IPFS_PATH="${K_REPO}" "${KUBO_BIN}" swarm peers || true
+        echo "current c-ipfs swarm peers:"
+        IPFS_PATH="${C_REPO}" "${C_IPFS_BIN}" swarm peers || true
     fi
     sleep 0.5
 done
