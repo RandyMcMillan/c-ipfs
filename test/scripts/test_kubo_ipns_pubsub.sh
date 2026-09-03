@@ -34,6 +34,20 @@ fi
 c_ipfs_pid=""
 kubo_pid=""
 
+_api_ready() {
+    local port="$1"
+    if command -v curl >/dev/null 2>&1; then
+        curl -fsS "http://127.0.0.1:${port}/api/v0/version" >/dev/null 2>&1
+        return
+    fi
+    if command -v wget >/dev/null 2>&1; then
+        wget -qO- "http://127.0.0.1:${port}/api/v0/version" >/dev/null 2>&1
+        return
+    fi
+    # Fallback: at least verify the TCP port is accepting connections
+    (echo >"/dev/tcp/127.0.0.1/${port}") >/dev/null 2>&1
+}
+
 wait_for_api() {
     local pid="$1"
     local port="$2"
@@ -45,7 +59,7 @@ wait_for_api() {
             tail -n 50 "${log_file}" || true
             return 1
         fi
-        if curl -fsS "http://127.0.0.1:${port}/api/v0/version" >/dev/null 2>&1; then
+        if _api_ready "${port}"; then
             return 0
         fi
         sleep 0.5
