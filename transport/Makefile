@@ -15,9 +15,14 @@ LSQUIC_BUILD_DIR = ../lsquic/build-c-ipfs
 LSQUIC_LIB = $(LSQUIC_BUILD_DIR)/src/liblsquic/liblsquic.a
 LSQUIC_INC = -I../lsquic/include
 
+# BoringSSL submodule build
+BORINGSSL_BUILD_DIR = ../boringssl/build-c-ipfs
+BORINGSSL_LIB = $(BORINGSSL_BUILD_DIR)/libssl.a $(BORINGSSL_BUILD_DIR)/libcrypto.a
+BORINGSSL_INC = -I../boringssl/include
+
 ifdef HAS_LSQUIC
-CFLAGS += -DHAS_LSQUIC $(LSQUIC_INC)
-LFLAGS += $(LSQUIC_LIB) -lssl -lcrypto -lz
+CFLAGS += -DHAS_LSQUIC $(LSQUIC_INC) $(BORINGSSL_INC)
+LFLAGS += $(LSQUIC_LIB) $(BORINGSSL_LIB) -lz
 endif
 
 ifdef HAS_LIBWEBSOCKETS

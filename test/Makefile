@@ -8,7 +8,22 @@ LFLAGS += -Wl,-rpath,@loader_path/../c-libp2p -L/opt/homebrew/opt/openssl/lib -f
 else
 LFLAGS += -Wl,-rpath,'$$ORIGIN/../c-libp2p'
 endif
+
+# lsquic + BoringSSL (optional; experimental due to OpenSSL symbol conflicts)
+LSQUIC_LIB = ../lsquic/build-c-ipfs/src/liblsquic/liblsquic.a
+BORINGSSL_LIB = ../boringssl/build-c-ipfs/libssl.a ../boringssl/build-c-ipfs/libcrypto.a
+
+ifdef HAS_LSQUIC
+CFLAGS += -DHAS_LSQUIC -I../lsquic/include -I../boringssl/include
+LFLAGS += $(LSQUIC_LIB) $(BORINGSSL_LIB) -lz ../nostril/libsecp256k1.a
+ifeq ($(shell uname -s),Darwin)
+LFLAGS += -lc++
+else
+LFLAGS += -lstdc++
+endif
+else
 LFLAGS += -lssl -lcrypto ../nostril/libsecp256k1.a
+endif
 DEPS = cmd/ipfs/test_init.h repo/test_repo_bootstrap_peers.h repo/test_repo_config.h repo/test_repo_identity.h cid/test_cid.h transport/test_transport.h
 OBJS = testit.o test_helper.o \
 	../blocks/block.o ../blocks/blockstore.o ../blocks/blockstore_shard.o \

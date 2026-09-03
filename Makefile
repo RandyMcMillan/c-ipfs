@@ -7,7 +7,7 @@ export DEBUG
 MODULES := blocks cid cmd commands core crypto exchange importer ipld journal merkledag multibase pin pubsub repo flatfs datastore thirdparty unixfs routing dnslink namesys path util rbsr nostr main transport
 
 # External submodules
-SUBMODULES := c-libp2p lmdb nostril libwebsockets lsquic
+SUBMODULES := c-libp2p lmdb nostril libwebsockets boringssl lsquic
 
 # Utility scripts
 SCRIPTS := scripts
@@ -57,8 +57,17 @@ libwebsockets:
 		cmake --build libwebsockets/build-c-ipfs -j$(shell sysctl -n hw.ncpu 2>/dev/null || echo 4); \
 	fi
 
-lsquic:
-	@echo "lsquic requires BoringSSL; skipping automatic build with OpenSSL"
+boringssl:
+	@if [ ! -f boringssl/build-c-ipfs/libssl.a ]; then \
+		cmake -B boringssl/build-c-ipfs -S boringssl -DCMAKE_BUILD_TYPE=Release && \
+		cmake --build boringssl/build-c-ipfs -j$(shell sysctl -n hw.ncpu 2>/dev/null || echo 4); \
+	fi
+
+lsquic: boringssl
+	@if [ ! -f lsquic/build-c-ipfs/src/liblsquic/liblsquic.a ]; then \
+		cmake -B lsquic/build-c-ipfs -S lsquic -DCMAKE_BUILD_TYPE=Release -DSSLLIB_INCLUDE=$(PWD)/boringssl/include -DLIBSSL_LIB=$(PWD)/boringssl/build-c-ipfs && \
+		cmake --build lsquic/build-c-ipfs -j$(shell sysctl -n hw.ncpu 2>/dev/null || echo 4); \
+	fi
 
 # ---------------------------------------------------------------------------
 # Module builds
@@ -82,6 +91,9 @@ clean-nostril:
 
 clean-libwebsockets:
 	rm -rf libwebsockets/build-c-ipfs
+
+clean-boringssl:
+	rm -rf boringssl/build-c-ipfs
 
 clean-lsquic:
 	rm -rf lsquic/build-c-ipfs

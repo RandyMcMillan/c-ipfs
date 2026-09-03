@@ -86,7 +86,7 @@ static int quic_dial(libp2p_transport_t *self, const char *multiaddr, libp2p_str
 
     lsquic_conn_t *conn = lsquic_engine_connect(
         quic->engine,
-        N_LSQUIC_VER,
+        N_LSQVER,
         (struct sockaddr *)&peer_addr,
         NULL, NULL, NULL, NULL, 0, NULL, 0, NULL, 0
     );

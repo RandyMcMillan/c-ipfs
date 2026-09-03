@@ -6,13 +6,28 @@ SECP256K1_AR = ../nostril/libsecp256k1.a
 $(SECP256K1_AR):
 	$(MAKE) -C ../nostril libsecp256k1.a
 
+# lsquic + BoringSSL (optional; experimental due to OpenSSL symbol conflicts)
+LSQUIC_LIB = ../lsquic/build-c-ipfs/src/liblsquic/liblsquic.a
+BORINGSSL_LIB = ../boringssl/build-c-ipfs/libssl.a ../boringssl/build-c-ipfs/libcrypto.a
+
 ifeq ($(shell uname -s),Darwin)
 CFLAGS += -I/opt/homebrew/opt/openssl/include
 LFLAGS += -Wl,-rpath,@loader_path/../c-libp2p -L/opt/homebrew/opt/openssl/lib -framework SystemConfiguration -framework CoreFoundation
 else
 LFLAGS += -Wl,-rpath,'$$ORIGIN/../c-libp2p'
 endif
+
+ifdef HAS_LSQUIC
+CFLAGS += -DHAS_LSQUIC -I../lsquic/include -I../boringssl/include
+LFLAGS += $(LSQUIC_LIB) $(BORINGSSL_LIB) -lz
+ifeq ($(shell uname -s),Darwin)
+LFLAGS += -lc++
+else
+LFLAGS += -lstdc++
+endif
+else
 LFLAGS += -lssl -lcrypto
+endif
 DEPS = cmd/ipfs/test_init.h repo/test_repo_bootstrap_peers.h repo/test_repo_config.h repo/test_repo_identity.h cid/test_cid.h
 OBJS = main.o \
 	../blocks/block.o ../blocks/blockstore.o \
