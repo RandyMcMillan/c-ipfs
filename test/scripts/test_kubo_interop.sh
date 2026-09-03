@@ -54,6 +54,15 @@ IPFS_PATH="${K_REPO}" "${KUBO_BIN}" config Addresses.Swarm --json '["/ip4/127.0.
 IPFS_PATH="${K_REPO}" "${KUBO_BIN}" config Addresses.API "/ip4/127.0.0.1/tcp/5011"
 IPFS_PATH="${K_REPO}" "${KUBO_BIN}" config Addresses.Gateway "/ip4/127.0.0.1/tcp/8081"
 
+echo "=== Starting c-ipfs daemon ==="
+IPFS_PATH="${C_REPO}" "${C_IPFS_BIN}" daemon > "${TMP_DIR}/c_ipfs.log" 2>&1 &
+c_ipfs_pid=$!
+
+echo "Waiting for c-ipfs daemon API..."
+until IPFS_PATH="${C_REPO}" "${C_IPFS_BIN}" id >/dev/null 2>&1; do
+    sleep 0.5
+done
+
 echo "=== Starting Kubo daemon ==="
 IPFS_PATH="${K_REPO}" "${KUBO_BIN}" daemon > "${TMP_DIR}/kubo.log" 2>&1 &
 kubo_pid=$!
@@ -73,7 +82,11 @@ IPFS_PATH="${C_REPO}" "${C_IPFS_BIN}" swarm connect "${KUBO_ADDR}" || true
 echo "=== Test 2: Vector 001 - c-ipfs add -> Kubo cat ==="
 TEST_FILE="${TMP_DIR}/vector1.txt"
 echo "Interoperability payload from c-ipfs $(date +%s)" > "${TEST_FILE}"
-CID=$(IPFS_PATH="${C_REPO}" "${C_IPFS_BIN}" add -q "${TEST_FILE}" | tail -n 1)
+CID=$(IPFS_PATH="${C_REPO}" "${C_IPFS_BIN}" add "${TEST_FILE}" | awk '/^added / {print $2; exit}')
+if [ -z "${CID}" ]; then
+    echo "Failed to parse CID from c-ipfs add output"
+    exit 1
+fi
 
 FETCHED_FILE="${TMP_DIR}/fetched_kubo.txt"
 IPFS_PATH="${K_REPO}" "${KUBO_BIN}" cat "${CID}" > "${FETCHED_FILE}"
@@ -82,7 +95,11 @@ diff -q "${TEST_FILE}" "${FETCHED_FILE}"
 echo "=== Test 3: Vector 002 - Kubo add -> c-ipfs cat ==="
 K_TEST_FILE="${TMP_DIR}/vector2.txt"
 echo "Kubo generated vector $(date +%s)" > "${K_TEST_FILE}"
-K_CID=$(IPFS_PATH="${K_REPO}" "${KUBO_BIN}" add -q "${K_TEST_FILE}")
+K_CID=$(IPFS_PATH="${K_REPO}" "${KUBO_BIN}" add "${K_TEST_FILE}" | awk '/^added / {print $2; exit}')
+if [ -z "${K_CID}" ]; then
+    echo "Failed to parse CID from Kubo add output"
+    exit 1
+fi
 
 C_FETCHED_FILE="${TMP_DIR}/fetched_c_ipfs.txt"
 IPFS_PATH="${C_REPO}" "${C_IPFS_BIN}" cat "${K_CID}" > "${C_FETCHED_FILE}"
