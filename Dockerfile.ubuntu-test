@@ -1,0 +1,18 @@
+FROM ubuntu:latest
+
+RUN apt-get update && apt-get install -y build-essential libcurl4-openssl-dev autoconf automake libtool curl git
+
+WORKDIR /workspace
+COPY . /workspace/
+
+RUN cd nostril/deps/secp256k1 && ./autogen.sh && \
+    ./configure --disable-shared --enable-module-ecdh --enable-module-schnorrsig --enable-module-extrakeys && \
+    make -j libsecp256k1.la && \
+    cp .libs/libsecp256k1.a ../../libsecp256k1.a || true
+
+RUN cd c-libp2p && make all
+RUN cd lmdb/libraries/liblmdb && make all
+RUN make all
+RUN cd test && make all
+
+RUN cd test/scripts && bash -x ./test_http_api.sh 2>&1
