@@ -2,6 +2,11 @@
 
 > Generated from codebase scan. **85 TODO/FIXME markers** found across project source (excluding submodules: `c-libp2p/`, `lmdb/`, `nostril/`).
 
+> Resolved transport-registry items:
+> - `transport/registry.c` and `include/ipfs/transport/registry.h` are present.
+> - Transport registry tests are registered in `test/testit.c`.
+> - The negative dial test now checks the expected failure path correctly, and a positive registry dial test has been added.
+
 ---
 
 ## Summary by Severity
