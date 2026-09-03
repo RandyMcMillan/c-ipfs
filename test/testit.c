@@ -35,6 +35,13 @@
 #include "crypto/test_crypto_verify.h"
 #include "crypto/test_secp256k1_nostril.h"
 #include "namesys/test_namesys_verify.h"
+#include "cid/test_cid_v1.h"
+#include "exchange/test_bitswap_future.h"
+#include "pubsub/test_gossipsub.h"
+#include "transport/test_transport.h"
+#include "repo/test_repo_lock.h"
+#include "blocks/test_blockstore_shard.h"
+#include "dnslink/test_dns_cache.h"
 
 struct test {
 	int index;
@@ -205,6 +212,19 @@ int build_test_collection() {
 	add_test("test_ping_remote", test_ping_remote, 0); // need to test more
 	add_test("test_null_add_provider", test_null_add_provider, 0); // need to test more
 	add_test("test_compat_go_join_swarm", test_compat_go_join_swarm, 0); // remote must be running
+	add_test("test_cid_from_string_v0", test_cid_from_string_v0, 1);
+	add_test("test_cid_from_bytes_v0", test_cid_from_bytes_v0, 1);
+	add_test("test_bitswap_future_create_resolve", test_bitswap_future_create_resolve, 1);
+	add_test("test_bitswap_future_reject", test_bitswap_future_reject, 1);
+	add_test("test_gossipsub_graft_roundtrip", test_gossipsub_graft_roundtrip, 1);
+	add_test("test_gossipsub_prune_roundtrip", test_gossipsub_prune_roundtrip, 1);
+	add_test("test_transport_stream_struct_size", test_transport_stream_struct_size, 1);
+	add_test("test_transport_struct_size", test_transport_struct_size, 1);
+	add_test("test_repo_lock_create_free", test_repo_lock_create_free, 1);
+	add_test("test_repo_lock_unlock_cycle", test_repo_lock_unlock_cycle, 1);
+	add_test("test_blockstore_shard_put_get", test_blockstore_shard_put_get, 1);
+	add_test("test_dns_cache_put_get", test_dns_cache_put_get, 1);
+	add_test("test_dns_cache_miss", test_dns_cache_miss, 1);
 	return 1;
 }
 

@@ -59,6 +59,13 @@
 !test/namesys/test_namesys_verify.h
 !test/pubsub/test_ipns_pubsub.h
 !test/scripts/test_dag_cbor_vectors.py
+!test/cid/test_cid_v1.h
+!test/exchange/test_bitswap_future.h
+!test/pubsub/test_gossipsub.h
+!test/transport/test_transport.h
+!test/repo/test_repo_lock.h
+!test/blocks/test_blockstore_shard.h
+!test/dnslink/test_dns_cache.h
 
 *.o
 .settings/language.settings.xml
