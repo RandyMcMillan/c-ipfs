@@ -587,14 +587,18 @@ int ipfs_import_file_with_layout(const char* root_dir, const char* fileName, str
 		}
 	}
 
-	// notify the network
-	struct HashtableNode *htn = *parent_node;
-	local_node->routing->Provide(local_node->routing, htn->hash, htn->hash_size);
-	// notify the network of the subnodes too
-	struct NodeLink *nl = htn->head_link;
-	while (nl != NULL) {
-		local_node->routing->Provide(local_node->routing, nl->hash, nl->hash_size);
-		nl = nl->next;
+	// notify the network only when this node owns a live API context.
+	// Offline helper nodes are still used to build content hashes in tests,
+	// but they should not try to publish those hashes over DHT.
+	if (local_node->api_context != NULL && local_node->routing != NULL && local_node->routing->Provide != NULL) {
+		struct HashtableNode *htn = *parent_node;
+		local_node->routing->Provide(local_node->routing, htn->hash, htn->hash_size);
+		// notify the network of the subnodes too
+		struct NodeLink *nl = htn->head_link;
+		while (nl != NULL) {
+			local_node->routing->Provide(local_node->routing, nl->hash, nl->hash_size);
+			nl = nl->next;
+		}
 	}
 
 	return 1;
@@ -758,4 +762,3 @@ int ipfs_import_files(struct CliArguments* args) {
 	//	free(repo_path);
 	return retVal;
 }
-

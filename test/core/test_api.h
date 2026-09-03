@@ -751,11 +751,23 @@ exit:
 int test_core_api_dht_findprovs() {
 	int retVal = 0;
 	struct IpfsNode* local_node = NULL;
+	pthread_t daemon_thread = 0;
+	int thread_started = 0;
 	char* repo_path = "./tmp/ipfs_api_dht_findprovs";
 	char* peer_id = NULL;
 
 	if (!drop_and_build_repository(repo_path, 4001, NULL, &peer_id))
 		goto exit;
+	if (!ipfs_node_offline_new(repo_path, &local_node))
+		goto exit;
+
+	ipfs_node_free(local_node);
+	local_node = NULL;
+
+	pthread_create(&daemon_thread, NULL, test_daemon_start, repo_path);
+	thread_started = 1;
+	sleep(3);
+
 	if (!ipfs_node_offline_new(repo_path, &local_node))
 		goto exit;
 
@@ -780,6 +792,9 @@ int test_core_api_dht_findprovs() {
 	ipfs_core_http_request_free(req);
 exit:
 	ipfs_node_free(local_node);
+	ipfs_daemon_stop();
+	if (thread_started)
+		pthread_join(daemon_thread, NULL);
 	if (peer_id) free(peer_id);
 	return retVal;
 }
@@ -1072,6 +1087,8 @@ exit:
 int test_core_api_get() {
 	int retVal = 0;
 	struct IpfsNode* local_node = NULL;
+	pthread_t daemon_thread = 0;
+	int thread_started = 0;
 	char* repo_path = "./tmp/ipfs_api_get";
 	char* peer_id = NULL;
 	struct HashtableNode* node = NULL;
@@ -1094,6 +1111,16 @@ int test_core_api_get() {
 	if (!ipfs_cid_hash_to_base58(node->hash, node->hash_size, (unsigned char*)hash_str, 256))
 		goto exit;
 
+	ipfs_node_free(local_node);
+	local_node = NULL;
+
+	pthread_create(&daemon_thread, NULL, test_daemon_start, repo_path);
+	thread_started = 1;
+	sleep(3);
+
+	if (!ipfs_node_offline_new(repo_path, &local_node))
+		goto exit;
+
 	struct HttpRequest* req = ipfs_core_http_request_new();
 	if (!req) goto exit;
 	req->command = strdup("get");
@@ -1114,6 +1141,9 @@ int test_core_api_get() {
 exit:
 	if (node) ipfs_hashtable_node_free(node);
 	ipfs_node_free(local_node);
+	ipfs_daemon_stop();
+	if (thread_started)
+		pthread_join(daemon_thread, NULL);
 	if (peer_id) free(peer_id);
 	return retVal;
 }
