@@ -346,10 +346,18 @@ int ipfs_core_http_process_swarm_connect(struct IpfsNode* local_node, struct Htt
 
 	struct Libp2pPeer* new_peer = libp2p_peer_new_from_multiaddress(ma);
 	if (!libp2p_peer_connect(local_node->dialer, new_peer, local_node->peerstore, local_node->repo->config->datastore, 30)) {
-		libp2p_logger_error("http_request", "swarm_connect: Unable to connect to peer %s.\n", libp2p_peer_id_to_string(new_peer));
-		libp2p_peer_free(new_peer);
-		multiaddress_free(ma);
-		return 0;
+		// Fallback: try transport registry for non-TCP transports (QUIC, WebSocket)
+		libp2p_stream_t *fallback_stream = NULL;
+		if (transport_registry_dial(&local_node->transport_registry, address, &fallback_stream) == 0 && fallback_stream != NULL) {
+			libp2p_logger_info("http_request", "swarm_connect: Connected via transport registry to %s.\n", address);
+			libp2p_peerstore_add_peer(local_node->peerstore, new_peer);
+			fallback_stream->close(fallback_stream);
+		} else {
+			libp2p_logger_error("http_request", "swarm_connect: Unable to connect to peer %s.\n", libp2p_peer_id_to_string(new_peer));
+			libp2p_peer_free(new_peer);
+			multiaddress_free(ma);
+			return 0;
+		}
 	}
 	*resp = ipfs_core_http_response_new();
 	struct HttpResponse* response = *resp;

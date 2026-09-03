@@ -42,6 +42,7 @@ OBJS = main.o \
 	../repo/config/*.o \
 	../routing/*.o \
 	../thirdparty/ipfsaddr/ipfs_addr.o \
+	../transport/quic_transport.o ../transport/ws_transport.o ../transport/registry.o \
 	../unixfs/unixfs.o ../unixfs/hamt.o \
 	../c-libp2p/c-protobuf/protobuf.o ../c-libp2p/c-protobuf/varint.o \
 	../util/errs.o \

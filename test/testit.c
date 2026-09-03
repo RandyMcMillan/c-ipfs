@@ -93,6 +93,7 @@ int build_test_collection() {
 	add_test("test_bitswap_new_free", test_bitswap_new_free, 1);
 	add_test("test_bitswap_peer_request_queue_new", test_bitswap_peer_request_queue_new, 1);
 	add_test("test_bitswap_message_120", test_bitswap_message_120, 1);
+	add_test("test_bitswap_wantlist_wire_defaults", test_bitswap_wantlist_wire_defaults, 1);
 	add_test("test_bitswap_retrieve_file", test_bitswap_retrieve_file, 1);
 	add_test("test_bitswap_retrieve_file_known_remote", test_bitswap_retrieve_file_known_remote, 0);
 	add_test("test_bitswap_retrieve_file_remote", test_bitswap_retrieve_file_remote, 0); // timing-sensitive multi-node; often hangs

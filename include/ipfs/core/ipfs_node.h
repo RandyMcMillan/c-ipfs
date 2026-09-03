@@ -9,6 +9,7 @@
 #include "ipfs/repo/config/identity.h"
 #include "ipfs/repo/fsrepo/fs_repo.h"
 #include "ipfs/routing/routing.h"
+#include "ipfs/transport/registry.h"
 
 struct Libp2pDiscovery;
 
@@ -44,6 +45,7 @@ struct IpfsNode {
 	struct Dialer* dialer;
 	struct SwarmContext* swarm;
 	struct Libp2pDiscovery* discovery;
+	transport_registry_t transport_registry;
 	//struct Pinner pinning; // an interface
 	//struct Mount** mounts;
 	// Additional fields (routing, exchange, blockstore) are attached at runtime

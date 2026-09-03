@@ -211,6 +211,89 @@ exit:
 	return retVal;
 }
 
+/**
+ * Exercise the Bitswap wantlist wire format with omitted default fields and
+ * a larger block CID payload so protobuf length encoding is covered too.
+ */
+int test_bitswap_wantlist_wire_defaults() {
+	int retVal = 0;
+	struct BitswapMessage* message = ipfs_bitswap_message_new();
+	struct BitswapMessage* decoded = NULL;
+	uint8_t* buf = NULL;
+
+	if (message == NULL)
+		return 0;
+
+	message->wantlist = ipfs_bitswap_wantlist_new();
+	if (message->wantlist == NULL)
+		goto exit;
+
+	if (message->wantlist->full != 0)
+		goto exit;
+
+	message->wantlist->entries = libp2p_utils_vector_new(1);
+	if (message->wantlist->entries == NULL)
+		goto exit;
+
+	struct WantlistEntry* entry = ipfs_bitswap_wantlist_entry_new();
+	if (entry == NULL)
+		goto exit;
+
+	entry->block_size = 300;
+	entry->block = generate_bytes(entry->block_size);
+	if (entry->block == NULL)
+		goto exit;
+	entry->priority = 1;
+	entry->cancel = 0;
+	entry->want_type = WANT_TYPE_BLOCK;
+	entry->send_dont_have = 0;
+	libp2p_utils_vector_add(message->wantlist->entries, entry);
+
+	size_t buf_size = ipfs_bitswap_message_protobuf_encode_size(message);
+	buf = (uint8_t*) malloc(buf_size);
+	if (buf == NULL)
+		goto exit;
+
+	size_t bytes_written = 0;
+	if (!ipfs_bitswap_message_protobuf_encode(message, buf, buf_size, &bytes_written))
+		goto exit;
+
+	if (!ipfs_bitswap_message_protobuf_decode(buf, bytes_written, &decoded))
+		goto exit;
+
+	if (decoded == NULL || decoded->wantlist == NULL || decoded->wantlist->entries == NULL)
+		goto exit;
+
+	if (decoded->wantlist->full != 0)
+		goto exit;
+
+	if (decoded->wantlist->entries->total != 1)
+		goto exit;
+
+	struct WantlistEntry* decoded_entry = (struct WantlistEntry*) libp2p_utils_vector_get(decoded->wantlist->entries, 0);
+	if (decoded_entry == NULL)
+		goto exit;
+
+	if (decoded_entry->block_size != 300)
+		goto exit;
+
+	if (!compare_generated_bytes(decoded_entry->block, decoded_entry->block_size))
+		goto exit;
+
+	if (decoded_entry->priority != 1 || decoded_entry->cancel != 0 || decoded_entry->want_type != WANT_TYPE_BLOCK || decoded_entry->send_dont_have != 0)
+		goto exit;
+
+	retVal = 1;
+
+exit:
+	if (buf != NULL)
+		free(buf);
+	if (decoded != NULL)
+		ipfs_bitswap_message_free(decoded);
+	ipfs_bitswap_message_free(message);
+	return retVal;
+}
+
 /***
  * Put a file in ipfs and attempt to retrieve it using bitswap's Exchange interface
  */
@@ -771,4 +854,3 @@ int test_bitswap_serve_file_go_remote() {
 		free(peer_id_2);
 	return retVal;
 }
-

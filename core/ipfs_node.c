@@ -30,6 +30,7 @@ struct IpfsNode* ipfs_node_new() {
 		node->routing = NULL;
 		node->api_context = NULL;
 		node->discovery = NULL;
+		transport_registry_init(&node->transport_registry);
 	}
 	return node;
 }
@@ -107,6 +108,17 @@ int ipfs_node_online_new(const char* repo_path, struct IpfsNode** node) {
 	local_node->exchange = ipfs_bitswap_new(local_node);
 	local_node->swarm = libp2p_swarm_new(local_node->protocol_handlers, local_node->repo->config->datastore, local_node->repo->config->filestore);
 	local_node->dialer = libp2p_conn_dialer_new(local_node->identity->peer, local_node->peerstore, &local_node->identity->private_key, local_node->swarm);
+
+	// populate transport registry with available transports
+	libp2p_transport_t *quic = libp2p_quic_transport_create(NULL);
+	if (quic != NULL) {
+		transport_registry_add(&local_node->transport_registry, quic);
+	}
+	libp2p_transport_t *ws = libp2p_ws_transport_create();
+	if (ws != NULL) {
+		transport_registry_add(&local_node->transport_registry, ws);
+	}
+
 	local_node->discovery = libp2p_discovery_new();
 	if (local_node->discovery != NULL) {
 		const char* local_multiaddr = NULL;
@@ -237,6 +249,7 @@ int ipfs_node_free(struct IpfsNode* node) {
 		if (node->discovery != NULL) {
 			libp2p_discovery_free(node->discovery);
 		}
+		transport_registry_free(&node->transport_registry);
 		free(node);
 	}
 	return 1;

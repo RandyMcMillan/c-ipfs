@@ -296,7 +296,7 @@ int ipfs_bitswap_wantlist_entry_protobuf_decode(unsigned char* buffer, size_t bu
 	if (buffer_length == 0)
 		return 1;
 
-	*output = (struct WantlistEntry*) malloc(sizeof(struct WantlistEntry));
+	*output = ipfs_bitswap_wantlist_entry_new();
 	if (*output == NULL)
 		goto exit;
 
@@ -355,7 +355,7 @@ struct BitswapWantlist* ipfs_bitswap_wantlist_new() {
 
 	if (list != NULL) {
 		list->entries = NULL;
-		list->full = 1;
+		list->full = 0;
 	}
 
 	return list;
@@ -389,11 +389,15 @@ int ipfs_bitswap_wantlist_free(struct BitswapWantlist* list) {
 size_t ipfs_bitswap_wantlist_protobuf_encode_size(struct BitswapWantlist* list) {
 	size_t total = 0;
 	if (list != NULL) {
-		for(int i = 0; i < list->entries->total; i++) {
-			struct WantlistEntry* entry = (struct WantlistEntry*) libp2p_utils_vector_get(list->entries, i);
-			total += ipfs_bitswap_wantlist_entry_protobuf_encode_size(entry);
+		if (list->entries != NULL) {
+			for(int i = 0; i < list->entries->total; i++) {
+				struct WantlistEntry* entry = (struct WantlistEntry*) libp2p_utils_vector_get(list->entries, i);
+				total += ipfs_bitswap_wantlist_entry_protobuf_encode_size(entry);
+			}
 		}
-		total += 11 + 12 + 11;
+		if (list->full != 0) {
+			total += 11 + 12 + 11;
+		}
 	}
 	return total;
 }
@@ -412,30 +416,34 @@ int ipfs_bitswap_wantlist_protobuf_encode(struct BitswapWantlist* list, unsigned
 
 	if (list != NULL) {
 		// the vector of entries
-		for(int i = 0; i < list->entries->total; i++) {
-			struct WantlistEntry* entry = (struct WantlistEntry*) libp2p_utils_vector_get(list->entries, i);
-			// protobuf the entry
-			size_t temp_buffer_size = ipfs_bitswap_wantlist_entry_protobuf_encode_size(entry);
-			uint8_t* temp_buffer = (uint8_t*) malloc(temp_buffer_size);
-			if (temp_buffer == NULL)
-				return 0;
-			if (!ipfs_bitswap_wantlist_entry_protobuf_encode(entry, temp_buffer, temp_buffer_size, &temp_buffer_size)) {
+		if (list->entries != NULL) {
+			for(int i = 0; i < list->entries->total; i++) {
+				struct WantlistEntry* entry = (struct WantlistEntry*) libp2p_utils_vector_get(list->entries, i);
+				// protobuf the entry
+				size_t temp_buffer_size = ipfs_bitswap_wantlist_entry_protobuf_encode_size(entry);
+				uint8_t* temp_buffer = (uint8_t*) malloc(temp_buffer_size);
+				if (temp_buffer == NULL)
+					return 0;
+				if (!ipfs_bitswap_wantlist_entry_protobuf_encode(entry, temp_buffer, temp_buffer_size, &temp_buffer_size)) {
+					free(temp_buffer);
+					return 0;
+				}
+				// we've got the protobuf'd entry, now put it in the real buffer
+				if (!protobuf_encode_length_delimited(1, WIRETYPE_LENGTH_DELIMITED, (char*)temp_buffer, temp_buffer_size, &buffer[*bytes_written], buffer_length - (*bytes_written), &bytes_used)) {
+					free(temp_buffer);
+					return 0;
+				}
+				// all went okay. Clean up and do it again...
 				free(temp_buffer);
-				return 0;
+				*bytes_written += bytes_used;
 			}
-			// we've got the protobuf'd entry, now put it in the real buffer
-			if (!protobuf_encode_length_delimited(1, WIRETYPE_LENGTH_DELIMITED, (char*)temp_buffer, temp_buffer_size, &buffer[*bytes_written], buffer_length - (*bytes_written), &bytes_used)) {
-				free(temp_buffer);
-				return 0;
-			}
-			// all went okay. Clean up and do it again...
-			free(temp_buffer);
-			*bytes_written += bytes_used;
 		}
 		// if this is the full list or not...
-		if (!protobuf_encode_varint(2, WIRETYPE_VARINT, list->full, &buffer[*bytes_written], buffer_length - (*bytes_written), &bytes_used))
-			return 0;
-		*bytes_written += bytes_used;
+		if (list->full != 0) {
+			if (!protobuf_encode_varint(2, WIRETYPE_VARINT, list->full, &buffer[*bytes_written], buffer_length - (*bytes_written), &bytes_used))
+				return 0;
+			*bytes_written += bytes_used;
+		}
 	}
 	return 1;
 }
@@ -901,6 +909,5 @@ int ipfs_bitswap_message_add_blocks(struct BitswapMessage* message, struct Libp2
 	}
 	return 1;
 }
-
 
 
