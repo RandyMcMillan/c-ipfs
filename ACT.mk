@@ -29,6 +29,7 @@ ACT_WORKFLOW_FLAGS := -W $(ACT_WORKFLOW)
 ACT_OPTIONAL_FLAGS :=
 ifeq ($(ACT_BIND),true)
 ACT_OPTIONAL_FLAGS += --bind
+ACT_EXTRA_FLAGS += --env BIND=true
 endif
 ifeq ($(ACT_DRYRUN),true)
 ACT_OPTIONAL_FLAGS += --dryrun
