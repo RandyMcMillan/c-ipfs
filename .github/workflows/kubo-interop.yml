@@ -1,0 +1,81 @@
+name: Kubo Interoperability
+
+on:
+  workflow_dispatch:
+    inputs:
+      interop_mode:
+        description: Interop harness mode
+        type: choice
+        required: false
+        default: ci
+        options:
+          - ci
+          - host
+          - auto
+      verbose:
+        description: Enable verbose interop logging
+        type: boolean
+        required: false
+        default: false
+      kubo_version:
+        description: Kubo release version for interop tests
+        type: string
+        required: false
+        default: v0.43.0
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  kubo-interop:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Sync submodule URLs
+        run: git submodule sync --recursive
+
+      - name: Update submodules
+        run: git submodule update --init --recursive
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential libcurl4-openssl-dev autoconf automake libtool
+
+      - name: Build secp256k1
+        run: |
+          cd nostril/deps/secp256k1
+          if [ ! -x ./configure ]; then
+            ./autogen.sh
+          fi
+          ./configure --disable-shared --enable-module-ecdh --enable-module-schnorrsig --enable-module-extrakeys
+          make -j$(nproc) libsecp256k1.la
+          cp .libs/libsecp256k1.a ../../libsecp256k1.a || true
+
+      - name: Build c-libp2p
+        run: cd c-libp2p && make all
+
+      - name: Build LMDB
+        run: cd lmdb/libraries/liblmdb && make all
+
+      - name: Build c-ipfs
+        run: make clean all
+
+      - name: Run Kubo Interoperability Harness
+        env:
+          INTEROP_MODE: ${{ inputs.interop_mode || 'ci' }}
+          VERBOSE: ${{ inputs.verbose || false }}
+          KUBO_VERSION: ${{ inputs.kubo_version || 'v0.43.0' }}
+        run: |
+          chmod +x test/scripts/test_kubo_interop.sh test/scripts/test_kubo_ipns_pubsub.sh
+          ./test/scripts/test_kubo_interop.sh
+          ./test/scripts/test_kubo_ipns_pubsub.sh
