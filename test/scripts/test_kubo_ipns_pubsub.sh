@@ -14,7 +14,7 @@ K_REPO="${TMP_DIR}/kubo_repo"
 KUBO_BIN="${KUBO_BIN:-}"
 
 if [ "${INTEROP_MODE}" = "auto" ]; then
-    if [ "${ACT:-}" = "true" ] || [ "${CI:-}" = "true" ]; then
+    if [ "${ACT_CI:-}" = "true" ] || [ "${ACT:-}" = "true" ] || [ "${CI:-}" = "true" ]; then
         INTEROP_MODE="ci"
     else
         INTEROP_MODE="host"
