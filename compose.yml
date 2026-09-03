@@ -6,4 +6,4 @@ services:
     working_dir: /workspace
     volumes:
       - .:/workspace
-    command: ["make", "test"]
+    command: ["sh", "-lc", "make clean && make test"]
