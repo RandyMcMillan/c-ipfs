@@ -1,10 +1,35 @@
 name: CI
 
 on:
+  workflow_dispatch:
+    inputs:
+      run_interop:
+        description: Run the Kubo interoperability harness
+        type: boolean
+        required: false
+        default: true
+      interop_mode:
+        description: Interop harness mode
+        type: choice
+        required: false
+        default: ci
+        options:
+          - ci
+          - host
+          - auto
+      kubo_version:
+        description: Kubo release version for interop tests
+        type: string
+        required: false
+        default: v0.43.0
   push:
     branches: [master, main]
   pull_request:
     branches: [master, main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -173,6 +198,7 @@ jobs:
 
   kubo-interop:
     name: Kubo v0.43.0 Interoperability
+    if: github.event_name != 'workflow_dispatch' || inputs.run_interop
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -208,8 +234,8 @@ jobs:
 
       - name: Run Kubo Interoperability Harness
         env:
-          INTEROP_MODE: "ci"
-          KUBO_VERSION: "v0.43.0"
+          INTEROP_MODE: ${{ inputs.interop_mode || 'ci' }}
+          KUBO_VERSION: ${{ inputs.kubo_version || 'v0.43.0' }}
         run: |
           chmod +x test/scripts/test_kubo_interop.sh test/scripts/test_kubo_ipns_pubsub.sh
           ./test/scripts/test_kubo_interop.sh
