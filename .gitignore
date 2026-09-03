@@ -20,6 +20,8 @@ NEXT_PLAN.md
 !TODOs_EASE_OF_IMPLEMENTATION.md
 !test/**
 !tmp/.gitkeep
+tmp/**
+test/tmp/
 test/*.o.tmp
 
 
