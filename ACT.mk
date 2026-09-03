@@ -1,5 +1,7 @@
 ACT ?= act
-ACT_WORKFLOW ?= .github/workflows/ci.yml
+ACT_CI_WORKFLOW ?= .github/workflows/ci.yml
+ACT_KUBO_WORKFLOW ?= .github/workflows/kubo-interop.yml
+ACT_WORKFLOW ?= $(ACT_CI_WORKFLOW)
 ACT_IMAGE ?= ghcr.io/catthehacker/ubuntu:act-latest
 ACT_CONTAINER_ARCH ?= linux/amd64
 ACT_JOB ?= build
@@ -12,6 +14,7 @@ ACT_QUIET ?= false
 ACT_REBUILD ?= false
 ACT_REUSE ?= false
 ACT_WATCH ?= false
+ACT_CLANG_BUILD ?= false
 
 ACT_PLATFORM_OVERRIDES := -P ubuntu-latest=$(ACT_IMAGE) -P macos-latest=$(ACT_IMAGE)
 
@@ -21,7 +24,8 @@ else
 ACT_ARCH_FLAG := --container-architecture $(ACT_CONTAINER_ARCH)
 endif
 
-ACT_BASE_FLAGS := -v -W $(ACT_WORKFLOW) $(ACT_PLATFORM_OVERRIDES) $(ACT_ARCH_FLAG)
+ACT_BASE_FLAGS := -v $(ACT_PLATFORM_OVERRIDES) $(ACT_ARCH_FLAG)
+ACT_WORKFLOW_FLAGS := -W $(ACT_WORKFLOW)
 ACT_OPTIONAL_FLAGS :=
 ifeq ($(ACT_BIND),true)
 ACT_OPTIONAL_FLAGS += --bind
@@ -48,7 +52,10 @@ endif
 ifeq ($(ACT_WATCH),true)
 ACT_OPTIONAL_FLAGS += --watch
 endif
-ACT_RUN_FLAGS := $(ACT_BASE_FLAGS) $(ACT_OPTIONAL_FLAGS) $(ACT_EXTRA_FLAGS)
+ifeq ($(ACT_CLANG_BUILD),true)
+ACT_OPTIONAL_FLAGS += --env CLANG_BUILD=true
+endif
+ACT_RUN_FLAGS := $(ACT_BASE_FLAGS) $(ACT_WORKFLOW_FLAGS) $(ACT_OPTIONAL_FLAGS) $(ACT_EXTRA_FLAGS)
 
 .PHONY: act-help act-build act-kubo-interop act-job act-list act-watch act-build-ubuntu act-build-macos act-kubo
 
@@ -69,13 +76,14 @@ act-help:
 	@printf '%s\n' "  ACT_JOB=build"
 	@printf '%s\n' "  ACT_REUSE=true ACT_REBUILD=true ACT_QUIET=true ACT_PRIVILEGED=true"
 	@printf '%s\n' "  ACT_LIST=true ACT_WATCH=true ACT_BIND=true ACT_DRYRUN=true"
+	@printf '%s\n' "  ACT_CLANG_BUILD=true      Also run the optional clang build"
 endif
 
 act-build:
 	$(ACT) $(ACT_RUN_FLAGS) -j build
 
 act-kubo-interop:
-	$(ACT) $(ACT_RUN_FLAGS) -j kubo-interop
+	$(ACT) $(ACT_BASE_FLAGS) -W $(ACT_KUBO_WORKFLOW) $(ACT_OPTIONAL_FLAGS) $(ACT_EXTRA_FLAGS) -j kubo-interop
 
 act-kubo: act-kubo-interop
 

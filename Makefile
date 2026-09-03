@@ -147,6 +147,7 @@ help:
 	@echo "  ACT_PRIVILEGED=true     Run containers in privileged mode"
 	@echo "  ACT_LIST=true           List workflows and jobs"
 	@echo "  ACT_WATCH=true          Watch files and rerun workflows"
+	@echo "  ACT_CLANG_BUILD=true    Also run the optional clang build"
 	@echo ""
 	@echo "Clean targets:"
 	@echo "  make clean-<name>       Clean a specific submodule or module"
