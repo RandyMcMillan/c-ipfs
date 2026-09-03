@@ -15,6 +15,8 @@ ACT_REBUILD ?= false
 ACT_REUSE ?= false
 ACT_WATCH ?= false
 ACT_CLANG_BUILD ?= false
+ACT_SHELL ?= bash
+ACT_SHELL_WORKDIR ?= /workspace
 
 ACT_PLATFORM_OVERRIDES := -P ubuntu-latest=$(ACT_IMAGE) -P macos-latest=$(ACT_IMAGE)
 
@@ -58,7 +60,7 @@ ACT_OPTIONAL_FLAGS += --env CLANG_BUILD=true
 endif
 ACT_RUN_FLAGS := $(ACT_BASE_FLAGS) $(ACT_WORKFLOW_FLAGS) $(ACT_OPTIONAL_FLAGS) $(ACT_EXTRA_FLAGS)
 
-.PHONY: act-help act-build act-kubo-interop act-job act-list act-watch act-build-ubuntu act-build-macos act-kubo
+.PHONY: act-help act-build act-kubo-interop act-job act-list act-watch act-shell act-build-ubuntu act-build-macos act-kubo
 
 ifeq ($(firstword $(MAKEFILE_LIST)),$(lastword $(MAKEFILE_LIST)))
 act-help:
@@ -68,6 +70,7 @@ act-help:
 	@printf '%s\n' "  make -f ACT.mk act-kubo-interop  Run the Kubo interop job locally"
 	@printf '%s\n' "  make -f ACT.mk act-list          List workflows and jobs"
 	@printf '%s\n' "  make -f ACT.mk act-watch         Watch repo changes and rerun the workflow"
+	@printf '%s\n' "  make -f ACT.mk act-shell         Open a shell in the act runner image"
 	@printf '%s\n' "  make -f ACT.mk act-job ACT_JOB=x Run any workflow job by name"
 	@printf '%s\n' "  make -f ACT.mk act-kubo          Alias for act-kubo-interop"
 	@printf '%s\n' ""
@@ -78,6 +81,7 @@ act-help:
 	@printf '%s\n' "  ACT_REUSE=true ACT_REBUILD=true ACT_QUIET=true ACT_PRIVILEGED=true"
 	@printf '%s\n' "  ACT_LIST=true ACT_WATCH=true ACT_BIND=true ACT_DRYRUN=true"
 	@printf '%s\n' "  ACT_CLANG_BUILD=true      Also run the optional clang build"
+	@printf '%s\n' "  ACT_SHELL=bash            Shell to launch inside the runner image"
 endif
 
 act-build:
@@ -96,6 +100,13 @@ act-list:
 
 act-watch:
 	$(ACT) $(filter-out --watch,$(ACT_RUN_FLAGS)) --watch
+
+act-shell:
+	docker run --rm -it --platform $(ACT_CONTAINER_ARCH) \
+		-v "$(CURDIR):$(ACT_SHELL_WORKDIR)" \
+		-w "$(ACT_SHELL_WORKDIR)" \
+		--entrypoint $(ACT_SHELL) \
+		$(ACT_IMAGE)
 
 # Convenience aliases for the current workflow jobs.
 act-build-ubuntu: act-build

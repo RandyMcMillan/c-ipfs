@@ -32,6 +32,8 @@ all: prepare $(SUBMODULES) $(MODULES) $(SCRIPTS) build-test-module
 
 clean: $(addprefix clean-,$(SUBMODULES)) $(addprefix clean-,$(MODULES)) clean-$(SCRIPTS) clean-build-test-module
 
+clean-all: clean
+
 rebuild: clean all
 
 selfhost: all
@@ -124,6 +126,7 @@ help:
 	@echo "  make act-kubo-interop   Run the Kubo interop job locally"
 	@echo "  make act-list           List workflows and jobs"
 	@echo "  make act-watch          Watch repo changes and rerun the workflow"
+	@echo "  make act-shell          Open a shell in the act runner image"
 	@echo "  make act-job            Run any workflow job with ACT_JOB=<job>"
 	@echo ""
 	@echo "Submodule targets:"
@@ -150,17 +153,19 @@ help:
 	@echo "  ACT_WATCH=true          Watch files and rerun workflows"
 	@echo "  ACT_DRYRUN=true         Validate workflows without creating containers"
 	@echo "  ACT_CLANG_BUILD=true    Also run the optional clang build"
+	@echo "  ACT_SHELL=bash          Shell to launch inside the runner image"
 	@echo ""
 	@echo "Examples:"
 	@echo "  make act-build"
 	@echo "  make act-build ACT_REUSE=true ACT_BIND=true"
 	@echo "  make act-watch ACT_REUSE=true ACT_BIND=true"
+	@echo "  make act-shell"
 	@echo "  make act-kubo-interop ACT_PRIVILEGED=true"
 	@echo "  make act-job ACT_JOB=build ACT_CLANG_BUILD=true"
 	@echo ""
 	@echo "Clean targets:"
 	@echo "  make clean-<name>       Clean a specific submodule or module"
 
-.PHONY: all clean rebuild selfhost prepare help test test-build test-run build-test-module clean-build-test-module
+.PHONY: all clean clean-all rebuild selfhost prepare help test test-build test-run build-test-module clean-build-test-module
 .PHONY: $(SUBMODULES) $(MODULES) $(SCRIPTS)
 .PHONY: $(addprefix clean-,$(SUBMODULES)) $(addprefix clean-,$(MODULES)) $(addprefix clean-,$(SCRIPTS))
