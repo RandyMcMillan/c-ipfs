@@ -22,7 +22,7 @@ if [ "${INTEROP_MODE}" = "auto" ]; then
 fi
 
 if [ "${INTEROP_MODE}" = "ci" ]; then
-    API_WAIT_STEPS=60
+    API_WAIT_STEPS=180
 else
     API_WAIT_STEPS=120
 fi
