@@ -13,9 +13,13 @@ SUBMODULES := c-libp2p lmdb nostril
 SCRIPTS := scripts
 
 prepare:
-	@if [ "$$(uname -s)" = "Darwin" ] && find . -type f -name '*.o' -exec file {} + 2>/dev/null | grep -vq 'Mach-O'; then \
-		echo "  CLEAN stale non-Mach-O build outputs"; \
-		find . -type f \( -name '*.o' -o -name '*.a' -o -name '*.so' -o -name '*.so.*' -o -name '*.dylib' \) -delete; \
+	@case "$$(uname -s)" in \
+		Darwin) bad_fmt='Mach-O' ;; \
+		*) bad_fmt='ELF' ;; \
+	esac; \
+	if find . -type f \( -name '*.o' -o -name '*.a' -o -name '*.so' -o -name '*.so.*' -o -name '*.dylib' -o -name '*.la' -o -name '*.lo' \) -exec file {} + 2>/dev/null | grep -vq "$$bad_fmt"; then \
+		echo "  CLEAN stale foreign build outputs"; \
+		find . -type f \( -name '*.o' -o -name '*.a' -o -name '*.so' -o -name '*.so.*' -o -name '*.dylib' -o -name '*.la' -o -name '*.lo' \) -delete; \
 	fi
 
 # ---------------------------------------------------------------------------
