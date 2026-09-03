@@ -31,7 +31,6 @@ typedef struct fs_repo {
     pthread_mutex_t inproc_mtx;
 } fs_repo_t;
 
-static fs_repo_t *g_repo_instance = NULL;
 static pthread_mutex_t g_repo_global_mtx = PTHREAD_MUTEX_INITIALIZER;
 
 static int platform_lock_file(fs_repo_t *repo, bool non_blocking) {
