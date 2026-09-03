@@ -72,6 +72,22 @@ jobs:
       - name: Build LMDB
         run: cd lmdb/libraries/liblmdb && make all
 
+      - name: Build BoringSSL
+        run: |
+          if [ ! -f boringssl/build-c-ipfs/libssl.a ]; then
+            cmake -B boringssl/build-c-ipfs -S boringssl -DCMAKE_BUILD_TYPE=Release
+            cmake --build boringssl/build-c-ipfs -j$(nproc)
+          fi
+
+      - name: Build lsquic
+        run: |
+          if [ ! -f lsquic/build-c-ipfs/src/liblsquic/liblsquic.a ]; then
+            cmake -B lsquic/build-c-ipfs -S lsquic -DCMAKE_BUILD_TYPE=Release \
+              -DSSLLIB_INCLUDE="$PWD/boringssl/include" \
+              -DLIBSSL_LIB="$PWD/boringssl/build-c-ipfs"
+            cmake --build lsquic/build-c-ipfs -j$(nproc)
+          fi
+
       - name: Build c-ipfs
         run: |
           if [ "${BIND:-${ACT_BIND:-false}}" = "true" ]; then
