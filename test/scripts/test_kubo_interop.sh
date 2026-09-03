@@ -117,6 +117,7 @@ IPFS_PATH="${K_REPO}" "${KUBO_BIN}" init --profile=test
 IPFS_PATH="${K_REPO}" "${KUBO_BIN}" config Addresses.Swarm --json '["/ip4/127.0.0.1/tcp/4011"]'
 IPFS_PATH="${K_REPO}" "${KUBO_BIN}" config Addresses.API "/ip4/127.0.0.1/tcp/5011"
 IPFS_PATH="${K_REPO}" "${KUBO_BIN}" config Addresses.Gateway "/ip4/127.0.0.1/tcp/8081"
+IPFS_PATH="${K_REPO}" "${KUBO_BIN}" config Swarm.Transports.Security.SECIO true
 
 echo "=== Starting c-ipfs daemon ==="
 IPFS_PATH="${C_REPO}" "${C_IPFS_BIN}" daemon > "${TMP_DIR}/c_ipfs.log" 2>&1 &
