@@ -159,7 +159,7 @@
 
 ### 33. `cmd/ipfs/init.c` / `repo/init.c` — Init completeness and config import
 **Status:** ✅ Done
-**Completed:** Daemon lock check, IPNS keyspace publish, parameter validation (bits >= 1024), default README asset, config file import stub, config import plumbing wired through `make_ipfs_repository`.
+**Completed:** Daemon lock check, IPNS keyspace publish, parameter validation (bits >= 1024), default README asset, config file import stub, config import plumbing wired through `make_ipfs_repository`. **JSON config merge fully implemented** (`repo_config_merge_json`) with jsmn parsing overlay for Datastore, Addresses, Bootstrap, and Replication fields. Unit test `test_repo_config_merge_json` verifies correct overlay behavior.
 
 ### 34. `path/resolver.c:104` — Complete path resolver
 **Status:** ✅ Done

@@ -57,12 +57,14 @@ CID, multihash, and multibase correctness are prerequisites for IPLD, UnixFS, Bi
 - Support balanced and trickle layouts.
 - Add configurable chunking.
 - Improve repo semantics for flatfs, transactional metadata, garbage collection, locking, and crash-safe writes.
+- Support JSON config import with field-level merge overlay.
 
 ### Exit criteria
 
 - `add`, `cat`, `ls`, and `get` interoperate with Kubo for common UnixFS trees.
 - Repo state survives restart and GC scenarios without corruption.
 - Metadata and layout choices round-trip correctly.
+- `ipfs init` accepts an optional config file and correctly overlays imported values onto defaults.
 
 ## Phase 4: libp2p compatibility
 
