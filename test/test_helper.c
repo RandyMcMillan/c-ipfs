@@ -198,10 +198,32 @@ static void _mkdir(const char *dir, const mode_t mode) {
  * @param peer_id a place to store the generated peer id
  * @returns true(1) on success, otherwise false(0)
  */
+static int force_remove_directory(const char *path) {
+	// First attempt: normal recursive removal
+	if (remove_directory(path))
+		return 1;
+
+	// Second attempt: force-remove any remaining files (including stale locks)
+	DIR *d = opendir(path);
+	if (d) {
+		struct dirent *p;
+		while ((p = readdir(d))) {
+			if (!strcmp(p->d_name, ".") || !strcmp(p->d_name, ".."))
+				continue;
+			char buf[512];
+			snprintf(buf, sizeof(buf), "%s/%s", path, p->d_name);
+			unlink(buf);
+		}
+		closedir(d);
+	}
+	rmdir(path);
+	return !os_utils_file_exists(path);
+}
+
 int drop_and_build_repository(const char* path, int swarm_port, struct Libp2pVector* bootstrap_peers, char **peer_id) {
 
 	if (os_utils_file_exists(path)) {
-		if (!drop_repository(path)) {
+		if (!force_remove_directory(path)) {
 			return 0;
 		}
 	}
