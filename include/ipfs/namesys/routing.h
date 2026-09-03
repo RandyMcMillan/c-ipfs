@@ -36,5 +36,5 @@
     int ipfs_namesys_routing_check_EOL (struct timespec *ts, struct namesys_pb *pb);
 
     int ipfs_namesys_routing_get_value (char*, char*);
-    int ipfs_namesys_routing_getpublic_key (char*, unsigned char* multihash, size_t multihash_size);
+    int ipfs_namesys_routing_getpublic_key (unsigned char *out_pubkey, size_t *out_len, unsigned char* multihash, size_t multihash_size);
 #endif // IPNS_NAMESYS_ROUTING_H

@@ -32,6 +32,7 @@ OBJS = main.o \
 	../importer/importer.o ../importer/exporter.o ../importer/resolver.o \
 	../journal/*.o \
 	../path/path.o \
+	../path/resolver.o \
 	../merkledag/merkledag.o ../merkledag/node.o \
 	../multibase/multibase.o \
 	../namesys/*.o \

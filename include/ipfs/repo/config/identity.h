@@ -23,6 +23,13 @@ int repo_config_identity_init(struct Identity* identity, unsigned long num_bits_
 int repo_config_identity_build_private_key(struct Identity* identity, const char* base64);
 
 /***
+ * Clears resources held by Identity without freeing the struct itself.
+ * Used between retry attempts during key generation.
+ * @param identity the identity to clear
+ */
+void repo_config_identity_clear(struct Identity* identity);
+
+/*** 
  * Frees resources held by Identity
  * @param identity the identity that we're cleaning up
  * @returns true(0)

@@ -1,7 +1,50 @@
+#include <stdlib.h>
+#include <string.h>
+#include <stdio.h>
+
 #include "ipfs/cid/cid.h"
 #include "ipfs/path/path.h"
+#include "ipfs/merkledag/node.h"
+#include "ipfs/merkledag/merkledag.h"
+#include "ipfs/repo/fsrepo/fs_repo.h"
+#include "ipfs/util/errs.h"
 
-Resolver* ipfs_path_new_basic_resolver (DAGService *ds)
+/* Forward declarations for types used in this module */
+typedef struct FSRepo DAGService;
+typedef struct FSRepo Context;
+
+typedef struct Resolver {
+    DAGService *DAG;
+    int (*ResolveOnce)(struct NodeLink **lnk, Context *ctx, DAGService *ds, struct HashtableNode **nd, char *name);
+} Resolver;
+
+/* Forward declarations */
+int ipfs_path_resolve_single(struct NodeLink **lnk, Context *ctx, DAGService *ds, struct HashtableNode **nd, char *name);
+int ipfs_path_resolve_path_components(struct HashtableNode ***nd, Context *ctx, Resolver *s, char *fpath);
+int ipfs_path_resolve_links(struct HashtableNode ***result, Context *ctx, DAGService *ds, struct HashtableNode *ndd, char **names);
+
+/**
+ * Find a link by name within a node.
+ * @param lnk where to store the found link (pointer into node, do not free)
+ * @param nd the node to search
+ * @param name the link name
+ * @returns 0 on success, ErrNoLink if not found
+ */
+static int ipfs_path_resolve_link(struct NodeLink **lnk, struct HashtableNode *nd, char *name)
+{
+    if (!nd || !name) return ErrNoLink;
+    struct NodeLink *curr = nd->head_link;
+    while (curr != NULL) {
+        if (curr->name && strcmp(curr->name, name) == 0) {
+            *lnk = curr;
+            return 0;
+        }
+        curr = curr->next;
+    }
+    return ErrNoLink;
+}
+
+Resolver* ipfs_path_new_basic_resolver(DAGService *ds)
 {
     Resolver *ret = malloc(sizeof(Resolver));
     if (!ret) return NULL;
@@ -12,26 +55,32 @@ Resolver* ipfs_path_new_basic_resolver (DAGService *ds)
 
 // ipfs_path_split_abs_path clean up and split fpath. It extracts the first component (which
 // must be a Multihash) and return it separately.
-int ipfs_path_split_abs_path (struct Cid* cid, char ***parts, char *fpath)
+int ipfs_path_split_abs_path(struct Cid* cid, char ***parts, char *fpath)
 {
     *parts = ipfs_path_split_segments(fpath);
 
-    if (strcmp (**parts, "ipfs") == 0) *parts++;
+    if (strcmp(**parts, "ipfs") == 0) (*parts)++;
 
     // if nothing, bail.
     if (!**parts) return ErrNoComponents;
 
     // first element in the path is a cid
-    cid_decode_from_string(**parts, strlen(**parts), cid);
+    struct Cid *temp_cid = NULL;
+    if (!ipfs_cid_decode_hash_from_base58((unsigned char*)**parts, strlen(**parts), &temp_cid)) {
+        ipfs_path_free_segments(parts);
+        return ErrCidDecode;
+    }
+    *cid = *temp_cid;
+    free(temp_cid);
     return 0;
 }
 
 // ipfs_path_resolve_path fetches the node for given path. It returns the last item
 // returned by ipfs_path_resolve_path_components.
-int ipfs_path_resolve_path(Node **nd, Context ctx, Resolver *s, char *fpath)
+int ipfs_path_resolve_path(struct HashtableNode **nd, Context *ctx, Resolver *s, char *fpath)
 {
-    int err = IsValid(fpath);
-    Node **ndd;
+    int err = ipfs_path_is_valid(fpath);
+    struct HashtableNode **ndd;
 
     if (err) {
         return err;
@@ -43,22 +92,32 @@ int ipfs_path_resolve_path(Node **nd, Context ctx, Resolver *s, char *fpath)
     if (ndd == NULL) {
         return ErrBadPath;
     }
-    while(*ndd) {
+    while (*ndd) {
         *nd = *ndd;
         ndd++;
     }
     return 0;
 }
 
-int ipfs_path_resolve_single(NodeLink **lnk, Context ctx, DAGService *ds, Node **nd, char *name)
+int ipfs_path_resolve_single(struct NodeLink **lnk, Context *ctx, DAGService *ds, struct HashtableNode **nd, char *name)
 {
-    return ipfs_path_resolve_link(lnk, name);
+    (void)ctx;
+    int err = ipfs_path_resolve_link(lnk, *nd, name);
+    if (err) return err;
+
+    /* Fetch the target node from the DAG service so the caller can continue walking */
+    struct HashtableNode *next_node = NULL;
+    if (!ipfs_merkledag_get((*lnk)->hash, (*lnk)->hash_size, &next_node, ds)) {
+        return ErrNoLink;
+    }
+    *nd = next_node;
+    return 0;
 }
 
 // ipfs_path_resolve_path_components fetches the nodes for each segment of the given path.
 // It uses the first path component as a hash (key) of the first node, then
 // resolves all other components walking the links, with ipfs_path_resolve_links.
-int ipfs_path_resolve_path_components(Node ***nd, Context ctx, Resolver *s, char *fpath)
+int ipfs_path_resolve_path_components(struct HashtableNode ***nd, Context *ctx, Resolver *s, char *fpath)
 {
     int err;
     struct Cid h;
@@ -69,13 +128,16 @@ int ipfs_path_resolve_path_components(Node ***nd, Context ctx, Resolver *s, char
         return err;
     }
 
-    //log.Debug("resolve dag get");
-    //*nd = s->DAG.Get(ctx, h);
-    //if (nd == DAG_ERR_VAL) {
-    //   return DAG_ERR_VAL;
-    //}
+    /* Fetch the root node from the DAG service */
+    struct HashtableNode *root = NULL;
+    if (!ipfs_merkledag_get(h.hash, h.hash_length, &root, s->DAG)) {
+        ipfs_path_free_segments(&parts);
+        return ErrBadPath;
+    }
 
-    return ipfs_path_resolve_links(ctx, *nd, parts);
+    err = ipfs_path_resolve_links(nd, ctx, s->DAG, root, parts);
+    ipfs_path_free_segments(&parts);
+    return err;
 }
 
 // ipfs_path_resolve_links iteratively resolves names by walking the link hierarchy.
@@ -85,44 +147,49 @@ int ipfs_path_resolve_path_components(Node ***nd, Context ctx, Resolver *s, char
 //
 // ipfs_path_resolve_links(nd, []string{"foo", "bar", "baz"})
 // would retrieve "baz" in ("bar" in ("foo" in nd.Links).Links).Links
-int ipfs_path_resolve_links(Node ***result, Context ctx, Node *ndd, char **names)
+int ipfs_path_resolve_links(struct HashtableNode ***result, Context *ctx, DAGService *ds, struct HashtableNode *ndd, char **names)
 {
-    int err, idx = 0, l;
-    NodeLink *lnk;
-    Node *nd;
+    (void)ctx;
+    int err, idx = 0;
+    struct NodeLink *lnk = NULL;
+    struct HashtableNode *nd = ndd;
 
-    *result = calloc (sizeof(Node*), ipfs_path_segments_length(names) + 1);
+    int seg_count = ipfs_path_segments_length(names);
+    *result = calloc(sizeof(struct HashtableNode*), seg_count + 1);
     if (!*result) {
         return -1;
     }
-    memset (*result, NULL, sizeof(Node*) * (ipfs_path_segments_length(names)+1));
+    memset(*result, 0, sizeof(struct HashtableNode*) * (seg_count + 1));
 
-    *result[idx++] = ndd;
-    nd = ndd; // dup arg workaround
+    (*result)[idx++] = ndd;
 
     while (*names) {
-        //TODO
-        //var cancel context.CancelFunc
-        //ctx, cancel = context.WithTimeout(ctx, time.Minute)
-        //defer cancel()
-
-        // for each of the path components
-        err = ipfs_path_resolve_link(&lnk, *names);
+        err = ipfs_path_resolve_link(&lnk, nd, *names);
         if (err) {
-            char msg[51];
-            *result[idx] = NULL;
-            snprintf(msg, sizeof(msg), ErrPath[ErrNoLinkFmt], *names, nd->Cid);
-            if (ErrPath[ErrNoLink]) {
-                free(ErrPath[ErrNoLink]);
+            char msg[256];
+            snprintf(msg, sizeof(msg), "no link named \"%s\" under %s", *names, nd->hash ? (char*)nd->hash : "unknown");
+            if (Err[ErrNoLink]) {
+                free(Err[ErrNoLink]);
             }
-            l = strlen(msg) + 1;
-            ErrPath[ErrNoLink] = malloc(l);
-            if (ErrPath[ErrNoLink]) {
-                memcpy(ErrPath[ErrNoLink], msg, l);
+            Err[ErrNoLink] = malloc(strlen(msg) + 1);
+            if (Err[ErrNoLink]) {
+                memcpy(Err[ErrNoLink], msg, strlen(msg) + 1);
             }
-            free (*result);
+            free(*result);
+            *result = NULL;
             return ErrNoLink;
         }
+
+        /* Fetch the next node via the DAG service */
+        struct HashtableNode *next = NULL;
+        if (!ipfs_merkledag_get(lnk->hash, lnk->hash_size, &next, ds)) {
+            free(*result);
+            *result = NULL;
+            return ErrNoLink;
+        }
+
+        nd = next;
+        (*result)[idx++] = nd;
         names++;
     }
     return 0;

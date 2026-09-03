@@ -11,6 +11,67 @@
 #include "ipfs/cid/cid.h"
 #include "ipfs/path/path.h"
 #include "libp2p/crypto/encoding/base58.h"
+#include "libp2p/crypto/rsa.h"
+#include "libp2p/crypto/key.h"
+
+/**
+ * Retrieve the public key for a given multihash from the routing layer.
+ * NOTE: Stub — full DHT public-key retrieval is not yet wired.
+ * @param out_pubkey buffer to receive the public key protobuf bytes
+ * @param out_len on input, max buffer size; on output, bytes written
+ * @param multihash the peer id multihash
+ * @param multihash_size size of multihash
+ * @returns 0 on success, -1 on error
+ */
+int ipfs_namesys_routing_getpublic_key(unsigned char *out_pubkey, size_t *out_len, unsigned char* multihash, size_t multihash_size) {
+    (void)out_pubkey;
+    (void)out_len;
+    (void)multihash;
+    (void)multihash_size;
+    /* TODO: Query DHT at /pk/<peer_id> or peerstore to obtain the
+     * protobuf-encoded public key for this multihash. */
+    return -1;
+}
+
+/**
+ * Verify an RSA signature using a protobuf-encoded public key.
+ * @param pubkey_pb protobuf-encoded PublicKey bytes
+ * @param pubkey_pb_len length of pubkey_pb
+ * @param message the signed message
+ * @param message_len length of message
+ * @param signature the signature bytes
+ * @param signature_len length of signature
+ * @param out_ok set to 1 if valid, 0 otherwise
+ * @returns 0 on success (verification performed), -1 on error
+ */
+int libp2p_crypto_rsa_verify_from_pubkey(
+    const unsigned char *pubkey_pb, size_t pubkey_pb_len,
+    const unsigned char *message, size_t message_len,
+    const unsigned char *signature, size_t signature_len,
+    int *out_ok)
+{
+    struct PublicKey *pubkey = NULL;
+    *out_ok = 0;
+
+    if (!libp2p_crypto_public_key_protobuf_decode((unsigned char*)pubkey_pb, pubkey_pb_len, &pubkey)) {
+        return -1;
+    }
+
+    if (pubkey->type != KEYTYPE_RSA) {
+        libp2p_crypto_public_key_free(pubkey);
+        return -1; /* Only RSA supported by current crypto layer */
+    }
+
+    struct RsaPublicKey rsa_pubkey = {0};
+    rsa_pubkey.der = (unsigned char*)pubkey->data;
+    rsa_pubkey.der_length = pubkey->data_size;
+
+    *out_ok = libp2p_crypto_rsa_verify(&rsa_pubkey, message, message_len, signature);
+
+    /* Do not free pubkey->data — it is owned by the PublicKey struct */
+    libp2p_crypto_public_key_free(pubkey);
+    return 0;
+}
 
 char* ipfs_routing_cache_get (char *key, struct ipns_entry *ientry)
 {
@@ -159,7 +220,8 @@ int ipfs_namesys_routing_resolve_once (char **path, char *name, int depth, char 
     unsigned char* multihash = NULL;
     size_t multihash_size = 0;
     char *h, *string, val[8];
-    char pubkey[60];
+    unsigned char pubkey[1024];
+    size_t pubkey_len = 0;
 
     if (!path || !name || !prefix) {
         return ErrInvalidParam;
@@ -215,7 +277,8 @@ int ipfs_namesys_routing_resolve_once (char **path, char *name, int depth, char 
     //}
 
     // name should be a public key retrievable from ipfs
-    err = ipfs_namesys_routing_getpublic_key (pubkey, multihash, multihash_size);
+    pubkey_len = sizeof(pubkey);
+    err = ipfs_namesys_routing_getpublic_key(pubkey, &pubkey_len, multihash, multihash_size);
 	free(multihash); // done with multihash for now
 	multihash = NULL;
 	multihash_size = 0;
@@ -223,12 +286,21 @@ int ipfs_namesys_routing_resolve_once (char **path, char *name, int depth, char 
         return err;
     }
 
-    // TODO: implement libp2p_crypto_verify
-    // check sig with pk
-    err = libp2p_crypto_verify(ipns_entry_data_for_sig(pb->IpnsEntry), pb->IpnsEntry->signature, &ok);
+    /* Verify IPNS signature using RSA public key.
+     * NOTE: Full verification requires fetching the public key from the
+     * DHT or peerstore. The ipfs_namesys_routing_getpublic_key stub
+     * above currently returns an error, so this path is unreachable
+     * until public key retrieval is wired to the routing layer. */
+    err = libp2p_crypto_rsa_verify_from_pubkey(
+            pubkey, pubkey_len,
+            (const unsigned char*)ipns_entry_data_for_sig(pb->IpnsEntry),
+            strlen(ipns_entry_data_for_sig(pb->IpnsEntry)),
+            (const unsigned char*)pb->IpnsEntry->signature,
+            pb->IpnsEntry->signature_size,
+            &ok);
     if (err || !ok) {
         char buf[500];
-        snprintf(buf, sizeof(buf), Err[ErrInvalidSignatureFmt], pubkey);
+        snprintf(buf, sizeof(buf), Err[ErrInvalidSignatureFmt], "<pubkey>");
         l = strlen(buf) + 1;
         Err[ErrInvalidSignature] = malloc(l);
         if (!Err[ErrInvalidSignature]) {

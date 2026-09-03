@@ -37,6 +37,7 @@ OBJS = testit.o test_helper.o \
 	../namesys/name.o \
 	../namesys/verify.o \
 	../path/path.o \
+	../path/resolver.o \
 	../pin/pin.o ../pin/pin_gc.o \
 	../pubsub/ipns_pubsub.o ../pubsub/gossipsub.o \
 	../repo/init.o \

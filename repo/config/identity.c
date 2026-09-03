@@ -75,14 +75,28 @@ int repo_config_identity_new(struct Identity** identity) {
 	return 1;
 }
 
+void repo_config_identity_clear(struct Identity* identity) {
+	if (identity == NULL)
+		return;
+	if (identity->private_key.public_key_der != NULL) {
+		free(identity->private_key.public_key_der);
+		identity->private_key.public_key_der = NULL;
+		identity->private_key.public_key_length = 0;
+	}
+	if (identity->private_key.der != NULL) {
+		free(identity->private_key.der);
+		identity->private_key.der = NULL;
+		identity->private_key.der_length = 0;
+	}
+	if (identity->peer != NULL) {
+		libp2p_peer_free(identity->peer);
+		identity->peer = NULL;
+	}
+}
+
 int repo_config_identity_free(struct Identity* identity) {
 	if (identity != NULL) {
-		if (identity->private_key.public_key_der != NULL)
-			free(identity->private_key.public_key_der);
-		if (identity->private_key.der != NULL)
-			free(identity->private_key.der);
-		if (identity->peer != NULL)
-			libp2p_peer_free(identity->peer);
+		repo_config_identity_clear(identity);
 		free(identity);
 	}
 	return 1;
