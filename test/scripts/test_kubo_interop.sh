@@ -144,12 +144,31 @@ KUBO_ID=$(IPFS_PATH="${K_REPO}" "${KUBO_BIN}" id -f="<id>")
 KUBO_ADDR="/ip4/127.0.0.1/tcp/4011/p2p/${KUBO_ID}"
 echo "Kubo Multiaddr: ${KUBO_ADDR}"
 echo "=== Test 1: Swarm connect c-ipfs <-> Kubo ==="
-for _ in $(seq 1 "${CONNECT_WAIT_STEPS}"); do
-    if IPFS_PATH="${K_REPO}" "${KUBO_BIN}" swarm connect "${C_PEER_ADDR}" >/dev/null 2>&1; then
+if [ "${VERBOSE}" = "true" ]; then
+    echo "c-ipfs peer: ${C_ID}"
+    echo "c-ipfs address: ${C_PEER_ADDR}"
+    echo "Kubo peer: ${KUBO_ID}"
+    echo "Kubo address: ${KUBO_ADDR}"
+fi
+CONNECTED=0
+for attempt in $(seq 1 "${CONNECT_WAIT_STEPS}"); do
+    if [ "${VERBOSE}" = "true" ]; then
+        echo "connect attempt ${attempt}/${CONNECT_WAIT_STEPS}"
+    fi
+    if IPFS_PATH="${K_REPO}" "${KUBO_BIN}" swarm connect "${C_PEER_ADDR}"; then
+        CONNECTED=1
         break
+    fi
+    if [ "${VERBOSE}" = "true" ]; then
+        echo "current Kubo swarm peers:"
+        IPFS_PATH="${K_REPO}" "${KUBO_BIN}" swarm peers || true
     fi
     sleep 0.5
 done
+if [ "${CONNECTED}" -ne 1 ]; then
+    echo "Failed to connect Kubo to c-ipfs after ${CONNECT_WAIT_STEPS} attempts"
+    exit 1
+fi
 
 for _ in $(seq 1 20); do
     if IPFS_PATH="${K_REPO}" "${KUBO_BIN}" swarm peers 2>/dev/null | grep -q "${C_ID}"; then
