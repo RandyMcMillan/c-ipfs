@@ -613,6 +613,10 @@ int ipfs_nostr(int argc, char** argv) {
         curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
         curl_easy_setopt(curl, CURLOPT_FAILONERROR, 1L);
         CURLcode res = curl_easy_perform(curl);
+        long http_code = 0;
+        if (res == CURLE_OK) {
+            curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
+        }
         curl_easy_cleanup(curl);
         fclose(fp);
 
@@ -621,8 +625,7 @@ int ipfs_nostr(int argc, char** argv) {
             goto cleanup;
         }
 
-        long http_code = 0;
-        if (curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code) == CURLE_OK && http_code >= 400) {
+        if (http_code >= 400) {
             fprintf(stderr, "Error: download failed with HTTP status %ld\n", http_code);
             goto cleanup;
         }
