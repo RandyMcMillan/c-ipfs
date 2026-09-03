@@ -995,9 +995,13 @@ int ipfs_repo_fsrepo_open(struct FSRepo* repo) {
 	// check the version, and make sure it is correct
 	int version = fs_repo_read_version(repo->path);
 	if (version >= 0 && version != IPFS_REPO_VERSION) {
-		libp2p_logger_error("fs_repo", "Repo version mismatch: expected %d, got %d\n", IPFS_REPO_VERSION, version);
-		fs_repo_release_lock(repo);
-		return 0;
+		if (version >= 12 && version <= 18) {
+			libp2p_logger_info("fs_repo", "Repo version %d detected (native %d). Continuing with best-effort compatibility.\n", version, IPFS_REPO_VERSION);
+		} else {
+			libp2p_logger_error("fs_repo", "Repo version mismatch: expected %d, got %d\n", IPFS_REPO_VERSION, version);
+			fs_repo_release_lock(repo);
+			return 0;
+		}
 	}
 	// make sure the directory is writable
 	if (!fs_repo_check_writable(repo->path)) {
