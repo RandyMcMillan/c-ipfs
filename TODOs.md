@@ -210,7 +210,7 @@
 | `routing/` | 5 | Offline storage + duplicate peers |
 | `blocks/` | 0 | Storage sharding — resolved |
 | `journal/` | 0 | Replication / file grouping — resolved |
-| `transport/` | 2 | QUIC/WS listen and close stubs |
+| `transport/` | 0 | Registry, stubs, and build integration — resolved |
 | Other | 12 | — |
 
 ---
@@ -222,5 +222,8 @@
 3. ✅ **`errno` checks added to `flatfs.c`** — `EMFILE`/`ENOSPC` now propagated.
 4. **Complete `cmd/ipfs/init.c` TODOs** before claiming CLI conformance.
 5. ✅ **`namesys/routing.c:226`** (`libp2p_crypto_verify`) resolved — Ed25519 + secp256k1 stubs via OpenSSL.
-6. **Wire transport registry into swarm dialer** — registry exists but is not yet integrated with `core/swarm.c` or c-libp2p `TransportDialer`.
-7. **Implement QUIC/WS `listen` stubs** — `transport/quic_transport.c` and `transport/ws_transport.c` have `listen = NULL`.
+6. ✅ **Wire transport registry into swarm dialer** — `transport/registry.c` created, tests added, integrated with `core/ipfs_node.c` and `core/swarm.c` fallback dial.
+7. ✅ **Implement QUIC/WS `listen` stubs** — `quic_listen` and `ws_listen` implemented with socket bind and context creation; `close` callbacks implemented.
+8. ✅ **libwebsockets submodule integrated** — CMake build produces static `.a`, linked into `main/ipfs` and `test/test_ipfs`.
+9. ✅ **Fix `ipfs_node_online_new` mode bug** — `MODE_OFFLINE` → `MODE_ONLINE` prevents segfault on Ubuntu CI during node teardown.
+10. **Add BoringSSL submodule and wire lsquic build** — lsquic requires BoringSSL or OpenSSL 3.2+; neither available on Ubuntu CI or macOS LibreSSL.

@@ -209,6 +209,7 @@ These are not explicitly marked as TODOs in the code but are implied by the anal
 
 ### 40. QUIC / WebSocket transports
 **Why:** Modern Kubo expects these. Current c-libp2p only has TCP.
+**Status:** Partial — transport registry, dial/listen/close stubs, and libwebsockets build integration are done. QUIC blocked on BoringSSL submodule + lsquic build.
 **Complexity:** Transport abstraction extension; security handshake integration.
 
 ### 41. pubsub for IPNS

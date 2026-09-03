@@ -10,16 +10,22 @@ As of 2026-09-03, the repository has moved past the earlier cross-OS build failu
 - `test_transport_registry_live_tcp_dial` now exercises the real multistream helper path again, after fixing the helper to negotiate on a raw connection and avoid the null `SessionContext` crash.
 - `c-libp2p` now has a discovery manager scaffold, a real mDNS UDP service, AutoNAT wire encoders, and an mplex scaffold wired into the build.
 - Focused discovery tests for the new mDNS and AutoNAT helpers pass locally.
+- **Transport registry created and wired into node lifecycle:** `transport/registry.c`, `include/ipfs/transport/registry.h`, and tests are in place. `ipfs_node_online_new` populates the registry with QUIC and WebSocket transports.
+- **libwebsockets submodule integrated into build system:** `libwebsockets/build-c-ipfs/lib/libwebsockets.a` is produced via CMake and linked into `main/ipfs` and `test/test_ipfs`.
+- **QUIC and WebSocket listen stubs implemented:** `quic_listen` and `ws_listen` are implemented in `transport/quic_transport.c` and `transport/ws_transport.c` (compiled conditionally via `HAS_LSQUIC` / `HAS_LIBWEBSOCKETS`).
+- **Critical segfix fixed:** `ipfs_node_online_new` now correctly sets `local_node->mode = MODE_ONLINE` (was `MODE_OFFLINE`), preventing `ipfs_node_free` from calling `ipfs_routing_offline_free` on a Kademlia routing object. This resolves the Ubuntu CI segfault in `test_core_api_startup_shutdown` and the Kubo interop daemon crash.
 
 ### Current blocker
 
-The remaining work is to turn the discovery scaffolding into fully interoperable relay/AutoNAT/hole-punching behavior and validate it against real peers. The broader suite still needs another full pass to catch any regressions outside the discovery path.
+lsquic requires a QUIC-capable TLS library (BoringSSL or OpenSSL 3.2+). Ubuntu CI ships OpenSSL 3.0.x (no QUIC), and macOS uses LibreSSL 3.3.6 (no QUIC). We must add BoringSSL as a submodule, build it, and wire lsquic into the Make-based build before the QUIC transport can be enabled at compile time.
 
 ### Near-term next steps
 
-1. Exercise the new mDNS/discovery path against live peers and confirm announcements are observed end-to-end.
-2. Expand AutoNAT, relay, and hole-punching beyond the current scaffolding where protocol behavior is still partial.
-3. Re-run the broader test suite and watch for regressions in the API, routing, and multi-node cases.
+1. **Add BoringSSL submodule** and build static libraries (`libssl.a`, `libcrypto.a`) via CMake.
+2. **Build lsquic against BoringSSL** and produce `liblsquic.a`.
+3. **Wire BoringSSL + lsquic into `transport/Makefile`, `main/Makefile`, and `test/Makefile`** behind `HAS_LSQUIC=1`.
+4. **Validate Kubo interop test** after the MODE_ONLINE fix (re-run CI and check daemon stability).
+5. **Re-run the broader test suite** and watch for regressions in the API, routing, and multi-node cases.
 
 ---
 
@@ -75,11 +81,19 @@ Known Issues:
 Compliance Gap: No Kubo interoperability evidence; crash-safety improved with locking
 Phase 4: libp2p Compatibility (PARTIAL)
 
-Status: Core networking exists, transport stubs implemented but not integrated
+Status: Core networking exists, transport registry implemented and wired into node lifecycle
+Recent Changes:
+- `transport/registry.c` and `include/ipfs/transport/registry.h` implement a linked-list transport registry with add/remove/dial/free operations.
+- Transport registry tests registered in `test/testit.c` (`test_transport_registry_basic`, `test_transport_registry_live_tcp_dial`).
+- `ipfs_node_online_new` populates the registry with QUIC and WebSocket transports on startup; `ipfs_node_free` tears it down.
+- `core/swarm.c` falls back to transport registry dial when c-libp2p dialer fails.
+- `transport/quic_transport.c` and `transport/ws_transport.c` implement dial/listen/close stubs (compiled conditionally via `HAS_LSQUIC` / `HAS_LIBWEBSOCKETS`).
+- libwebsockets submodule builds successfully via CMake and is linked into `main/ipfs` and `test/test_ipfs`.
 Critical Gaps:
-⚠️ QUIC transport stub in `transport/quic_transport.c` (requires lsquic at compile time)
-⚠️ WebSocket transport stub in `transport/ws_transport.c` (requires libwebsockets at compile time)
-❌ Neither transport is wired into the active dialer or listener
+⚠️ lsquic cannot compile without BoringSSL or OpenSSL 3.2+; neither is available on Ubuntu CI or macOS LibreSSL
+⚠️ QUIC transport is stub-only (`HAS_LSQUIC` undefined); needs BoringSSL submodule + lsquic build integration
+⚠️ WebSocket transport is stub-only (`HAS_LIBWEBSOCKETS` undefined); needs `LWS_PRE` macro and context creation validated
+⚠️ Transport registry is wired but not yet exercised in active dialer for real multiaddr negotiation
 ⚠️ Modern security negotiation (Noise, TLS) unclear
 ⚠️ yamux multiplexer status unclear
 ⚠️ NAT traversal, relay, AutoNAT, hole punching, and mDNS are partially implemented or scaffolded
@@ -356,11 +370,19 @@ Known Issues:
 Compliance Gap: No Kubo interoperability evidence; crash-safety improved with locking
 Phase 4: libp2p Compatibility (PARTIAL)
 
-Status: Core networking exists, transport stubs implemented but not integrated
+Status: Core networking exists, transport registry implemented and wired into node lifecycle
+Recent Changes:
+- `transport/registry.c` and `include/ipfs/transport/registry.h` implement a linked-list transport registry with add/remove/dial/free operations.
+- Transport registry tests registered in `test/testit.c` (`test_transport_registry_basic`, `test_transport_registry_live_tcp_dial`).
+- `ipfs_node_online_new` populates the registry with QUIC and WebSocket transports on startup; `ipfs_node_free` tears it down.
+- `core/swarm.c` falls back to transport registry dial when c-libp2p dialer fails.
+- `transport/quic_transport.c` and `transport/ws_transport.c` implement dial/listen/close stubs (compiled conditionally via `HAS_LSQUIC` / `HAS_LIBWEBSOCKETS`).
+- libwebsockets submodule builds successfully via CMake and is linked into `main/ipfs` and `test/test_ipfs`.
 Critical Gaps:
-⚠️ QUIC transport stub in `transport/quic_transport.c` (requires lsquic at compile time)
-⚠️ WebSocket transport stub in `transport/ws_transport.c` (requires libwebsockets at compile time)
-❌ Neither transport is wired into the active dialer or listener
+⚠️ lsquic cannot compile without BoringSSL or OpenSSL 3.2+; neither is available on Ubuntu CI or macOS LibreSSL
+⚠️ QUIC transport is stub-only (`HAS_LSQUIC` undefined); needs BoringSSL submodule + lsquic build integration
+⚠️ WebSocket transport is stub-only (`HAS_LIBWEBSOCKETS` undefined); needs `LWS_PRE` macro and context creation validated
+⚠️ Transport registry is wired but not yet exercised in active dialer for real multiaddr negotiation
 ⚠️ Modern security negotiation (Noise, TLS) unclear
 ⚠️ yamux multiplexer status unclear
 ⚠️ NAT traversal, relay, AutoNAT, hole punching, and mDNS are partially implemented or scaffolded

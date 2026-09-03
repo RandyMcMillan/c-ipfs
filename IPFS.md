@@ -81,6 +81,24 @@ CID, multihash, and multibase correctness are prerequisites for IPLD, UnixFS, Bi
 - Improve connection/resource management.
 - Add NAT traversal, relay, AutoNAT, hole punching, and mDNS.
 
+### Completed
+
+- ✅ Transport registry (`transport/registry.c`) with add/remove/dial/free and unit tests.
+- ✅ QUIC and WebSocket dial/listen/close stubs implemented in `transport/quic_transport.c` and `transport/ws_transport.c`.
+- ✅ Transport registry wired into `ipfs_node_online_new` / `ipfs_node_free` and `core/swarm.c` fallback dial.
+- ✅ libwebsockets submodule integrated into Make build; static library linked on macOS and Linux.
+
+### Current blocker
+
+lsquic requires a QUIC-capable TLS library. macOS ships LibreSSL (no QUIC). Ubuntu CI ships OpenSSL 3.0.x (no QUIC). We must add **BoringSSL as a submodule**, build it, and wire lsquic into the Make-based build before QUIC can be enabled at compile time.
+
+### Next steps
+
+1. Add `boringssl` submodule and build `libssl.a` + `libcrypto.a` via CMake.
+2. Build `lsquic` against BoringSSL to produce `liblsquic.a`.
+3. Update `transport/Makefile`, `main/Makefile`, and `test/Makefile` to link BoringSSL + lsquic when `HAS_LSQUIC=1` is defined.
+4. Validate Kubo interoperability test after enabling transports.
+
 ### Exit criteria
 
 - This implementation can connect to Kubo peers on supported transports.
