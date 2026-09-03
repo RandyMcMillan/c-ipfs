@@ -340,8 +340,6 @@ int ipfs_blockstore_put(const struct BlockstoreContext* context, struct Block* b
 		return 0;
 	}
 
-	//TODO: put this in subdirectories
-
 	// turn the block into a binary array
 	size_t protobuf_len = ipfs_blocks_block_protobuf_encode_size(block);
 	unsigned char protobuf[protobuf_len];
@@ -392,8 +390,6 @@ int ipfs_blockstore_put_unixfs(const struct UnixFS* unix_fs, const struct FSRepo
 		free(key);
 		return 0;
 	}
-
-	//TODO: put this in subdirectories
 
 	// turn the block into a binary array
 	size_t protobuf_len = ipfs_unixfs_protobuf_encode_size(unix_fs);
@@ -471,8 +467,6 @@ int ipfs_blockstore_put_node(const struct HashtableNode* node, const struct FSRe
 		free(key);
 		return 0;
 	}
-
-	//TODO: put this in subdirectories
 
 	// turn the block into a binary array
 	size_t protobuf_len = ipfs_hashtable_node_protobuf_encode_size(node);

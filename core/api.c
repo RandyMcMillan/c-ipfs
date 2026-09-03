@@ -22,6 +22,9 @@
 #include "ipfs/importer/exporter.h"
 #include "ipfs/core/http_request.h"
 
+/* Forward declaration from core/api_gzip.c */
+int api_handle_post_request(const char *content_encoding, const unsigned char *body, size_t body_len);
+
 //pthread_mutex_t conns_lock;
 //int conns_count;
 
@@ -239,11 +242,34 @@ char *boundary_find(char *str, char *boundary, char **filename, char **contentty
 	char *p = str_tok(str, "--");
 	while (p) {
 		if (strstart(p, boundary)) {
-			// skip to the beginning, ignoring the header for now, if there is.
-			// TODO: return filename and content-type
-			p = strstr(p, "\r\n\r\n");
-			if (p) {
-				return p + 4; // ignore 4 bytes CRLF 2x
+			/* Parse headers to extract filename and content-type */
+			char *hdr_start = p + strlen(boundary);
+			while (*hdr_start == '\r' || *hdr_start == '\n') hdr_start++;
+			char *body = strstr(hdr_start, "\r\n\r\n");
+			if (body) {
+				*body = '\0';
+				if (filename) {
+					char *fn = strstr(hdr_start, "filename=\"");
+					if (fn) {
+						fn += 10;
+						char *end = strchr(fn, '"');
+						if (end) {
+							*end = '\0';
+							*filename = fn;
+						}
+					}
+				}
+				if (contenttype) {
+					char *ct = strstr(hdr_start, "Content-Type:");
+					if (ct) {
+						ct += 13;
+						while (*ct == ' ') ct++;
+						char *end = strstr(ct, "\r\n");
+						if (end) *end = '\0';
+						*contenttype = ct;
+					}
+				}
+				return body + 4; /* skip CRLF CRLF */
 			}
 			break;
 		}
@@ -547,7 +573,12 @@ void *api_connection_thread (void *ptr)
 			}
 			// end of GET
 		} else if (strncmp(req.buf + req.method, "POST", 4)==0) {
-			// TODO: Handle gzip/json POST requests.
+			/* Handle gzip-compressed or JSON POST bodies */
+			char *content_encoding = header_value_cmp(&req, "Content-Encoding:", "gzip");
+			if (content_encoding || header_value_cmp(&req, "Content-Type:", "application/json")) {
+				api_handle_post_request(content_encoding ? "gzip" : NULL,
+					(const unsigned char*)(req.buf + req.body), req.body_size);
+			}
 
 			p = header_value_cmp(&req, "Content-Type:", "multipart/form-data;");
 			if (p) {
