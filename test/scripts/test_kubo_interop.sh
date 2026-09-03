@@ -3,6 +3,7 @@ set -euo pipefail
 
 KUBO_VERSION="${KUBO_VERSION:-v0.43.0}"
 INTEROP_MODE="${INTEROP_MODE:-auto}"
+VERBOSE="${VERBOSE:-false}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 
@@ -27,6 +28,10 @@ if [ "${INTEROP_MODE}" = "ci" ]; then
 else
     CONNECT_WAIT_STEPS=40
     API_WAIT_STEPS=120
+fi
+
+if [ "${VERBOSE}" = "true" ]; then
+    set -x
 fi
 
 c_ipfs_pid=""
