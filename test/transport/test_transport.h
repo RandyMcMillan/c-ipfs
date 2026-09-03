@@ -12,6 +12,7 @@
 #include "ipfs/transport/stream.h"
 #include "ipfs/transport/transport.h"
 #include "ipfs/transport/registry.h"
+#include "libp2p/net/multistream.h"
 
 // Forward declarations for transport creation functions
 extern libp2p_transport_t *libp2p_quic_transport_create(void *tls_ctx);
@@ -226,7 +227,7 @@ static int live_tcp_transport_dial(libp2p_transport_t *self, const char *multiad
         return -1;
     }
 
-    struct Stream *real_stream = libp2p_net_connection_new(socket_open4(), host, port, NULL);
+    struct Stream *real_stream = libp2p_net_multistream_connect_with_timeout(host, port, 15);
     if (real_stream == NULL) {
         return -1;
     }
