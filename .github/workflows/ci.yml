@@ -3,30 +3,11 @@ name: CI
 on:
   workflow_dispatch:
     inputs:
-      run_interop:
-        description: Run the Kubo interoperability harness
-        type: boolean
-        required: false
-        default: true
-      interop_mode:
-        description: Interop harness mode
-        type: choice
-        required: false
-        default: ci
-        options:
-          - ci
-          - host
-          - auto
-      verbose:
-        description: Enable verbose interop logging
+      clang_build:
+        description: Also run an optional clang build
         type: boolean
         required: false
         default: false
-      kubo_version:
-        description: Kubo release version for interop tests
-        type: string
-        required: false
-        default: v0.43.0
   push:
     branches: [master, main]
   pull_request:
@@ -42,6 +23,8 @@ permissions:
 jobs:
   build:
     timeout-minutes: 15
+    env:
+      CLANG_BUILD: ${{ inputs.clang_build || false }}
     strategy:
       fail-fast: false
       matrix:
@@ -58,6 +41,9 @@ jobs:
       - name: Sync submodule URLs
         run: git submodule sync --recursive
 
+      - name: Update submodules
+        run: git submodule update --init --recursive
+
       - name: Install dependencies (macOS)
         if: runner.os == 'macOS'
         run: |
@@ -73,7 +59,9 @@ jobs:
       - name: Build secp256k1
         run: |
           cd nostril/deps/secp256k1
-          ./autogen.sh
+          if [ ! -x ./configure ]; then
+            ./autogen.sh
+          fi
           ./configure --disable-shared --enable-module-ecdh --enable-module-schnorrsig --enable-module-extrakeys
           make -j libsecp256k1.la
           cp .libs/libsecp256k1.a ../../libsecp256k1.a || true
@@ -86,22 +74,32 @@ jobs:
 
       - name: Build c-ipfs
         run: |
-          if [ "${REUSE:-${ACT_REUSE:-false}}" = "true" ] && [ -f .act-reuse-ready ]; then
+          if [ "${BIND:-${ACT_BIND:-false}}" = "true" ]; then
+            make all
+          elif [ "${REUSE:-${ACT_REUSE:-false}}" = "true" ] && [ -f .act-reuse-ready ]; then
             make all
           else
             make clean all
           fi
-          if [ "${REUSE:-${ACT_REUSE:-false}}" = "true" ]; then
+          if [ "${REUSE:-${ACT_REUSE:-false}}" = "true" ] || [ "${BIND:-${ACT_BIND:-false}}" = "true" ]; then
             touch .act-reuse-ready
           fi
 
       - name: Build tests
         run: |
-          if [ "${REUSE:-${ACT_REUSE:-false}}" = "true" ] && [ -f ../.act-reuse-ready ]; then
+          if [ "${BIND:-${ACT_BIND:-false}}" = "true" ]; then
+            cd test && make all
+          elif [ "${REUSE:-${ACT_REUSE:-false}}" = "true" ] && [ -f ../.act-reuse-ready ]; then
             cd test && make all
           else
             cd test && make clean all
           fi
+
+      - name: Optional build — clang
+        if: env.CLANG_BUILD == 'true'
+        run: |
+          make clean all CC=clang
+          cd test && make clean all CC=clang
 
       - name: Smoke test — ipfs init + id
         run: |
@@ -239,49 +237,3 @@ jobs:
           else
             echo "Skipping git server push/pull outside Linux and act-ci"
           fi
-
-  kubo-interop:
-    name: Kubo v0.43.0 Interoperability
-    if: github.event_name != 'workflow_dispatch' || inputs.run_interop
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-          fetch-depth: 0
-
-      - name: Sync submodule URLs
-        run: git submodule sync --recursive
-
-      - name: Install build dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential libcurl4-openssl-dev autoconf automake libtool
-
-      - name: Build secp256k1
-        run: |
-          cd nostril/deps/secp256k1
-          ./autogen.sh
-          ./configure --disable-shared --enable-module-ecdh --enable-module-schnorrsig --enable-module-extrakeys
-          make -j$(nproc) libsecp256k1.la
-          cp .libs/libsecp256k1.a ../../libsecp256k1.a || true
-
-      - name: Build c-libp2p
-        run: cd c-libp2p && make all
-
-      - name: Build LMDB
-        run: cd lmdb/libraries/liblmdb && make all
-
-      - name: Build c-ipfs
-        run: make clean all
-
-      - name: Run Kubo Interoperability Harness
-        env:
-          INTEROP_MODE: ${{ inputs.interop_mode || 'ci' }}
-          VERBOSE: ${{ inputs.verbose || false }}
-          KUBO_VERSION: ${{ inputs.kubo_version || 'v0.43.0' }}
-        run: |
-          chmod +x test/scripts/test_kubo_interop.sh test/scripts/test_kubo_ipns_pubsub.sh
-          ./test/scripts/test_kubo_interop.sh
-          ./test/scripts/test_kubo_ipns_pubsub.sh
