@@ -1,10 +1,22 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "libp2p/utils/logger.h"
 #include "ipfs/core/ipfs_node.h"
 #include "ipfs/core/swarm.h"
 #include "ipfs/core/http_request.h"
+
+static void print_swarm_help(FILE* out) {
+	fprintf(out, "Usage: ipfs swarm <command> [<args>]\n");
+	fprintf(out, "\n");
+	fprintf(out, "Available commands:\n");
+	fprintf(out, "  connect <multiaddress>     Connect to a peer\n");
+	fprintf(out, "  disconnect <multiaddress>  Disconnect from a peer (not implemented yet)\n");
+	fprintf(out, "\n");
+	fprintf(out, "Examples:\n");
+	fprintf(out, "  ipfs swarm connect /ip4/127.0.0.1/tcp/4001/p2p/QmPeerID\n");
+}
 
 /***
  * Connect to a swarm
@@ -39,7 +51,15 @@ int ipfs_swarm (struct CliArguments* args) {
 	struct IpfsNode* client_node = NULL;
 
 	if (args->argc < (args->verb_index + 2)) {
-		libp2p_logger_error("swarm", "Not enough command line arguments. Should be \"swarm connect\" or \"swarm disconnect\" etc.\n");
+		print_swarm_help(stdout);
+		retVal = 1;
+		goto exit;
+	}
+
+	const char* which = args->argv[args->verb_index + 1];
+	if (strcmp(which, "help") == 0 || strcmp(which, "--help") == 0 || strcmp(which, "-h") == 0) {
+		print_swarm_help(stdout);
+		retVal = 1;
 		goto exit;
 	}
 
@@ -53,7 +73,6 @@ int ipfs_swarm (struct CliArguments* args) {
 		goto exit;
 	}
 
-	const char* which = args->argv[args->verb_index + 1];
 	const char* path = args->argv[args->verb_index + 2];
 	// determine what we're doing
 	if (strcmp(which, "connect") == 0) {
@@ -62,7 +81,7 @@ int ipfs_swarm (struct CliArguments* args) {
 		libp2p_logger_error("swarm", "Swarm disconnect not implemented yet.\n");
 		retVal = 0;
 	} else {
-		libp2p_logger_error("swarm", "Nothing useful found on command line. Should be \"swarm connect\" or \"swarm disconnect\".\n");
+		print_swarm_help(stderr);
 		goto exit;
 	}
 
