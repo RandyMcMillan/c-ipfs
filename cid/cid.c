@@ -259,11 +259,9 @@ int ipfs_cid_decode_hash_from_base58(const unsigned char* incoming, size_t incom
 	if (incoming == NULL || incoming_length < 2)
 		return 0;
 
-	if (incoming[0] == MULTIBASE_BASE58_BTC || incoming[0] == MULTIBASE_BASE32 || incoming[0] == MULTIBASE_BASE16) {
-		size_t buffer_size = multibase_decode_size(incoming[0], incoming, incoming_length);
-		if (buffer_size == 0)
-			return 0;
-
+	// Attempt multibase decode for any recognized prefix
+	size_t buffer_size = multibase_decode_size(incoming[0], incoming, incoming_length);
+	if (buffer_size > 0) {
 		unsigned char* buffer = (unsigned char*) malloc(buffer_size);
 		if (buffer == NULL)
 			return 0;
@@ -280,7 +278,7 @@ int ipfs_cid_decode_hash_from_base58(const unsigned char* incoming, size_t incom
 		return retVal;
 	}
 
-	// is this a sha_256 multihash?
+	// is this a sha_256 multihash? (CIDv0 base58)
 	if (incoming_length == 46 && incoming[0] == 'Q' && incoming[1] == 'm') {
 		size_t hash_length = libp2p_crypto_encoding_base58_decode_size(incoming_length);
 		unsigned char hash[hash_length];
@@ -293,22 +291,6 @@ int ipfs_cid_decode_hash_from_base58(const unsigned char* incoming, size_t incom
 		return *cid != NULL;
 	}
 
-	// TODO: finish this
-	/*
-	// it wasn't a sha_256 multihash, try to decode it using multibase
-	size_t buffer_size = multibase_decode_size(incoming_length);
-	if (buffer_size == 0)
-		return 0;
-	unsigned char buffer[buffer_size];
-
-	memset(buffer, 0, buffer_size);
-
-	retVal = multibase_decode(incoming, incoming_length, buffer, buffer_size, &buffer_size);
-	if (retVal == 0)
-		return 0;
-
-	return cid_cast(buffer, buffer_size, cid);
-	*/
 	return 0;
 }
 
@@ -470,6 +452,13 @@ int ipfs_cid_compare(const struct Cid* a, const struct Cid* b) {
 	if (a == NULL && b != NULL)
 		return 1;
 
+	// Compare multihash first: same hash means same content regardless of version/codec
+	if (a->hash_length == b->hash_length) {
+		int hash_cmp = memcmp(a->hash, b->hash, a->hash_length);
+		if (hash_cmp == 0)
+			return 0;
+	}
+	// For ordering, fall back to version, then codec, then hash
 	if (a->version != b->version) {
 		return b->version - a->version;
 	}

@@ -22,7 +22,7 @@ char *Err[] = {
     "invalid 'ipfs ref' path",
     // Paths after a protocol must contain at least one component
     "path must contain at least one component",
-    "failed to decode CID",
+    "failed to decode CID: invalid multibase prefix, bad varint encoding, or corrupted multihash buffer",
     NULL,
     "no link named %s under %s",
     "ErrInvalidParam",
