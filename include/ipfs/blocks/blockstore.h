@@ -15,6 +15,7 @@ struct BlockstoreContext {
 struct BlockstoreEntry {
 	unsigned char* hash;
 	size_t hash_size;
+	size_t block_size;
 	struct BlockstoreEntry* next;
 };
 

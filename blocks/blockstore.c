@@ -1,6 +1,7 @@
 /***
  * a thin wrapper over a datastore for getting and putting block objects
  */
+#include <sys/stat.h>
 #include "libp2p/crypto/encoding/base32.h"
 #include "ipfs/cid/cid.h"
 #include "ipfs/blocks/block.h"
@@ -96,6 +97,13 @@ int ipfs_blockstore_list(const struct FSRepo* fs_repo, struct BlockstoreEntry** 
 		memcpy(entry->hash, hash, hash_len);
 		entry->hash_size = hash_len;
 		entry->next = NULL;
+		/* attempt to stat the file for size */
+		char full_file_path[strlen(blockstore_path) + strlen(current->file_name) + 2];
+		if (os_utils_filepath_join(blockstore_path, current->file_name, full_file_path, sizeof(full_file_path))) {
+			struct stat st;
+			if (stat(full_file_path, &st) == 0)
+				entry->block_size = (size_t)st.st_size;
+		}
 
 		if (last == NULL) {
 			*entries = entry;

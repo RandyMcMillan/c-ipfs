@@ -184,15 +184,24 @@ int ipfs_flatfs_put(const char* datastore_path, const char* key, unsigned char* 
 	if (retVal == 0)
 		return 0;
 
-	//TODO: Error checking (i.e. too many open files
-
 	// write temp file
 	char temp_filename[filename_length + 5];
 	strncpy(temp_filename, full_filename, strlen(full_filename) + 1);
 	strcat(temp_filename, ".tmp");
 	FILE* out = fopen(temp_filename, "w");
+	if (out == NULL) {
+		return 0;
+	}
 	size_t bytes_written = fwrite(byte, num_bytes, 1, out);
-	fclose(out);
+	if (bytes_written != 1) {
+		fclose(out);
+		remove(temp_filename);
+		return 0;
+	}
+	if (fclose(out) != 0) {
+		remove(temp_filename);
+		return 0;
+	}
 
 	// rename temp file to real name
 	retVal = rename(temp_filename, full_filename);

@@ -364,7 +364,7 @@ int ipfs_gc_collect(struct FSRepo* fs_repo, size_t* bytes_reclaimed) {
         if (!ipfs_cid_set_has(marked, &cid)) {
             // delete from blockstore
             bs->Delete(bs->blockstoreContext, &cid);
-            reclaimed += 0; // TODO: track actual file size
+            reclaimed += b->block_size; /* block_size populated by ipfs_blockstore_list */
         }
         b = b->next;
     }
