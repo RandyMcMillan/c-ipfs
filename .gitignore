@@ -23,7 +23,7 @@ NEXT_PLAN.md
 tmp/**
 test/tmp/
 test/*.o.tmp
-
+test1.txt
 
 # Module source files
 !crypto/verify.c
