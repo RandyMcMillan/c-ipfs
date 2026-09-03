@@ -23,7 +23,10 @@ cleanup() {
     if docker ps -a --format '{{.Names}}' | grep -qx "${CONTAINER_NAME}"; then
         docker rm -f "${CONTAINER_NAME}" >/dev/null 2>&1 || true
     fi
-    rm -rf "${TMP_DIR}"
+    if [ -d "${TMP_DIR}" ]; then
+        chmod -R +w "${TMP_DIR}" 2>/dev/null || true
+        rm -rf "${TMP_DIR}"
+    fi
 }
 trap cleanup EXIT
 
