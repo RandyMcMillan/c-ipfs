@@ -151,3 +151,46 @@ jobs:
         run: |
           cd test
           timeout 60 ./test_ipfs || true
+
+  kubo-interop:
+    name: Kubo v0.43.0 Interoperability
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Sync submodule URLs
+        run: git submodule sync --recursive
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential libcurl4-openssl-dev autoconf automake libtool
+
+      - name: Build secp256k1
+        run: |
+          cd nostril/deps/secp256k1
+          ./autogen.sh
+          ./configure --disable-shared --enable-module-ecdh --enable-module-schnorrsig --enable-module-extrakeys
+          make -j$(nproc) libsecp256k1.la
+          cp .libs/libsecp256k1.a ../../libsecp256k1.a || true
+
+      - name: Build c-libp2p
+        run: cd c-libp2p && make all
+
+      - name: Build LMDB
+        run: cd lmdb/libraries/liblmdb && make all
+
+      - name: Build c-ipfs
+        run: make all
+
+      - name: Run Kubo Interoperability Harness
+        env:
+          KUBO_VERSION: "v0.43.0"
+        run: |
+          chmod +x test/scripts/test_kubo_interop.sh test/scripts/test_kubo_ipns_pubsub.sh
+          ./test/scripts/test_kubo_interop.sh
+          ./test/scripts/test_kubo_ipns_pubsub.sh
