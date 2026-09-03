@@ -15,6 +15,16 @@
 #include "libp2p/crypto/key.h"
 
 /**
+ * Retrieve a value from the routing system.
+ * NOTE: Stub — full DHT value retrieval is not yet wired.
+ */
+int ipfs_namesys_routing_get_value(char *val, char *key) {
+    (void)val;
+    (void)key;
+    return -1;
+}
+
+/**
  * Retrieve the public key for a given multihash from the routing layer.
  * NOTE: Stub — full DHT public-key retrieval is not yet wired.
  * @param out_pubkey buffer to receive the public key protobuf bytes

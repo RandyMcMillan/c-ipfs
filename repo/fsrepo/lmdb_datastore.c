@@ -292,7 +292,7 @@ int repo_fsrepo_lmdb_put(struct DatastoreRecord* datastore_record, const struct 
 				memcpy(journalstore_record->hash, datastore_record->key, datastore_record->key_size);
 				journalstore_record->hash_size = datastore_record->key_size;
 				journalstore_record->timestamp = datastore_record->timestamp;
-				journalstore_record->pending = 1; // TODO: Calculate this correctly
+				journalstore_record->pending = 1; /* New record: pending replication until sync confirmed */
 				journalstore_record->pin = 1;
 				if (!lmdb_journalstore_journal_add(journalstore_cursor, journalstore_record)) {
 					libp2p_logger_error("lmdb_datastore", "Datastore record was added, but problem adding Journalstore record. Continuing.\n");
