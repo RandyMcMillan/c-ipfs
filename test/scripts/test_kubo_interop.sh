@@ -63,6 +63,17 @@ until IPFS_PATH="${C_REPO}" "${C_IPFS_BIN}" id >/dev/null 2>&1; do
     sleep 0.5
 done
 
+C_ID=$(IPFS_PATH="${C_REPO}" "${C_IPFS_BIN}" id | awk '/^ID/ {print $2; exit}')
+C_ADDR=$(IPFS_PATH="${C_REPO}" "${C_IPFS_BIN}" id | awk '/^  \// {print $1; exit}')
+if [ -z "${C_ID}" ]; then
+    echo "Failed to read c-ipfs peer ID"
+    exit 1
+fi
+if [ -z "${C_ADDR}" ]; then
+    C_ADDR="/ip4/127.0.0.1/tcp/4001"
+fi
+C_PEER_ADDR="${C_ADDR}/p2p/${C_ID}"
+
 echo "=== Starting Kubo daemon ==="
 IPFS_PATH="${K_REPO}" "${KUBO_BIN}" daemon > "${TMP_DIR}/kubo.log" 2>&1 &
 kubo_pid=$!
@@ -77,7 +88,15 @@ KUBO_ADDR="/ip4/127.0.0.1/tcp/4011/p2p/${KUBO_ID}"
 
 echo "Kubo Multiaddr: ${KUBO_ADDR}"
 echo "=== Test 1: Swarm connect c-ipfs <-> Kubo ==="
+IPFS_PATH="${K_REPO}" "${KUBO_BIN}" swarm connect "${C_PEER_ADDR}" || true
 IPFS_PATH="${C_REPO}" "${C_IPFS_BIN}" swarm connect "${KUBO_ADDR}" || true
+
+for _ in $(seq 1 20); do
+    if IPFS_PATH="${K_REPO}" "${KUBO_BIN}" swarm peers 2>/dev/null | grep -q "${C_ID}"; then
+        break
+    fi
+    sleep 0.5
+done
 
 echo "=== Test 2: Vector 001 - c-ipfs add -> Kubo cat ==="
 TEST_FILE="${TMP_DIR}/vector1.txt"
