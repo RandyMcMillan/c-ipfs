@@ -165,7 +165,7 @@ jobs:
           mkdir -p ../tmp
           echo "sync payload" > ../tmp/sync_payload.txt
           IPFS_PATH=../tmp/ipfs_test ./ipfs init
-          CID=$(IPFS_PATH=../tmp/ipfs_test ./ipfs add -q ../tmp/sync_payload.txt | tail -n 1)
+          CID=$(IPFS_PATH=../tmp/ipfs_test ./ipfs add -q ../tmp/sync_payload.txt 2>/dev/null | awk 'NR==1 { if ($1 == "added") { print $2 } else { print $1 } }')
           if [ -z "$CID" ]; then
             echo "Failed to capture CID"
             exit 1
