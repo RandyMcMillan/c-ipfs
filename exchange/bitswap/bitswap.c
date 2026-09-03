@@ -162,7 +162,36 @@ int ipfs_bitswap_has_block(struct Exchange* exchange, struct Block* block) {
 		pthread_cond_broadcast(&queueEntry->block_cond);
 		pthread_mutex_unlock(&queueEntry->block_mutex);
 	}
-	// TODO: Announce to world that we now have the block
+	// Announce to connected peers that we now have the block (Bitswap 1.2.0 HAVE)
+	struct BitswapMessage* announce = ipfs_bitswap_message_new();
+	if (announce != NULL) {
+		struct BitswapBlockPresence* bp = ipfs_bitswap_block_presence_new();
+		if (bp != NULL) {
+			bp->cid = (unsigned char*)malloc(block->cid->hash_length);
+			if (bp->cid != NULL) {
+				memcpy(bp->cid, block->cid->hash, block->cid->hash_length);
+				bp->cid_size = block->cid->hash_length;
+				bp->type = BLOCK_PRESENCE_HAVE;
+				if (announce->block_presences == NULL)
+					announce->block_presences = libp2p_utils_vector_new(1);
+				libp2p_utils_vector_add(announce->block_presences, bp);
+
+				// Send to all connected peers in the peer request queue
+				struct PeerRequestEntry* entry = context->peerRequestQueue->first;
+				while (entry != NULL) {
+					struct PeerRequest* pr = entry->current;
+					if (pr != NULL && pr->peer != NULL &&
+					    pr->peer->connection_type == CONNECTION_TYPE_CONNECTED) {
+						ipfs_bitswap_network_send_message(context, pr->peer, announce);
+					}
+					entry = entry->next;
+				}
+			} else {
+				ipfs_bitswap_block_presence_free(bp);
+			}
+		}
+		ipfs_bitswap_message_free(announce);
+	}
 	return 0;
 }
 

@@ -839,8 +839,9 @@ int ipfs_bitswap_message_add_wantlist_items(struct BitswapMessage* message, stru
 			return 0;
 		}
 		if (!ipfs_cid_protobuf_encode(cidEntry->cid, entry->block, entry->block_size, &entry->block_size)) {
-			// TODO: we should do more than return a half-baked list
-			return 0;
+			// Clean up partially built entry and skip this CID
+			ipfs_bitswap_wantlist_entry_free(entry);
+			continue;
 		}
 		entry->cancel = cidEntry->cancel;
 		entry->priority = 1;

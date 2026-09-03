@@ -118,9 +118,29 @@ int ipfs_namesys_resolver_resolve_once(struct IpfsNode* local_node, const char* 
 		return retVal;
 	}
 
-	//TODO: ask the network
+	// Fallback: ask the network (DHT or routing)
+	if (local_node->routing && local_node->routing->GetValue) {
+		void* net_record = NULL;
+		size_t net_record_size = 0;
+		if (local_node->routing->GetValue(local_node->routing, cid->hash, cid->hash_length, &net_record, &net_record_size)) {
+			struct ipns_entry* net_entry = NULL;
+			if (ipfs_namesys_pb_ipns_entry_decode(net_record, net_record_size, &net_entry)) {
+				if (net_entry->value) {
+					*results = (char*)malloc(strlen(net_entry->value) + 1);
+					if (*results != NULL) {
+						strcpy(*results, net_entry->value);
+						retVal = 1;
+					}
+				}
+				ipfs_namesys_ipnsentry_reset(net_entry);
+				free(net_entry);
+			}
+			if (net_record)
+				free(net_record);
+		}
+	}
 	ipfs_cid_free(cid);
-	return 0;
+	return retVal;
 }
 
 /**
