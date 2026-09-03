@@ -17,6 +17,7 @@
 # Module source files
 !crypto/verify.c
 !crypto/verify_impl.c
+!crypto/security.c
 !crypto/Makefile
 !ipld/dag_cbor.c
 !ipld/Makefile
@@ -55,6 +56,7 @@
 # Test files
 !test/crypto/test_crypto_verify.h
 !test/crypto/test_secp256k1_nostril.h
+!test/crypto/test_security.h
 !test/ipld/test_dag_cbor.h
 !test/namesys/test_namesys_verify.h
 !test/pubsub/test_ipns_pubsub.h

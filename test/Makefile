@@ -16,7 +16,7 @@ OBJS = testit.o test_helper.o \
 	../cmd/ipfs/init.o \
 	../commands/argument.o ../commands/command_option.o ../commands/command.o ../commands/cli/parse.o \
 	../core/*.o \
-	../crypto/verify.o ../crypto/verify_impl.o \
+	../crypto/verify.o ../crypto/verify_impl.o ../crypto/security.o \
 	../datastore/ds_helper.o ../datastore/key.o ../datastore/key_impl.o \
 	../dnslink/dnslink.o ../dnslink/dns_cache.o \
 	../exchange/bitswap/*.o \

@@ -34,6 +34,7 @@
 #include "pubsub/test_ipns_pubsub.h"
 #include "crypto/test_crypto_verify.h"
 #include "crypto/test_secp256k1_nostril.h"
+#include "crypto/test_security.h"
 #include "namesys/test_namesys_verify.h"
 #include "cid/test_cid_v1.h"
 #include "exchange/test_bitswap_future.h"
@@ -126,6 +127,15 @@ int build_test_collection() {
 	add_test("test_secp256k1_nostril_schnorr_roundtrip", test_secp256k1_nostril_schnorr_roundtrip, 1);
 	add_test("test_secp256k1_nostril_openssl_cross_verify", test_secp256k1_nostril_openssl_cross_verify, 1);
 	add_test("test_secp256k1_nostril_bip340_vectors", test_secp256k1_nostril_bip340_vectors, 1);
+	add_test("test_security_validate_cid_valid", test_security_validate_cid_valid, 1);
+	add_test("test_security_validate_cid_invalid_shell_injection", test_security_validate_cid_invalid_shell_injection, 1);
+	add_test("test_security_validate_cid_invalid_path_traversal", test_security_validate_cid_invalid_path_traversal, 1);
+	add_test("test_security_validate_cid_null", test_security_validate_cid_null, 1);
+	add_test("test_security_validate_cid_too_short", test_security_validate_cid_too_short, 1);
+	add_test("test_security_validate_hex_valid", test_security_validate_hex_valid, 1);
+	add_test("test_security_validate_hex_invalid_char", test_security_validate_hex_invalid_char, 1);
+	add_test("test_security_validate_hex_wrong_len", test_security_validate_hex_wrong_len, 1);
+	add_test("test_security_secure_wipe", test_security_secure_wipe, 1);
 	add_test("test_core_api_startup_shutdown", test_core_api_startup_shutdown, 1);
 	add_test("test_core_api_object_cat", test_core_api_object_cat, 0); // timing-sensitive multi-node; often hangs
 	add_test("test_core_api_object_cat_binary", test_core_api_object_cat_binary, 0); // timing-sensitive multi-node; often hangs

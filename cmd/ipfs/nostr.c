@@ -4,8 +4,10 @@
 
 #include <secp256k1.h>
 #include <secp256k1_schnorrsig.h>
+#include <curl/curl.h>
 
 #include "ipfs/cmd/ipfs/nostr.h"
+#include "ipfs/crypto/security.h"
 #include "ipfs/nostr/event.h"
 #include "ipfs/nostr/git.h"
 #include "ipfs/nostr/kind.h"
@@ -13,6 +15,20 @@
 #include "ipfs/rbsr.h"
 #include "hex.h"
 #include "sha256.h"
+
+struct sync_download_state {
+    FILE *fp;
+    struct sha256_ctx sha_ctx;
+    size_t total;
+};
+
+static size_t sync_download_cb(void *ptr, size_t size, size_t nmemb, void *userdata) {
+    struct sync_download_state *st = (struct sync_download_state *)userdata;
+    size_t written = fwrite(ptr, size, nmemb, st->fp);
+    sha256_update(&st->sha_ctx, (const unsigned char *)ptr, written * size);
+    st->total += written * size;
+    return written;
+}
 
 static void print_nostr_help(FILE *out) {
     fprintf(out, "USAGE:\n");
@@ -144,6 +160,10 @@ int ipfs_nostr(int argc, char** argv) {
             fprintf(stderr, "Error: --cid required\n");
             goto cleanup;
         }
+        if (!ipfs_validate_cid(cid)) {
+            fprintf(stderr, "SECURITY ERROR: Invalid CID payload format.\n");
+            goto cleanup;
+        }
         if (!nostr_event_make_ipfs_content(ctx, &key, cid, content, &ev)) {
             fprintf(stderr, "Error: failed to create event\n");
             goto cleanup;
@@ -162,6 +182,10 @@ int ipfs_nostr(int argc, char** argv) {
         const char *euc = get_arg(argc, argv, "--euc");
         if (!id || !name || !cid) {
             fprintf(stderr, "Error: --id, --name, and --cid required\n");
+            goto cleanup;
+        }
+        if (!ipfs_validate_cid(cid)) {
+            fprintf(stderr, "SECURITY ERROR: Invalid CID payload format.\n");
             goto cleanup;
         }
         if (!nostr_git_repo_announce_ipfs(ctx, &key, id, name, cid, euc, &ev)) {
@@ -413,6 +437,14 @@ int ipfs_nostr(int argc, char** argv) {
             fprintf(stderr, "Error: --cid, --sha256, and --size required\n");
             goto cleanup;
         }
+        if (!ipfs_validate_cid(cid)) {
+            fprintf(stderr, "SECURITY ERROR: Invalid CID payload format.\n");
+            goto cleanup;
+        }
+        if (!ipfs_validate_hex_string(sha256_hex, 64)) {
+            fprintf(stderr, "SECURITY ERROR: Invalid SHA-256 hex string.\n");
+            goto cleanup;
+        }
         struct NostrPipManifest m = {0};
         strncpy(m.root, cid, sizeof(m.root) - 1);
         strncpy(m.sha256, sha256_hex, sizeof(m.sha256) - 1);
@@ -441,6 +473,14 @@ int ipfs_nostr(int argc, char** argv) {
             fprintf(stderr, "Error: --manifest, --sha256, and --cid required\n");
             goto cleanup;
         }
+        if (!ipfs_validate_cid(root_id)) {
+            fprintf(stderr, "SECURITY ERROR: Invalid CID payload format.\n");
+            goto cleanup;
+        }
+        if (!ipfs_validate_hex_string(sha256_hex, 64)) {
+            fprintf(stderr, "SECURITY ERROR: Invalid SHA-256 hex string.\n");
+            goto cleanup;
+        }
         if (!nostr_pip_attest_create(ctx, &key, root_id, sha256_hex, manifest_id, &ev)) {
             fprintf(stderr, "Error: failed to create attest event\n");
             goto cleanup;
@@ -461,6 +501,15 @@ int ipfs_nostr(int argc, char** argv) {
             fprintf(stderr, "Error: --cid required\n");
             goto cleanup;
         }
+        if (!ipfs_validate_cid(cid)) {
+            fprintf(stderr, "SECURITY ERROR: Invalid CID payload format.\n");
+            goto cleanup;
+        }
+        if (sha256_expected && !ipfs_validate_hex_string(sha256_expected, 64)) {
+            fprintf(stderr, "SECURITY ERROR: Invalid SHA-256 hex string.\n");
+            goto cleanup;
+        }
+
         char url[1024];
         snprintf(url, sizeof(url), "%s/ipfs/%s",
                  gateway ? gateway : "http://127.0.0.1:8080", cid);
@@ -479,39 +528,35 @@ int ipfs_nostr(int argc, char** argv) {
             goto cleanup;
         }
 
-        char cmd[2048];
-        snprintf(cmd, sizeof(cmd), "curl -sL \"%s\"", url);
-        FILE *pipe = popen(cmd, "r");
-        if (!pipe) {
-            fprintf(stderr, "Error: failed to run curl\n");
+        struct sync_download_state st = {0};
+        st.fp = fp;
+        sha256_init(&st.sha_ctx);
+
+        CURL *curl = curl_easy_init();
+        if (!curl) {
+            fprintf(stderr, "Error: failed to initialize curl\n");
             fclose(fp);
             goto cleanup;
         }
-
-        struct sha256_ctx sha_ctx;
-        sha256_init(&sha_ctx);
-        char dlbuf[8192];
-        size_t total = 0;
-        size_t n;
-        while ((n = fread(dlbuf, 1, sizeof(dlbuf), pipe)) > 0) {
-            fwrite(dlbuf, 1, n, fp);
-            sha256_update(&sha_ctx, dlbuf, n);
-            total += n;
-        }
-        int curl_status = pclose(pipe);
+        curl_easy_setopt(curl, CURLOPT_URL, url);
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, sync_download_cb);
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &st);
+        curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+        CURLcode res = curl_easy_perform(curl);
+        curl_easy_cleanup(curl);
         fclose(fp);
 
-        if (curl_status != 0) {
-            fprintf(stderr, "Error: curl failed (exit %d)\n", curl_status);
+        if (res != CURLE_OK) {
+            fprintf(stderr, "Error: download failed: %s\n", curl_easy_strerror(res));
             goto cleanup;
         }
 
         struct sha256 hash;
-        sha256_done(&sha_ctx, &hash);
+        sha256_done(&st.sha_ctx, &hash);
         char hash_hex[65];
         hex_encode(hash.u.u8, 32, hash_hex, sizeof(hash_hex));
 
-        printf("Downloaded %zu bytes to %s\n", total, outpath);
+        printf("Downloaded %zu bytes to %s\n", st.total, outpath);
         printf("SHA-256: %s\n", hash_hex);
 
         if (sha256_expected) {
@@ -539,8 +584,10 @@ int ipfs_nostr(int argc, char** argv) {
     }
 
     fprintf(stderr, "Secret key (save to sign future events): %s\n", seckey_hex);
+    ipfs_crypto_secure_wipe(seckey_hex, sizeof(seckey_hex));
 
 cleanup:
+    ipfs_crypto_secure_wipe(key.seckey, sizeof(key.seckey));
     nostr_context_free(ctx);
     return ret;
 }

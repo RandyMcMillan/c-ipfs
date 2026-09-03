@@ -23,7 +23,7 @@ OBJS = main.o \
 	../cmd/*.o \
 	../commands/argument.o ../commands/command_option.o ../commands/command.o ../commands/cli/parse.o \
 	../core/*.o \
-	../crypto/verify.o \
+	../crypto/verify.o ../crypto/security.o \
 	../datastore/ds_helper.o \
 	../datastore/key.o \
 	../dnslink/*.o \
