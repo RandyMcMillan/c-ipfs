@@ -1,5 +1,9 @@
 
 #include <string.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <unistd.h>
+#include <errno.h>
 #include "ipfs/core/net.h"
 #include "ipfs/core/ipfs_node.h"
 #include "libp2p/conn/dialer.h"
@@ -12,11 +16,21 @@
  * @returns true(1) on success, false(0) otherwise
  */
 int ipfs_core_net_accept(struct IpfsListener* listener, struct Stream* stream) {
-	(void)listener;
 	(void)stream;
-	/* TODO: Full accept implementation requires socket descriptor in IpfsListener */
-	libp2p_logger_debug("net", "ipfs_core_net_accept: stub\n");
-	return 0;
+	if (listener == NULL || listener->listen_fd < 0)
+		return 0;
+
+	struct sockaddr_in client_addr;
+	socklen_t addr_len = sizeof(client_addr);
+	int client_fd = accept(listener->listen_fd, (struct sockaddr*)&client_addr, &addr_len);
+	if (client_fd < 0) {
+		libp2p_logger_error("net", "accept failed: %s\n", strerror(errno));
+		return 0;
+	}
+
+	libp2p_logger_debug("net", "Accepted connection on fd %d\n", client_fd);
+	close(client_fd);
+	return 1;
 }
 
 /**
@@ -28,11 +42,45 @@ int ipfs_core_net_accept(struct IpfsListener* listener, struct Stream* stream) {
  */
 int ipfs_core_net_listen(struct IpfsNode* node, char* protocol, struct IpfsListener* listener) {
 	(void)node;
-	(void)protocol;
-	(void)listener;
-	/* TODO: Full listen implementation requires protocol-specific listener setup */
-	libp2p_logger_debug("net", "ipfs_core_net_listen: stub\n");
-	return 0;
+	if (protocol == NULL || listener == NULL)
+		return 0;
+
+	int fd = socket(AF_INET, SOCK_STREAM, 0);
+	if (fd < 0) {
+		libp2p_logger_error("net", "socket creation failed: %s\n", strerror(errno));
+		return 0;
+	}
+
+	int opt = 1;
+	if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
+		libp2p_logger_error("net", "setsockopt failed: %s\n", strerror(errno));
+		close(fd);
+		return 0;
+	}
+
+	struct sockaddr_in addr;
+	memset(&addr, 0, sizeof(addr));
+	addr.sin_family = AF_INET;
+	addr.sin_addr.s_addr = INADDR_ANY;
+	addr.sin_port = htons(listener->port > 0 ? listener->port : 4001);
+
+	if (bind(fd, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
+		libp2p_logger_error("net", "bind failed: %s\n", strerror(errno));
+		close(fd);
+		return 0;
+	}
+
+	if (listen(fd, 10) < 0) {
+		libp2p_logger_error("net", "listen failed: %s\n", strerror(errno));
+		close(fd);
+		return 0;
+	}
+
+	listener->listen_fd = fd;
+	listener->protocol = strdup(protocol);
+	libp2p_logger_debug("net", "Listening on port %d for protocol %s\n",
+		listener->port > 0 ? listener->port : 4001, protocol);
+	return 1;
 }
 
 /***

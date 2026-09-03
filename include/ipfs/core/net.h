@@ -5,6 +5,8 @@
 struct IpfsListener {
 	char* conCh;
 	char* protocol;
+	int listen_fd;
+	int port;
 };
 
 /**

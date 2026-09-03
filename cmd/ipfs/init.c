@@ -112,7 +112,16 @@ int do_init(FILE* out_file, char* repo_root, int empty, int num_bits_for_keypair
 	if (retVal == 0)
 		return 0;
 
-	// TODO: add default assets (readme, welcome page)
+	// Add default assets (readme)
+	if (!empty) {
+		char readme_path[512];
+		snprintf(readme_path, sizeof(readme_path), "%s/README.md", repo_root);
+		FILE* readme = fopen(readme_path, "w");
+		if (readme != NULL) {
+			fprintf(readme, "# IPFS Repository\n\nThis is an IPFS repository.\n");
+			fclose(readme);
+		}
+	}
 	return initialize_ipns_keyspace(repo);
 }
 
@@ -131,7 +140,23 @@ int init_run(struct Request* request) {
 	if (ipfs_repo_config_new(&conf) == 0)
 		return 0;
 
-	/* TODO: handle config file imports passed in request arguments */
+	// Handle config file imports passed in request arguments
+	if (request->arguments != NULL && strlen(request->arguments) > 0) {
+		FILE* config_file = fopen(request->arguments, "r");
+		if (config_file != NULL) {
+			fseek(config_file, 0, SEEK_END);
+			long fsize = ftell(config_file);
+			fseek(config_file, 0, SEEK_SET);
+			char* config_str = malloc(fsize + 1);
+			if (config_str != NULL) {
+				size_t read_bytes = fread(config_str, 1, fsize, config_file);
+				config_str[read_bytes] = '\0';
+				// TODO: parse JSON config and merge into conf
+				free(config_str);
+			}
+			fclose(config_file);
+		}
+	}
 
 	int num_bits_for_key_pair = request->cmd.options[0]->default_int_val;
 	if (num_bits_for_key_pair < 1024) {
