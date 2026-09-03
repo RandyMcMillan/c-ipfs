@@ -141,12 +141,18 @@ jobs:
             kill "$DAEMON_PID" 2>/dev/null || true
           }
           trap cleanup EXIT
+          READY=0
           for _ in $(seq 1 60); do
             if curl -fsS "http://127.0.0.1:8080/" >/dev/null 2>&1; then
+              READY=1
               break
             fi
             sleep 0.5
           done
+          if [ "$READY" -ne 1 ]; then
+            echo "Local gateway failed to start"
+            exit 1
+          fi
           ./ipfs nostr sync --cid "$CID" --sha256 "$SHA256" --gateway "http://127.0.0.1:8080" --output /tmp/sync_got.txt
           kill "$DAEMON_PID" 2>/dev/null || true
           trap - EXIT
