@@ -50,6 +50,19 @@ wait_for_api() {
     return 1
 }
 
+wait_for_port() {
+    local port="$1"
+    local label="$2"
+    for _ in $(seq 1 "${API_WAIT_STEPS}"); do
+        if (echo >"/dev/tcp/127.0.0.1/${port}") >/dev/null 2>&1; then
+            return 0
+        fi
+        sleep 0.5
+    done
+    echo "Timed out waiting for ${label} port ${port}"
+    return 1
+}
+
 cleanup() {
     if [ -n "${c_ipfs_pid}" ] && kill -0 "${c_ipfs_pid}" 2>/dev/null; then
         kill -9 "${c_ipfs_pid}" 2>/dev/null || true
@@ -99,6 +112,7 @@ c_ipfs_pid=$!
 
 echo "Waiting for c-ipfs daemon API..."
 wait_for_api "${c_ipfs_pid}" 5001 "c-ipfs" "${TMP_DIR}/c_ipfs.log" || exit 1
+wait_for_port 4001 "c-ipfs swarm" || exit 1
 
 C_ID=$(IPFS_PATH="${C_REPO}" "${C_IPFS_BIN}" id | awk '/^ID/ {print $2; exit}')
 if [ -z "${C_ID}" ]; then
@@ -113,9 +127,15 @@ kubo_pid=$!
 
 echo "Waiting for Kubo daemon API..."
 wait_for_api "${kubo_pid}" 5011 "Kubo" "${TMP_DIR}/kubo.log" || exit 1
+wait_for_port 4011 "Kubo swarm" || exit 1
 KUBO_ID=$(IPFS_PATH="${K_REPO}" "${KUBO_BIN}" id -f="<id>")
 KUBO_ADDR="/ip4/127.0.0.1/tcp/4011/p2p/${KUBO_ID}"
-IPFS_PATH="${K_REPO}" "${KUBO_BIN}" swarm connect "${C_PEER_ADDR}" || true
+for _ in $(seq 1 20); do
+    if IPFS_PATH="${K_REPO}" "${KUBO_BIN}" swarm connect "${C_PEER_ADDR}" >/dev/null 2>&1; then
+        break
+    fi
+    sleep 0.5
+done
 
 for _ in $(seq 1 20); do
     if IPFS_PATH="${K_REPO}" "${KUBO_BIN}" swarm peers 2>/dev/null | grep -q "${C_ID}"; then

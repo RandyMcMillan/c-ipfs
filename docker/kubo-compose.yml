@@ -1,0 +1,25 @@
+services:
+  kubo:
+    image: ipfs/kubo:latest
+    container_name: kubo-interop
+    ports:
+      - "4001:4001/tcp"
+      - "4001:4001/udp"
+      - "5001:5001"
+      - "8080:8080"
+    environment:
+      IPFS_SWARM_KEY: /key/swarm
+      IPFS_PROFILE: server
+    volumes:
+      - kubo-repo:/data/ipfs
+      - ./kubo-init:/container-init.d:ro
+    command: ["daemon", "--migrate=true"]
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:5001/api/v0/id"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+volumes:
+  kubo-repo:

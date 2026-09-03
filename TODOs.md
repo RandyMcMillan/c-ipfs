@@ -13,7 +13,7 @@
 
 | Severity | Count | Description |
 |----------|-------|-------------|
-| 🔴 Critical | 14 | Concurrency, crash-safety, memory safety, data structure bugs |
+| 🔴 Critical | 0 | All resolved: repo locking, wantlist queue, node.c malloc failure, offline base32, bitswap busy-loop, flatfs errno |
 | 🟠 High | 22 | Missing features, incomplete error handling, protocol gaps |
 | 🟡 Medium | 31 | Code quality, logging, optimization opportunities |
 | 🟢 Low | 18 | Documentation, cleanup, minor improvements |
@@ -23,53 +23,28 @@
 ## 🔴 Critical
 
 ### Concurrency & Locking (`repo/fsrepo/fs_repo.c`)
-| Line | TODO | Context |
-|------|------|---------|
-| 736 | `//TODO: lock` | `ipfs_repo_fsrepo_open` — no lock during open |
-| 741 | `//TODO: lock the file (remember to unlock)` | Race condition on repo file |
-| 742 | `//TODO: check the version, and make sure it is correct` | Version mismatch unchecked |
-| 743 | `//TODO: make sure the directory is writable` | Writable check missing |
-| 744 | `//TODO: open the config` | Config opening is implicit/unverified |
-| 767 | `//TODO: lock things up so that someone doesn't try an init or remove while this call is in progress` | `fs_repo_is_initialized` unprotected |
-| 804 | `// TODO: Do a lock so 2 don't do this at the same time` | `ipfs_repo_fsrepo_init` unprotected |
-| 823 | `//TODO: mfsr.RepoPath(repo_path).WriteVersion(RepoVersion)` | Version file never written |
-
-**Impact:** Multi-threaded or multi-process repo access is unsafe. Crash or corruption likely under concurrent init/open.
+**Status:** ✅ Resolved
+**Fix:** `flock`-based file locking (`fs_repo_acquire_lock` / `fs_repo_release_lock`) implemented; version file read/write added; writable check added. All 8 TODOs removed from source.
 
 ### Data Structure Bug (`exchange/bitswap/wantlist_queue.c`)
-| Line | TODO | Context |
-|------|------|---------|
-| 140 | `//TODO: This should be a linked list, not an array` | `ipfs_bitswap_wantlist_queue_pop` scans entire vector |
-
-**Impact:** O(n) scan per pop. Wrong abstraction for queue semantics; affects Bitswap performance.
+**Status:** ✅ Resolved
+**Fix:** `wantlist_queue_impl.c` uses a linked list (`head` + `next` pointers) for entries. `sessionsRequesting` remains a vector by design (tracks peer session pointers).
 
 ### Memory Safety (`merkledag/node.c`)
-| Line | TODO | Context |
-|------|------|---------|
-| 833 | `if (LProc->links[i] == NULL) { // TODO: What should we do if memory wasn't allocated here?` | Link allocation failure unhandled |
-
-**Impact:** Null pointer dereference risk during DAG node construction.
+**Status:** ✅ Resolved
+**Fix:** `merkledag_node_copy_links` frees already-allocated links on partial failure, sets `LProc->amount`, and returns NULL.
 
 ### Buffer Sizing (`routing/offline.c`)
-| Line | TODO | Context |
-|------|------|---------|
-| 26 | `nkey = malloc(key_size * 2); // FIXME: size of encoded key` | Key encoding buffer size is guessed |
-
-**Impact:** Potential buffer overflow or underflow in offline routing key handling.
+**Status:** ✅ Resolved
+**Fix:** Replaced with safe upper-bound calculation `(((key_size + 4) / 5) * 8) + 1` for base32 encoding.
 
 ### Busy Loop (`exchange/bitswap/bitswap.c`)
-| Line | TODO | Context |
-|------|------|---------|
-| 201 | `//TODO: This is a busy-loop. Find another way.` | Block-wait spins CPU |
-
-**Impact:** Wastes CPU cycles; prevents efficient multi-peer operation.
+**Status:** ✅ Resolved
+**Fix:** `WantListQueueEntry` uses `pthread_mutex_t block_mutex` and `pthread_cond_t block_cond`; `GetBlock` uses `pthread_cond_timedwait`.
 
 ### Error Handling (`flatfs/flatfs.c`)
-| Line | TODO | Context |
-|------|------|---------|
-| 187 | `//TODO: Error checking (i.e. too many open files` | `flatfs_put` ignores `fopen`/`fwrite` failures |
-
-**Impact:** Silent data loss on disk-full or fd-exhaustion conditions.
+**Status:** ✅ Resolved
+**Fix:** Added `fopen`/`fwrite`/`fflush`/`fclose` error checking with `errno` propagation for `EMFILE`, `ENOSPC`, and short writes.
 
 ---
 
@@ -225,24 +200,27 @@
 
 | Module | Count | Top Issue |
 |--------|-------|-----------|
-| `repo/fsrepo/` | 8 | Locking / concurrency |
+| `repo/fsrepo/` | 0 | Locking / concurrency — resolved |
 | `cmd/ipfs/` | 10 | Init completeness |
-| `exchange/bitswap/` | 7 | Data structures + protocol |
+| `exchange/bitswap/` | 4 | Protocol watchables + message decode improvements |
 | `core/` | 10 | API / builder / net stubs |
 | `namesys/` | 7 | IPNS signing / caching / resolution |
 | `test/` | 8 | Test harness brittleness |
-| `importer/` | 3 | Directory traversal / type handling |
+| `importer/` | 0 | Directory traversal / type handling — resolved |
 | `routing/` | 5 | Offline storage + duplicate peers |
-| `blocks/` | 3 | Storage sharding |
-| `journal/` | 2 | Replication / file grouping |
+| `blocks/` | 0 | Storage sharding — resolved |
+| `journal/` | 0 | Replication / file grouping — resolved |
+| `transport/` | 2 | QUIC/WS listen and close stubs |
 | Other | 12 | — |
 
 ---
 
 ## Recommendations (Do Not Remove — Track Progress)
 
-1. **Track repo locking TODOs as a single epic** — all 8 in `fs_repo.c` must be resolved together for thread safety.
-2. **Convert `wantlist_queue.c` to linked list** — currently the most impactful data-structure bug.
-3. **Add `errno` checks to `flatfs.c`** — disk-full / fd-exhaustion are production killers.
+1. ✅ **Repo locking epic complete** — all 8 `fs_repo.c` TODOs resolved with `flock`.
+2. ✅ **Wantlist queue converted to linked list** — `wantlist_queue_impl.c` uses `head`+`next`.
+3. ✅ **`errno` checks added to `flatfs.c`** — `EMFILE`/`ENOSPC` now propagated.
 4. **Complete `cmd/ipfs/init.c` TODOs** before claiming CLI conformance.
-5. **Resolve `namesys/routing.c:226`** (`libp2p_crypto_verify`) to complete IPNS validation.
+5. ✅ **`namesys/routing.c:226`** (`libp2p_crypto_verify`) resolved — Ed25519 + secp256k1 stubs via OpenSSL.
+6. **Wire transport registry into swarm dialer** — registry exists but is not yet integrated with `core/swarm.c` or c-libp2p `TransportDialer`.
+7. **Implement QUIC/WS `listen` stubs** — `transport/quic_transport.c` and `transport/ws_transport.c` have `listen = NULL`.
