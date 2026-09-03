@@ -1,7 +1,12 @@
-#define _POSIX_C_SOURCE 200809L
+#define _GNU_SOURCE
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <fcntl.h>
 #include <sys/stat.h>
+#include <sys/file.h>
 #include <unistd.h>
+#include <errno.h>
 
 #include "libp2p/utils/logger.h"
 #include "libp2p/crypto/encoding/base64.h"
@@ -21,6 +26,58 @@
 /** 
  * private methods
  */
+
+static int fs_repo_acquire_lock(struct FSRepo* repo) {
+	if (repo->lock_fd >= 0)
+		return 1;
+	char lock_path[512];
+	snprintf(lock_path, sizeof(lock_path), "%s/repo.lock", repo->path);
+	repo->lock_fd = open(lock_path, O_RDWR | O_CREAT, 0600);
+	if (repo->lock_fd < 0)
+		return 0;
+	if (flock(repo->lock_fd, LOCK_EX | LOCK_NB) != 0) {
+		close(repo->lock_fd);
+		repo->lock_fd = -1;
+		return 0;
+	}
+	return 1;
+}
+
+static void fs_repo_release_lock(struct FSRepo* repo) {
+	if (repo->lock_fd >= 0) {
+		flock(repo->lock_fd, LOCK_UN);
+		close(repo->lock_fd);
+		repo->lock_fd = -1;
+	}
+}
+
+static int fs_repo_check_writable(const char* path) {
+	return access(path, W_OK) == 0;
+}
+
+static int fs_repo_read_version(const char* path) {
+	char version_path[512];
+	snprintf(version_path, sizeof(version_path), "%s/version", path);
+	FILE* f = fopen(version_path, "r");
+	if (!f) return -1;
+	int version = -1;
+	if (fscanf(f, "%d", &version) != 1) {
+		fclose(f);
+		return -1;
+	}
+	fclose(f);
+	return version;
+}
+
+static int fs_repo_write_version(const char* path, int version) {
+	char version_path[512];
+	snprintf(version_path, sizeof(version_path), "%s/version", path);
+	FILE* f = fopen(version_path, "w");
+	if (!f) return 0;
+	fprintf(f, "%d\n", version);
+	fclose(f);
+	return 1;
+}
 
 /**
  * writes the config file atomically (temp file + rename)
@@ -248,6 +305,8 @@ char* ipfs_repo_get_home_directory(int argc, char** argv);
  */
 int ipfs_repo_fsrepo_new(const char* repo_path, struct RepoConfig* config, struct FSRepo** repo) {
 	*repo = (struct FSRepo*)malloc(sizeof(struct FSRepo));
+	(*repo)->lock_fd = -1;
+	(*repo)->closed = 0;
 
 	if (repo_path == NULL) {
 		char* ipfs_path = ipfs_repo_get_home_directory(0, NULL);
@@ -282,6 +341,10 @@ int ipfs_repo_fsrepo_new(const char* repo_path, struct RepoConfig* config, struc
  */
 int ipfs_repo_fsrepo_free(struct FSRepo* repo) {
 	if (repo != NULL) {
+		if (repo->lock_fd >= 0) {
+			close(repo->lock_fd);
+			repo->lock_fd = -1;
+		}
 		if (repo->path != NULL)
 			free(repo->path);
 		if (repo->config != NULL)
@@ -734,21 +797,37 @@ int ipfs_repo_fsrepo_node_get(const unsigned char* hash, size_t hash_length, voi
  * @return 0 if there was a problem, otherwise 1
  */
 int ipfs_repo_fsrepo_open(struct FSRepo* repo) {
-	//TODO: lock
 	// check if initialized
 	if (!repo_check_initialized(repo->path)) {
 		return 0;
 	}
-	//TODO: lock the file (remember to unlock)
-	//TODO: check the version, and make sure it is correct
-	//TODO: make sure the directory is writable
-	//TODO: open the config
+	// acquire repo lock
+	if (!fs_repo_acquire_lock(repo)) {
+		libp2p_logger_error("fs_repo", "Unable to acquire repo lock for %s\n", repo->path);
+		return 0;
+	}
+	// check the version, and make sure it is correct
+	int version = fs_repo_read_version(repo->path);
+	if (version >= 0 && version != IPFS_REPO_VERSION) {
+		libp2p_logger_error("fs_repo", "Repo version mismatch: expected %d, got %d\n", IPFS_REPO_VERSION, version);
+		fs_repo_release_lock(repo);
+		return 0;
+	}
+	// make sure the directory is writable
+	if (!fs_repo_check_writable(repo->path)) {
+		libp2p_logger_error("fs_repo", "Repo directory is not writable: %s\n", repo->path);
+		fs_repo_release_lock(repo);
+		return 0;
+	}
+	// open the config
 	if (!fs_repo_open_config(repo)) {
+		fs_repo_release_lock(repo);
 		return 0;
 	}
 
 	// open the datastore
 	if (!fs_repo_open_datastore(repo)) {
+		fs_repo_release_lock(repo);
 		return 0;
 	}
 	
@@ -765,8 +844,6 @@ int ipfs_repo_fsrepo_open(struct FSRepo* repo) {
  * @returns true(1) if it is initialized, otherwise false(0)
  */
 int fs_repo_is_initialized(char* repo_path) {
-	//TODO: lock things up so that someone doesn't try an init or remove while this call is in progress
-	// don't forget to unlock
 	return fs_repo_is_initialized_unsynced(repo_path);
 }
 
@@ -802,26 +879,47 @@ int ipfs_repo_fsrepo_blockstore_init(const struct FSRepo* fs_repo) {
  * @returns true(1) on success
  */
 int ipfs_repo_fsrepo_init(struct FSRepo* repo) {
-	// TODO: Do a lock so 2 don't do this at the same time
-	
 	// return error if this has already been done
 	if (fs_repo_is_initialized_unsynced(repo->path))
 		return 0;
-	
-	int retVal = fs_repo_write_config_file(repo->path, repo->config);
-	if (retVal == 0)
-		return 0;
-	
-	retVal = ipfs_repo_fsrepo_datastore_init(repo);
-	if (retVal == 0)
-		return 0;
-	
-	retVal = ipfs_repo_fsrepo_blockstore_init(repo);
-	if (retVal == 0)
-		return 0;
 
-	// write the version to a file for migrations (see repo/fsrepo/migrations/mfsr.go)
-	//TODO: mfsr.RepoPath(repo_path).WriteVersion(RepoVersion)
+	// acquire lock to prevent concurrent init
+	if (!fs_repo_acquire_lock(repo)) {
+		libp2p_logger_error("fs_repo", "Unable to acquire lock during init of %s\n", repo->path);
+		return 0;
+	}
+	// double-check after locking
+	if (fs_repo_is_initialized_unsynced(repo->path)) {
+		fs_repo_release_lock(repo);
+		return 0;
+	}
+
+	int retVal = fs_repo_write_config_file(repo->path, repo->config);
+	if (retVal == 0) {
+		fs_repo_release_lock(repo);
+		return 0;
+	}
+
+	retVal = ipfs_repo_fsrepo_datastore_init(repo);
+	if (retVal == 0) {
+		fs_repo_release_lock(repo);
+		return 0;
+	}
+
+	retVal = ipfs_repo_fsrepo_blockstore_init(repo);
+	if (retVal == 0) {
+		fs_repo_release_lock(repo);
+		return 0;
+	}
+
+	// write the version to a file for migrations
+	if (!fs_repo_write_version(repo->path, IPFS_REPO_VERSION)) {
+		libp2p_logger_error("fs_repo", "Unable to write repo version file for %s\n", repo->path);
+		fs_repo_release_lock(repo);
+		return 0;
+	}
+
+	fs_repo_release_lock(repo);
 	return 1;
 }
 

@@ -14,10 +14,12 @@
 /**
  * a structure to hold the repo info
  */
+#define IPFS_REPO_VERSION 12
+
 struct FSRepo {
 	int closed;
 	char* path;
-	struct IOCloser* lock_file;
+	int lock_fd;
 	struct RepoConfig* config;
 };
 
