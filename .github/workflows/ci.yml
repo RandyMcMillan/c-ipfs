@@ -171,10 +171,14 @@ jobs:
             exit 1
           fi
           SHA256=$(shasum -a 256 ../tmp/sync_payload.txt | awk '{print $1}')
-          IPFS_PATH=../tmp/ipfs_test ./ipfs daemon > ../tmp/ipfs_sync_daemon.log 2>&1 &
-          DAEMON_PID=$!
+          GATEWAY_ROOT=../tmp/ipfs_sync_gateway
+          rm -rf "$GATEWAY_ROOT"
+          mkdir -p "$GATEWAY_ROOT/ipfs"
+          cp ../tmp/sync_payload.txt "$GATEWAY_ROOT/ipfs/$CID"
+          python3 -m http.server 8080 --bind 127.0.0.1 --directory "$GATEWAY_ROOT" > ../tmp/ipfs_sync_gateway.log 2>&1 &
+          GATEWAY_PID=$!
           cleanup() {
-            kill "$DAEMON_PID" 2>/dev/null || true
+            kill "$GATEWAY_PID" 2>/dev/null || true
           }
           trap cleanup EXIT
           READY=0
@@ -187,11 +191,11 @@ jobs:
           done
           if [ "$READY" -ne 1 ]; then
             echo "Local gateway did not serve /ipfs/$CID"
-            tail -n 50 ../tmp/ipfs_sync_daemon.log || true
+            tail -n 50 ../tmp/ipfs_sync_gateway.log || true
             exit 1
           fi
           ./ipfs nostr sync --cid "$CID" --sha256 "$SHA256" --gateway "http://127.0.0.1:8080" --output ../tmp/sync_got.txt
-          kill "$DAEMON_PID" 2>/dev/null || true
+          kill "$GATEWAY_PID" 2>/dev/null || true
           trap - EXIT
 
       - name: Smoke test — nostr self-test
