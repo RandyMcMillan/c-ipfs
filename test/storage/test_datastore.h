@@ -19,7 +19,7 @@ int test_ipfs_datastore_put() {
 	const unsigned char* input = (unsigned char*)"Hello, world!";
 
 	// build the ipfs repository, then shut it down, so we can start fresh
-	retVal = drop_and_build_repository("/tmp/.ipfs", 4001, NULL, NULL);
+	retVal = drop_and_build_repository("./tmp/.ipfs", 4001, NULL, NULL);
 	if (retVal == 0)
 		return 0;
 
@@ -45,7 +45,7 @@ int test_ipfs_datastore_put() {
 
 	// open the repository
 	struct FSRepo* fs_repo;
-	retVal = ipfs_repo_fsrepo_new("/tmp/.ipfs", NULL, &fs_repo);
+	retVal = ipfs_repo_fsrepo_new("./tmp/.ipfs", NULL, &fs_repo);
 	if (retVal == 0) {
 		ipfs_block_free(block);
 		return 0;
@@ -81,7 +81,7 @@ int test_datastore_list_journal() {
 
 	// open database
 	struct FSRepo* fs_repo;
-	if (ipfs_repo_fsrepo_new("/tmp/.ipfs", NULL, &fs_repo) == 0) {
+	if (ipfs_repo_fsrepo_new("./tmp/.ipfs", NULL, &fs_repo) == 0) {
 		return 0;
 	}
 	if (ipfs_repo_fsrepo_open(fs_repo) == 0) {

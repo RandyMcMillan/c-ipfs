@@ -14,7 +14,7 @@
 #include "ipfs/pin/pin.h"
 
 int test_core_api_startup_shutdown() {
-	char* repo_path = "/tmp/ipfs_1";
+	char* repo_path = "./tmp/ipfs_1";
 	char* peer_id = NULL;
 	int retVal = 0;
 	pthread_t daemon_thread = 0;
@@ -60,9 +60,9 @@ int test_core_api_object_cat() {
 	pthread_t daemon_thread2;
 	int thread_started1 = 0;
 	int thread_started2 = 0;
-	char* ipfs_path1 = "/tmp/ipfs_1";
+	char* ipfs_path1 = "./tmp/ipfs_1";
 	char* config_file1 = "config.test1.wo_journal";
-	char* ipfs_path2 = "/tmp/ipfs_2";
+	char* ipfs_path2 = "./tmp/ipfs_2";
 	char* config_file2 = "config.test2.wo_journal";
 	struct FSRepo* fs_repo = NULL;
 	char hash[256] = "";
@@ -108,7 +108,7 @@ int test_core_api_object_cat() {
 
 	// add a file to the first repo
 	uint8_t *bytes = (unsigned char*)"hello, world!\n";
-	char* filename = "/tmp/test1.txt";
+	char* filename = "./tmp/test1.txt";
 	create_file(filename, bytes, strlen((char*)bytes));
 	struct HashtableNode* node;
 	size_t bytes_written;
@@ -155,7 +155,7 @@ int test_core_api_object_cat_binary() {
 	int retVal = 0;
 	pthread_t daemon_thread1;
 	int thread_started1 = 0;
-	char* ipfs_path1 = "/tmp/ipfs_1";
+	char* ipfs_path1 = "./tmp/ipfs_1";
 	char* config_file1 = "config.test1.wo_journal";
 	struct FSRepo* fs_repo = NULL;
 	char hash[256] = "";
@@ -238,7 +238,7 @@ int test_core_api_object_cat_large_binary() {
 	int retVal = 0;
 	pthread_t daemon_thread1;
 	int thread_started1 = 0;
-	char* ipfs_path1 = "/tmp/ipfs_1";
+	char* ipfs_path1 = "./tmp/ipfs_1";
 	char* config_file1 = "config.test1.wo_journal";
 	struct FSRepo* fs_repo = NULL;
 	char hash[256] = "";
@@ -326,9 +326,9 @@ int test_core_api_name_resolve() {
 	pthread_t daemon_thread2;
 	int thread_started1 = 0;
 	int thread_started2 = 0;
-	char* ipfs_path1 = "/tmp/ipfs_1";
+	char* ipfs_path1 = "./tmp/ipfs_1";
 	char* config_file1 = "config.test1.wo_journal";
-	char* ipfs_path2 = "/tmp/ipfs_2";
+	char* ipfs_path2 = "./tmp/ipfs_2";
 	char* config_file2 = "config.test2.wo_journal";
 	struct FSRepo* fs_repo = NULL;
 	char hash[256] = "";
@@ -413,7 +413,7 @@ int test_core_api_name_resolve_1() {
 	int retVal = 0;
 	pthread_t daemon_thread1;
 	int thread_started1 = 0;
-	char* ipfs_path1 = "/tmp/ipfs_1";
+	char* ipfs_path1 = "./tmp/ipfs_1";
 	char* config_file1 = "config.test1.wo_journal";
 	struct FSRepo* fs_repo = NULL;
 	char hash[256] = "";
@@ -471,7 +471,7 @@ int test_core_api_name_resolve_2() {
 	int retVal = 0;
 	pthread_t daemon_thread2;
 	int thread_started2 = 0;
-	char* ipfs_path2 = "/tmp/ipfs_2";
+	char* ipfs_path2 = "./tmp/ipfs_2";
 	char* config_file2 = "config.test2.wo_journal";
 	struct FSRepo* fs_repo = NULL;
 	char peer_id1[256] = "/ipns/QmZVoAZGFfinB7MQQiDzB84kWaDPQ95GLuXdemJFM2r9b4";
@@ -519,7 +519,7 @@ int test_core_api_name_resolve_2() {
 int test_core_api_name_resolve_3()
 {
 	char* hash = "QmcbMZW8hcd46AfUsJUxQYTanHYDpeUq3pBuX5nihPEKD9";
-	char* publish_args[] = {"ipfs", "--config", "/tmp/ipfs_1", "name", "publish", hash };
+	char* publish_args[] = {"ipfs", "--config", "./tmp/ipfs_1", "name", "publish", hash };
 	struct CliArguments* args = NULL;
 
 	libp2p_logger_add_class("api");
@@ -538,7 +538,7 @@ int test_core_api_name_resolve_3()
 int test_core_api_id() {
 	int retVal = 0;
 	struct IpfsNode* local_node = NULL;
-	char* repo_path = "/tmp/ipfs_api_id";
+	char* repo_path = "./tmp/ipfs_api_id";
 	char* peer_id = NULL;
 
 	if (!drop_and_build_repository(repo_path, 4001, NULL, &peer_id))
@@ -571,7 +571,7 @@ exit:
 int test_core_api_version() {
 	int retVal = 0;
 	struct IpfsNode* local_node = NULL;
-	char* repo_path = "/tmp/ipfs_api_version";
+	char* repo_path = "./tmp/ipfs_api_version";
 	char* peer_id = NULL;
 
 	if (!drop_and_build_repository(repo_path, 4001, NULL, &peer_id))
@@ -604,7 +604,7 @@ exit:
 int test_core_api_block_get() {
 	int retVal = 0;
 	struct IpfsNode* local_node = NULL;
-	char* repo_path = "/tmp/ipfs_api_block";
+	char* repo_path = "./tmp/ipfs_api_block";
 	char* peer_id = NULL;
 	struct Block* block = NULL;
 	struct Cid* cid = NULL;
@@ -657,7 +657,7 @@ exit:
 int test_core_api_cat() {
 	int retVal = 0;
 	struct IpfsNode* local_node = NULL;
-	char* repo_path = "/tmp/ipfs_api_cat";
+	char* repo_path = "./tmp/ipfs_api_cat";
 	char* peer_id = NULL;
 	struct HashtableNode* node = NULL;
 	char hash_str[256] = {0};
@@ -669,7 +669,7 @@ int test_core_api_cat() {
 
 	// Import a small file
 	const char* content = "hello, cat world!\n";
-	char* filename = "/tmp/test_api_cat.txt";
+	char* filename = "./tmp/test_api_cat.txt";
 	create_file(filename, (unsigned char*)content, strlen(content));
 
 	size_t bytes_written = 0;
@@ -707,7 +707,7 @@ exit:
 int test_core_api_block_put() {
 	int retVal = 0;
 	struct IpfsNode* local_node = NULL;
-	char* repo_path = "/tmp/ipfs_api_block_put";
+	char* repo_path = "./tmp/ipfs_api_block_put";
 	char* peer_id = NULL;
 
 	if (!drop_and_build_repository(repo_path, 4001, NULL, &peer_id))
@@ -751,7 +751,7 @@ exit:
 int test_core_api_dht_findprovs() {
 	int retVal = 0;
 	struct IpfsNode* local_node = NULL;
-	char* repo_path = "/tmp/ipfs_api_dht_findprovs";
+	char* repo_path = "./tmp/ipfs_api_dht_findprovs";
 	char* peer_id = NULL;
 
 	if (!drop_and_build_repository(repo_path, 4001, NULL, &peer_id))
@@ -787,7 +787,7 @@ exit:
 int test_core_api_pin_add() {
 	int retVal = 0;
 	struct IpfsNode* local_node = NULL;
-	char* repo_path = "/tmp/ipfs_api_pin_add";
+	char* repo_path = "./tmp/ipfs_api_pin_add";
 	char* peer_id = NULL;
 	struct HashtableNode* node = NULL;
 	char hash_str[256] = {0};
@@ -799,7 +799,7 @@ int test_core_api_pin_add() {
 
 	// Import a small file to get a hash to pin
 	const char* content = "pin me please\n";
-	char* filename = "/tmp/test_api_pin_add.txt";
+	char* filename = "./tmp/test_api_pin_add.txt";
 	create_file(filename, (unsigned char*)content, strlen(content));
 
 	size_t bytes_written = 0;
@@ -837,7 +837,7 @@ exit:
 int test_core_api_pin_ls() {
 	int retVal = 0;
 	struct IpfsNode* local_node = NULL;
-	char* repo_path = "/tmp/ipfs_api_pin_ls";
+	char* repo_path = "./tmp/ipfs_api_pin_ls";
 	char* peer_id = NULL;
 	struct HashtableNode* node = NULL;
 	char hash_str[256] = {0};
@@ -849,7 +849,7 @@ int test_core_api_pin_ls() {
 
 	// Import and pin a file first
 	const char* content = "list my pins\n";
-	char* filename = "/tmp/test_api_pin_ls.txt";
+	char* filename = "./tmp/test_api_pin_ls.txt";
 	create_file(filename, (unsigned char*)content, strlen(content));
 
 	size_t bytes_written = 0;
@@ -889,7 +889,7 @@ exit:
 int test_core_api_repo_gc() {
 	int retVal = 0;
 	struct IpfsNode* local_node = NULL;
-	char* repo_path = "/tmp/ipfs_api_repo_gc";
+	char* repo_path = "./tmp/ipfs_api_repo_gc";
 	char* peer_id = NULL;
 
 	if (!drop_and_build_repository(repo_path, 4001, NULL, &peer_id))
@@ -923,7 +923,7 @@ exit:
 int test_core_api_add() {
 	int retVal = 0;
 	struct IpfsNode* local_node = NULL;
-	char* repo_path = "/tmp/ipfs_api_add";
+	char* repo_path = "./tmp/ipfs_api_add";
 	char* peer_id = NULL;
 
 	if (!drop_and_build_repository(repo_path, 4001, NULL, &peer_id))
@@ -965,7 +965,7 @@ exit:
 int test_core_api_dag_get() {
 	int retVal = 0;
 	struct IpfsNode* local_node = NULL;
-	char* repo_path = "/tmp/ipfs_api_dag_get";
+	char* repo_path = "./tmp/ipfs_api_dag_get";
 	char* peer_id = NULL;
 	struct HashtableNode* node = NULL;
 	char hash_str[256] = {0};
@@ -1015,7 +1015,7 @@ exit:
 int test_core_api_dag_put() {
 	int retVal = 0;
 	struct IpfsNode* local_node = NULL;
-	char* repo_path = "/tmp/ipfs_api_dag_put";
+	char* repo_path = "./tmp/ipfs_api_dag_put";
 	char* peer_id = NULL;
 	struct HashtableNode* node = NULL;
 
@@ -1072,7 +1072,7 @@ exit:
 int test_core_api_get() {
 	int retVal = 0;
 	struct IpfsNode* local_node = NULL;
-	char* repo_path = "/tmp/ipfs_api_get";
+	char* repo_path = "./tmp/ipfs_api_get";
 	char* peer_id = NULL;
 	struct HashtableNode* node = NULL;
 	char hash_str[256] = {0};
@@ -1084,7 +1084,7 @@ int test_core_api_get() {
 
 	// Import a small file
 	const char* content = "hello, get world!\n";
-	char* filename = "/tmp/test_api_get.txt";
+	char* filename = "./tmp/test_api_get.txt";
 	create_file(filename, (unsigned char*)content, strlen(content));
 
 	size_t bytes_written = 0;
@@ -1121,7 +1121,7 @@ exit:
 int test_core_api_ls() {
 	int retVal = 0;
 	struct IpfsNode* local_node = NULL;
-	char* repo_path = "/tmp/ipfs_api_ls";
+	char* repo_path = "./tmp/ipfs_api_ls";
 	char* peer_id = NULL;
 	struct HashtableNode* node = NULL;
 	char hash_str[256] = {0};

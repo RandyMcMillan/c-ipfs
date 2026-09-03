@@ -28,7 +28,7 @@ int test_ping() {
     size_t protobuf_size = 0;
 
     // act like this is a normal node
-	drop_build_and_open_repo("/tmp/.ipfs", &fs_repo);
+	drop_build_and_open_repo("./tmp/.ipfs", &fs_repo);
 
 	// create a new IpfsNode
 	/*

@@ -14,8 +14,8 @@
 int test_import_large_file() {
 	size_t bytes_size = 1000000; //1mb
 	unsigned char file_bytes[bytes_size];
-	const char* fileName = "/tmp/test_import_large.tmp";
-	const char* repo_dir = "/tmp/ipfs_1";
+	const char* fileName = "./tmp/test_import_large.tmp";
+	const char* repo_dir = "./tmp/ipfs_1";
 	struct IpfsNode* local_node = NULL;
 	int retVal = 0;
 	// cid should be the same each time
@@ -93,20 +93,20 @@ int test_import_large_file() {
 	}
 
 	// attempt to write file
-	if (ipfs_exporter_to_file(base58, "/tmp/test_import_large_file.rsl", local_node) == 0) {
+	if (ipfs_exporter_to_file(base58, "./tmp/test_import_large_file.rsl", local_node) == 0) {
 		printf("Unable to write file.\n");
 		goto exit;
 	}
 
 	// compare original with new
-	size_t new_file_size = os_utils_file_size("/tmp/test_import_large_file.rsl");
+	size_t new_file_size = os_utils_file_size("./tmp/test_import_large_file.rsl");
 	if (new_file_size != bytes_size) {
 		printf("File sizes are different. Should be %lu but the new one is %lu\n", bytes_size, new_file_size);
 		goto exit;
 	}
 
-	FILE* f1 = fopen("/tmp/test_import_large.tmp", "rb");
-	FILE* f2 = fopen("/tmp/test_import_large_file.rsl", "rb");
+	FILE* f1 = fopen("./tmp/test_import_large.tmp", "rb");
+	FILE* f2 = fopen("./tmp/test_import_large_file.rsl", "rb");
 
 	// compare bytes of files
 	while (bytes_read1 != 0 && bytes_read2 != 0) {
@@ -148,8 +148,8 @@ int test_import_large_file() {
 int test_import_trickle_file() {
 	size_t bytes_size = 1000000; //1mb
 	unsigned char file_bytes[bytes_size];
-	const char* fileName = "/tmp/test_import_trickle.tmp";
-	const char* repo_dir = "/tmp/ipfs_trickle";
+	const char* fileName = "./tmp/test_import_trickle.tmp";
+	const char* repo_dir = "./tmp/ipfs_trickle";
 	struct IpfsNode* local_node = NULL;
 	int retVal = 0;
 	struct HashtableNode* write_node = NULL;
@@ -183,18 +183,18 @@ int test_import_trickle_file() {
 		goto exit;
 	}
 
-	if (ipfs_exporter_to_file(base58, "/tmp/test_import_trickle.rsl", local_node) == 0) {
+	if (ipfs_exporter_to_file(base58, "./tmp/test_import_trickle.rsl", local_node) == 0) {
 		goto exit;
 	}
 
-	size_t new_file_size = os_utils_file_size("/tmp/test_import_trickle.rsl");
+	size_t new_file_size = os_utils_file_size("./tmp/test_import_trickle.rsl");
 	if (new_file_size != bytes_size) {
 		printf("Trickle file sizes are different. Should be %lu but the new one is %lu\n", bytes_size, new_file_size);
 		goto exit;
 	}
 
-	FILE* f1 = fopen("/tmp/test_import_trickle.tmp", "rb");
-	FILE* f2 = fopen("/tmp/test_import_trickle.rsl", "rb");
+	FILE* f1 = fopen("./tmp/test_import_trickle.tmp", "rb");
+	FILE* f2 = fopen("./tmp/test_import_trickle.rsl", "rb");
 	while (bytes_read1 != 0 && bytes_read2 != 0) {
 		bytes_read1 = fread(buf1, 1, 100, f1);
 		bytes_read2 = fread(buf2, 1, 100, f2);
@@ -226,8 +226,8 @@ exit:
 int test_import_small_file() {
 	size_t bytes_size = 1000;
 	unsigned char file_bytes[bytes_size];
-	const char* fileName = "/tmp/test_import_small.tmp";
-	const char* repo_path = "/tmp/ipfs_1";
+	const char* fileName = "./tmp/test_import_small.tmp";
+	const char* repo_path = "./tmp/ipfs_1";
 	struct IpfsNode *local_node = NULL;
 	int retVal = 0;
 
@@ -238,7 +238,10 @@ int test_import_small_file() {
 	// get the repo
 	drop_and_build_repository(repo_path, 4001, NULL, NULL);
 
-	ipfs_node_offline_new(repo_path, &local_node);
+	if (!ipfs_node_offline_new(repo_path, &local_node)) {
+		fprintf(stderr, "Unable to create offline node for %s\n", repo_path);
+		return 0;
+	}
 
 	// write to ipfs
 	struct HashtableNode* write_node;

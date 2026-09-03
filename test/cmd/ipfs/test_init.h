@@ -18,7 +18,7 @@
 
 
 int test_init_new_installation() {
-	unlink("/tmp/.ipfs/config");
+	unlink("./tmp/.ipfs/config");
 	// do the minimum to get the .ipfs directory structure and config file built
 	struct Request request;
 	int retVal = ipfs_cmd_ipfs_init_command_new( &request.cmd );
@@ -27,7 +27,7 @@ int test_init_new_installation() {
 
 	// build a request so it builds the repository in the /tmp directory
 	request.invoc_context = (struct Context*)malloc(sizeof(struct Context));
-	request.invoc_context->config_root = "/tmp/.ipfs";
+	request.invoc_context->config_root = "./tmp/.ipfs";
 
 	// run the methods
 
@@ -57,7 +57,7 @@ int test_init_new_installation() {
 	free(request.invoc_context);
 
 	// make sure the repository exists
-	retVal = os_utils_file_exists("/tmp/.ipfs/config");
+	retVal = os_utils_file_exists("./tmp/.ipfs/config");
 
 	return retVal;
 }

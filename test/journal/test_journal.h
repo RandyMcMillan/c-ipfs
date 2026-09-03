@@ -79,7 +79,7 @@ int test_journal_server_1() {
 	int retVal = 0;
 	pthread_t daemon_thread;
 	int thread_started = 0;
-	char* ipfs_path = "/tmp/ipfs_1";
+	char* ipfs_path = "./tmp/ipfs_1";
 	char* config_file = "config.test1";
 	struct FSRepo* fs_repo = NULL;
 
@@ -150,7 +150,7 @@ int test_journal_server_2() {
 	int retVal = 0;
 	pthread_t daemon_thread;
 	int thread_started = 0;
-	char* ipfs_path = "/tmp/ipfs_2";
+	char* ipfs_path = "./tmp/ipfs_2";
 	char* config_file = "config.test2";
 	struct FSRepo* fs_repo = NULL;
 
@@ -190,7 +190,7 @@ int test_journal_server_2() {
 	sleep(45);
 
 	// see if we have the file that we should have...
-	if (!have_file_in_blockstore("/tmp/ipfs_2/blockstore", "2PD7A7OALR6OCEDZNKYAX363LMX3SBXZQPD3IAVTT")) {
+	if (!have_file_in_blockstore("./tmp/ipfs_2/blockstore", "2PD7A7OALR6OCEDZNKYAX363LMX3SBXZQPD3IAVTT")) {
 		libp2p_logger_error("test_journal", "We don't have the file that we think we should.\n");
 		goto exit;
 	} else {
@@ -235,8 +235,8 @@ int test_journal_db() {
 	journalstore_value->mv_data = (void*)value;
 
 	// clean up the old stuff
-	unlink ("/tmp/lock.mdb");
-	unlink ("/tmp/data.mdb");
+	unlink ("./tmp/lock.mdb");
+	unlink ("./tmp/data.mdb");
 
 	// create environment
 	if (mdb_env_create(&mdb_env) != 0)

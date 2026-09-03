@@ -21,7 +21,7 @@ int test_repo_config_new() {
 int test_repo_config_init() {
 	int retVal = 0;
 	struct RepoConfig* repoConfig = NULL;
-	char* config_dir = "/tmp/.ipfs";
+	char* config_dir = "./tmp/.ipfs";
 	char* peer_id = NULL;
 
 	if (!drop_repository(config_dir)) {
@@ -80,7 +80,7 @@ int test_repo_config_init() {
 	*/
 	
 	// datastore
-	if (strncmp(repoConfig->datastore->path, "/tmp/.ipfs/datastore", 32) != 0)
+	if (strncmp(repoConfig->datastore->path, "./tmp/.ipfs/datastore", 32) != 0)
 		goto exit;
 
 	retVal = 1;
@@ -98,21 +98,21 @@ int test_repo_config_init() {
  */
 int test_repo_config_write() {
 	// make sure the directory is there
-	if (!os_utils_file_exists("/tmp/.ipfs")) {
-		mkdir("/tmp/.ipfs", S_IRWXU);
+	if (!os_utils_file_exists("./tmp/.ipfs")) {
+		mkdir("./tmp/.ipfs", S_IRWXU);
 	}
 	// first delete the existing one
-	unlink("/tmp/.ipfs/config");
+	unlink("./tmp/.ipfs/config");
 	
 	// now build a new one
 	struct RepoConfig* repoConfig;
 	ipfs_repo_config_new(&repoConfig);
-	if (!ipfs_repo_config_init(repoConfig, 2048, "/tmp/.ipfs", 4001, NULL)) {
+	if (!ipfs_repo_config_init(repoConfig, 2048, "./tmp/.ipfs", 4001, NULL)) {
 		ipfs_repo_config_free(repoConfig);
 		return 0;
 	}
 	
-	if (!fs_repo_write_config_file("/tmp/.ipfs", repoConfig)) {
+	if (!fs_repo_write_config_file("./tmp/.ipfs", repoConfig)) {
 		ipfs_repo_config_free(repoConfig);
 		return 0;
 	}
@@ -120,14 +120,14 @@ int test_repo_config_write() {
 	ipfs_repo_config_free(repoConfig);
 	
 	// check to see if the file exists
-	return os_utils_file_exists("/tmp/.ipfs/config");
+	return os_utils_file_exists("./tmp/.ipfs/config");
 }
 
 /***
  * test atomic config write: temp file should not remain after rename
  */
 int test_repo_config_atomic_write() {
-	const char* config_dir = "/tmp/ipfs_atomic_config_test";
+	const char* config_dir = "./tmp/ipfs_atomic_config_test";
 	char config_path[256];
 	char tmp_path[256];
 	snprintf(config_path, sizeof(config_path), "%s/config", config_dir);

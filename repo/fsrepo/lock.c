@@ -33,9 +33,9 @@ typedef struct fs_repo {
 
 static pthread_mutex_t g_repo_global_mtx = PTHREAD_MUTEX_INITIALIZER;
 
-static int platform_lock_file(fs_repo_t *repo, bool non_blocking) {
+static int platform_lock_file(fs_repo_t *repo, bool non_blocking, bool exclusive) {
 #if defined(_WIN32)
-    DWORD flags = LOCKFILE_EXCLUSIVE_LOCK;
+    DWORD flags = exclusive ? LOCKFILE_EXCLUSIVE_LOCK : 0;
     if (non_blocking) flags |= LOCKFILE_FAIL_IMMEDIATELY;
     OVERLAPPED overlapped = {0};
     repo->lock_handle = (HANDLE)_get_osfhandle(repo->lock_fd);
@@ -44,7 +44,7 @@ static int platform_lock_file(fs_repo_t *repo, bool non_blocking) {
     }
     return 0;
 #else
-    int operation = LOCK_EX;
+    int operation = exclusive ? LOCK_EX : LOCK_SH;
     if (non_blocking) operation |= LOCK_NB;
     return flock(repo->lock_fd, operation);
 #endif
@@ -89,7 +89,7 @@ fs_repo_t *fs_repo_create(const char *path) {
     return repo;
 }
 
-int fs_repo_lock(fs_repo_t *repo) {
+static int fs_repo_lock_internal(fs_repo_t *repo, bool exclusive) {
     if (!repo) return -1;
     pthread_mutex_lock(&repo->inproc_mtx);
 
@@ -105,7 +105,7 @@ int fs_repo_lock(fs_repo_t *repo) {
         return -1;
     }
 
-    if (platform_lock_file(repo, true) != 0) {
+    if (platform_lock_file(repo, true, exclusive) != 0) {
         if (errno == EWOULDBLOCK || errno == EAGAIN) {
             fprintf(stderr, "[fs_repo] Error: Repo locked by another process.\n");
         }
@@ -121,6 +121,14 @@ int fs_repo_lock(fs_repo_t *repo) {
     repo->lock_depth = 1;
     pthread_mutex_unlock(&repo->inproc_mtx);
     return 0;
+}
+
+int fs_repo_lock(fs_repo_t *repo) {
+    return fs_repo_lock_internal(repo, true);
+}
+
+int fs_repo_lock_shared(fs_repo_t *repo) {
+    return fs_repo_lock_internal(repo, false);
 }
 
 int fs_repo_unlock(fs_repo_t *repo) {
@@ -195,7 +203,7 @@ int fs_repo_init(fs_repo_t *repo) {
 int fs_repo_open(fs_repo_t *repo) {
     pthread_mutex_lock(&g_repo_global_mtx);
 
-    if (fs_repo_lock(repo) != 0) {
+    if (fs_repo_lock_shared(repo) != 0) {
         pthread_mutex_unlock(&g_repo_global_mtx);
         return -1;
     }

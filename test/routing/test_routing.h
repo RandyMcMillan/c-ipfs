@@ -22,7 +22,7 @@
  */
 int test_routing_put_value() {
 	int retVal = 0;
-	char* ipfs_path_publisher = "/tmp/ipfs_1";
+	char* ipfs_path_publisher = "./tmp/ipfs_1";
 	char* peer_id_publisher = NULL;
 	struct MultiAddress* ma_publisher = NULL;
 	pthread_t thread_publisher;
@@ -88,13 +88,13 @@ int test_routing_put_value() {
  */
 int test_routing_put_value_and_resolve() {
 	int retVal = 0;
-	char* ipfs_path_publisher = "/tmp/ipfs_1";
+	char* ipfs_path_publisher = "./tmp/ipfs_1";
 	char* peer_id_publisher = NULL;
 	struct MultiAddress* ma_publisher = NULL;
 	pthread_t thread_publisher;
 	int publisher_thread_started = 0;
 	pthread_t thread_consumer;
-	char* ipfs_path_consumer = "/tmp/ipfs_2";
+	char* ipfs_path_consumer = "./tmp/ipfs_2";
 	char* peer_id_consumer = NULL;
 	int consumer_thread_started = 0;
 	struct Libp2pVector* ma_vector = NULL;
@@ -168,9 +168,9 @@ int test_routing_put_value_and_resolve() {
 
 int test_routing_find_peer() {
 	int retVal = 0;
-	char* ipfs_path1 = "/tmp/ipfs_1";
-	char* ipfs_path2 = "/tmp/ipfs_2";
-	char* ipfs_path3 = "/tmp/ipfs_3";
+	char* ipfs_path1 = "./tmp/ipfs_1";
+	char* ipfs_path2 = "./tmp/ipfs_2";
+	char* ipfs_path3 = "./tmp/ipfs_3";
 	pthread_t thread1;
 	pthread_t thread2;
 	pthread_t thread3;
@@ -213,10 +213,13 @@ int test_routing_find_peer() {
 
 	// add a file to peer 2
 	char* hello_text = "Hello, World!";
-	create_file("/tmp/hello.txt", (uint8_t*)hello_text, strlen(hello_text));
+	create_file("./tmp/hello.txt", (uint8_t*)hello_text, strlen(hello_text));
 	size_t bytes_written = 0;
-	ipfs_node_offline_new(ipfs_path2, &local_node2);
-	ipfs_import_file(NULL, "/tmp/hello.txt", &node, local_node2, &bytes_written, 0);
+	if (!ipfs_node_offline_new(ipfs_path2, &local_node2)) {
+		fprintf(stderr, "Unable to create offline node for %s\n", ipfs_path2);
+		goto exit;
+	}
+	ipfs_import_file(NULL, "./tmp/hello.txt", &node, local_node2, &bytes_written, 0);
 	ipfs_node_free(local_node2);
 
 	// create my peer, peer 3
@@ -229,7 +232,10 @@ int test_routing_find_peer() {
 
 	sleep(3);
 
-	ipfs_node_offline_new(ipfs_path3, &local_node3);
+	if (!ipfs_node_offline_new(ipfs_path3, &local_node3)) {
+		fprintf(stderr, "Unable to create offline node for %s\n", ipfs_path3);
+		goto exit;
+	}
 	int peer2_len = strlen(peer_id_2);
 
 	if (!local_node3->routing->FindPeer(local_node3->routing, (unsigned char*)peer_id_2, peer2_len, &result)) {
@@ -278,9 +284,9 @@ int test_routing_find_peer() {
 
 int test_routing_find_providers() {
 	int retVal = 0;
-	char* ipfs_path1 = "/tmp/ipfs_1";
-	char* ipfs_path2 = "/tmp/ipfs_2";
-	char* ipfs_path3 = "/tmp/ipfs_3";
+	char* ipfs_path1 = "./tmp/test_findprov_1";
+	char* ipfs_path2 = "./tmp/test_findprov_2";
+	char* ipfs_path3 = "./tmp/test_findprov_3";
 	char* peer_id_1 = NULL;
 	char* peer_id_2 = NULL;
 	char* peer_id_3 = NULL;
@@ -329,8 +335,13 @@ int test_routing_find_providers() {
 
 	// add a file, to prime the connection to peer 1
 	size_t bytes_written = 0;
-	ipfs_node_offline_new(ipfs_path2, &local_node2);
-	ipfs_import_file(NULL, "/home/parallels/ipfstest/hello_world.txt", &node, local_node2, &bytes_written, 0);
+	uint8_t *hello_bytes = (unsigned char*)"hello, world!\n";
+	create_file("./tmp/hello_world.txt", hello_bytes, strlen((char*)hello_bytes));
+	if (!ipfs_node_offline_new(ipfs_path2, &local_node2)) {
+		fprintf(stderr, "Unable to create offline node for %s\n", ipfs_path2);
+		goto exit;
+	}
+	ipfs_import_file(NULL, "./tmp/hello_world.txt", &node, local_node2, &bytes_written, 0);
 	ipfs_node_free(local_node2);
 
 	// create my peer, peer 3
@@ -339,7 +350,10 @@ int test_routing_find_providers() {
 	libp2p_utils_vector_add(ma_vector3, ma_peer1);
 	drop_and_build_repository(ipfs_path3, 4003, ma_vector3, &peer_id_3);
 
-	ipfs_node_offline_new(ipfs_path3, &local_node3);
+	if (!ipfs_node_offline_new(ipfs_path3, &local_node3)) {
+		fprintf(stderr, "Unable to create offline node for %s\n", ipfs_path3);
+		goto exit;
+	}
 
     if (!local_node3->routing->FindProviders(local_node3->routing, node->hash, node->hash_size, &result)) {
     		fprintf(stderr, "Unable to find a provider\n");
@@ -420,7 +434,7 @@ int test_routing_find_providers() {
 int test_routing_provide() {
 	int retVal = 0;
 	// clean out repository
-	char* ipfs_path = "/tmp/test1";
+	char* ipfs_path = "./tmp/test1";
 	os_utils_setenv("IPFS_PATH", ipfs_path, 1);
 	char* peer_id_1 = NULL;
 	char* peer_id_2 = NULL;
@@ -447,7 +461,7 @@ int test_routing_provide() {
 	thread1_started = 1;
 
 	// create peer 2
-	ipfs_path = "/tmp/test2";
+	ipfs_path = "./tmp/test2";
 	os_utils_setenv("IPFS_PATH", ipfs_path, 1);
 	// create a vector to hold peer1's multiaddress so we can connect as a peer
 	ma_vector2 = libp2p_utils_vector_new(1);
@@ -457,7 +471,10 @@ int test_routing_provide() {
 	// add a file, to prime the connection to peer 1
 	//TODO: Find a better way to do this...
 	size_t bytes_written = 0;
-	ipfs_node_offline_new(ipfs_path, &local_node2);
+	if (!ipfs_node_offline_new(ipfs_path, &local_node2)) {
+		fprintf(stderr, "Unable to create offline node for %s\n", ipfs_path);
+		goto exit;
+	}
 	uint8_t *bytes = (unsigned char*)"hello, world!\n";
 	char* filename = "test1.txt";
 	create_file(filename, bytes, strlen((char*)bytes));
@@ -500,7 +517,7 @@ int test_routing_provide() {
  */
 int test_routing_retrieve_file_third_party() {
 	int retVal = 0;
-	char* ipfs_path_1 = "/tmp/ipfs_1", *ipfs_path_2 = "/tmp/ipfs_2", *ipfs_path_3 = "/tmp/ipfs_3";
+	char* ipfs_path_1 = "./tmp/ipfs_1", *ipfs_path_2 = "./tmp/ipfs_2", *ipfs_path_3 = "./tmp/ipfs_3";
 	char* peer_id_1 = NULL, *peer_id_2 = NULL, *peer_id_3 = NULL;
 	struct IpfsNode* ipfs_node2 = NULL, *ipfs_node3 = NULL;
 	pthread_t thread1, thread2, thread3;
@@ -658,7 +675,7 @@ int test_routing_retrieve_large_file() {
 	libp2p_logger_add_class("online");
 
 	// clean out repository
-	char* ipfs_path = "/tmp/test1";
+	char* ipfs_path = "./tmp/test1";
 	char* peer_id_1 = NULL, *peer_id_2 = NULL, *peer_id_3 = NULL;
 	struct IpfsNode* ipfs_node2 = NULL, *ipfs_node3 = NULL;
 	pthread_t thread1, thread2;
@@ -667,7 +684,7 @@ int test_routing_retrieve_large_file() {
 	struct Libp2pVector* ma_vector2 = NULL, *ma_vector3 = NULL;
 	struct HashtableNode* node = NULL, *result_node = NULL;
 	FILE *fd;
-	char* temp_file_name = "/tmp/largefile.tmp";
+	char* temp_file_name = "./tmp/largefile.tmp";
 
 	unlink(temp_file_name);
 
@@ -689,7 +706,7 @@ int test_routing_retrieve_large_file() {
     sleep(3);
 
     // create peer 2
-	ipfs_path = "/tmp/test2";
+	ipfs_path = "./tmp/test2";
 	// create a vector to hold peer1's multiaddress so we can connect as a peer
 	ma_vector2 = libp2p_utils_vector_new(1);
 	libp2p_utils_vector_add(ma_vector2, ma_peer1);
@@ -719,7 +736,7 @@ int test_routing_retrieve_large_file() {
     // see if we get the entire file
     libp2p_logger_debug("test_routing", "Firing up the 3rd client\n");
     // create my peer, peer 3
-	ipfs_path = "/tmp/test3";
+	ipfs_path = "./tmp/test3";
 	ma_peer1 = multiaddress_new_from_string(multiaddress_string);
 	ma_vector3 = libp2p_utils_vector_new(1);
 	libp2p_utils_vector_add(ma_vector3, ma_peer1);

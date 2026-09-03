@@ -5,7 +5,7 @@
 int test_repo_fsrepo_open_config() {
 	struct FSRepo* fs_repo = NULL;
 
-	const char* path = "/tmp/.ipfs";
+	const char* path = "./tmp/.ipfs";
 
 	if (!drop_build_and_open_repo(path, &fs_repo))
 		return 0;
@@ -17,7 +17,7 @@ int test_repo_fsrepo_open_config() {
 }
 
 int test_repo_fsrepo_build() {
-	const char* path = "/tmp/.ipfs";
+	const char* path = "./tmp/.ipfs";
 	char* peer_id = NULL;
 
 	int retVal = drop_and_build_repository(path, 4001, NULL, &peer_id);
@@ -27,7 +27,7 @@ int test_repo_fsrepo_build() {
 }
 
 int test_repo_init_config_import() {
-	const char* path = "/tmp/.ipfs_import_test";
+	const char* path = "./tmp/.ipfs_import_test";
 	drop_repository(path);
 
 	// Create a minimal config file for import
@@ -52,7 +52,7 @@ int test_repo_config_merge_json() {
 		return 0;
 
 	// Initialize with defaults
-	if (!ipfs_repo_config_init(config, 2048, "/tmp/.ipfs_merge_test", 4001, NULL)) {
+	if (!ipfs_repo_config_init(config, 2048, "./tmp/.ipfs_merge_test", 4001, NULL)) {
 		ipfs_repo_config_free(config);
 		return 0;
 	}
@@ -128,7 +128,7 @@ int test_repo_fsrepo_write_read_block() {
 	int retVal = 0;
 
 	// freshen the repository
-	retVal = drop_build_and_open_repo("/tmp/.ipfs", &fs_repo);
+	retVal = drop_build_and_open_repo("./tmp/.ipfs", &fs_repo);
 	if (retVal == 0)
 		return 0;
 

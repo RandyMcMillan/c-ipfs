@@ -9,7 +9,7 @@ int blockstore_put(const char *root, const char *cid_str, const uint8_t *data, s
 int blockstore_get(const char *root, const char *cid_str, uint8_t **out_data, size_t *out_len);
 
 int test_blockstore_shard_put_get(void) {
-    char tmp[] = "/tmp/test_bs_shard_XXXXXX";
+    char tmp[] = "./tmp/test_bs_shard_XXXXXX";
     if (!mkdtemp(tmp)) return 0;
     const char *cid = "Qm1234567890abcdef";
     const uint8_t data[] = "hello shard";

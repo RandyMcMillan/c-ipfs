@@ -218,7 +218,7 @@ int test_bitswap_retrieve_file()
 {
 	int retVal = 0;
 	struct IpfsNode* localNode = NULL;
-	const char* ipfs_path = "/tmp/ipfstest1";
+	const char* ipfs_path = "./tmp/ipfstest1";
 	struct HashtableNode* node = NULL; // the node created by adding the file
 	size_t bytes_written = 0;
 	struct Block* block = NULL;
@@ -226,13 +226,16 @@ int test_bitswap_retrieve_file()
 
 	// build and open the new IPFS repository with no bootstrap peers
 	drop_and_build_repository(ipfs_path, 4001, NULL, NULL);
-	ipfs_node_offline_new(ipfs_path, &localNode);
+	if (!ipfs_node_offline_new(ipfs_path, &localNode)) {
+		fprintf(stderr, "Unable to create offline node for %s\n", ipfs_path);
+		goto exit;
+	}
 
 	// add a file
 	unsigned char bytes[256];
 	create_bytes(&bytes[0], 256);
-	create_file("/tmp/test_file.bin", &bytes[0], 256);
-	ipfs_import_file(NULL, "/tmp/test_file.bin", &node, localNode, &bytes_written, 0);
+	create_file("./tmp/test_file.bin", &bytes[0], 256);
+	ipfs_import_file(NULL, "./tmp/test_file.bin", &node, localNode, &bytes_written, 0);
 
 	// build the Cid from the node information
 	cid = ipfs_cid_new(0, node->hash, node->hash_size, CID_DAG_PROTOBUF);
@@ -276,7 +279,7 @@ int test_bitswap_retrieve_file_remote() {
 	libp2p_logger_add_class("multistream");
 
 	// clean out repository
-	char* ipfs_path = "/tmp/test1";
+	char* ipfs_path = "./tmp/test1";
 	char* peer_id_1 = NULL, *peer_id_2 = NULL;
 	struct IpfsNode* ipfs_node1 = NULL, *ipfs_node2 = NULL;
 	pthread_t thread1;
@@ -299,8 +302,8 @@ int test_bitswap_retrieve_file_remote() {
 	ipfs_node_offline_new(ipfs_path, &ipfs_node1);
 	unsigned char bytes[256];
 	create_bytes(bytes, 256);
-	create_file("/tmp/hello.bin", bytes, 256);
-	ipfs_import_file(NULL, "/tmp/hello.bin", &node, ipfs_node1, &bytes_written, 0);
+	create_file("./tmp/hello.bin", bytes, 256);
+	ipfs_import_file(NULL, "./tmp/hello.bin", &node, ipfs_node1, &bytes_written, 0);
 	// start the daemon in a separate thread
 	if (pthread_create(&thread1, NULL, test_daemon_start, (void*)ipfs_path) < 0) {
 		libp2p_logger_error("test_bitswap", "Unable to start thread 1\n");
@@ -312,7 +315,7 @@ int test_bitswap_retrieve_file_remote() {
 
     // create my peer, peer 2
     libp2p_logger_debug("test_bitswap", "Firing up the client\n");
-	ipfs_path = "/tmp/test2";
+	ipfs_path = "./tmp/test2";
 	ma_peer1 = multiaddress_new_from_string(multiaddress_string);
 	ma_vector2 = libp2p_utils_vector_new(1);
 	libp2p_utils_vector_add(ma_vector2, ma_peer1);
@@ -398,7 +401,7 @@ int test_bitswap_retrieve_file_known_remote() {
 	libp2p_logger_add_class("bitswap_engine");
 	libp2p_logger_add_class("bitswap_network");
 
-	char* ipfs_path = "/tmp/test1";
+	char* ipfs_path = "./tmp/test1";
 	char* peer_id_1 = NULL, *peer_id_2 = NULL;
 	struct IpfsNode* ipfs_node2 = NULL;
 	struct MultiAddress* ma_peer1 = NULL;
@@ -413,7 +416,7 @@ int test_bitswap_retrieve_file_known_remote() {
 
     // create my peer, peer 2
     libp2p_logger_debug("test_routing", "Firing up the client\n");
-	ipfs_path = "/tmp/test2";
+	ipfs_path = "./tmp/test2";
 	ma_vector2 = libp2p_utils_vector_new(1);
 	libp2p_utils_vector_add(ma_vector2, ma_peer1);
 	drop_and_build_repository(ipfs_path, 4002, ma_vector2, &peer_id_2);
@@ -487,7 +490,7 @@ int test_bitswap_retrieve_file_third_party() {
 	libp2p_logger_add_class("multistream");
 
 	// clean out repository
-	char* ipfs_path = "/tmp/test1";
+	char* ipfs_path = "./tmp/test1";
 	char* peer_id_1 = NULL, *peer_id_2 = NULL, *peer_id_3 = NULL;
 	struct IpfsNode* ipfs_node2 = NULL, *ipfs_node3 = NULL;
 	pthread_t thread1, thread2;
@@ -516,7 +519,7 @@ int test_bitswap_retrieve_file_third_party() {
 
     // create peer 2
 	libp2p_logger_debug("test_routing", "Firing up daemon 2.\n");
-	ipfs_path = "/tmp/test2";
+	ipfs_path = "./tmp/test2";
 	// create a vector to hold peer1's multiaddress so we can connect as a peer
 	ma_vector2 = libp2p_utils_vector_new(1);
 	libp2p_utils_vector_add(ma_vector2, ma_peer1);
@@ -531,8 +534,8 @@ int test_bitswap_retrieve_file_third_party() {
 	ipfs_node2->routing->Bootstrap(ipfs_node2->routing);
 	unsigned char bytes[256];
 	create_bytes(&bytes[0], 256);
-	create_file("/tmp/hello.bin", &bytes[0], 256);
-	ipfs_import_file(NULL, "/tmp/hello.bin", &node, ipfs_node2, &bytes_written, 0);
+	create_file("./tmp/hello.bin", &bytes[0], 256);
+	ipfs_import_file(NULL, "./tmp/hello.bin", &node, ipfs_node2, &bytes_written, 0);
 	ipfs_node_free(ipfs_node2);
 	// start the daemon in a separate thread
 	if (pthread_create(&thread2, NULL, test_daemon_start, (void*)ipfs_path) < 0) {
@@ -545,7 +548,7 @@ int test_bitswap_retrieve_file_third_party() {
 
     // create my peer, peer 3
     libp2p_logger_debug("test_routing", "Firing up the 3rd client\n");
-	ipfs_path = "/tmp/test3";
+	ipfs_path = "./tmp/test3";
 	ma_peer1 = multiaddress_new_from_string(multiaddress_string);
 	ma_vector3 = libp2p_utils_vector_new(1);
 	libp2p_utils_vector_add(ma_vector3, ma_peer1);
@@ -640,7 +643,7 @@ int test_bitswap_retrieve_file_go_remote() {
 	libp2p_logger_add_class("bitswap_engine");
 	libp2p_logger_add_class("bitswap_network");
 
-	char* ipfs_path = "/tmp/test1";
+	char* ipfs_path = "./tmp/test1";
 	char peer_ma_1[80] = "", *peer_id_2 = NULL;
 	struct IpfsNode* ipfs_node2 = NULL;
 	struct MultiAddress* ma_peer1 = NULL;
@@ -654,7 +657,7 @@ int test_bitswap_retrieve_file_go_remote() {
 
     // create my peer, peer 2
     libp2p_logger_debug("test_routing", "Firing up the client\n");
-	ipfs_path = "/tmp/test2";
+	ipfs_path = "./tmp/test2";
 	ma_vector2 = libp2p_utils_vector_new(1);
 	libp2p_utils_vector_add(ma_vector2, ma_peer1);
 	drop_and_build_repository(ipfs_path, 4002, ma_vector2, &peer_id_2);
@@ -732,7 +735,7 @@ int test_bitswap_serve_file_go_remote() {
 	libp2p_logger_add_class("bitswap_engine");
 	libp2p_logger_add_class("bitswap_network");
 
-	char* ipfs_path = "/tmp/ipfs_2";
+	char* ipfs_path = "./tmp/ipfs_2";
 	char *peer_id_2 = NULL;
 	struct FSRepo* fs_repo;
 	pthread_t thread2;

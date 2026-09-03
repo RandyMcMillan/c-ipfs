@@ -10,7 +10,7 @@ int ipfs_swarm_connect(struct IpfsNode* local_node, const char* address);
 
 int test_compat_go_join_swarm() {
 	int retVal = 0;
-	char* ipfs_path1 = "/tmp/ipfs_1";
+	char* ipfs_path1 = "./tmp/ipfs_1";
 	char* config_file1 = "config.test1.wo_journal";
 	pthread_t daemon_thread;
 	int daemon_started = 0;

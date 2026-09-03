@@ -199,7 +199,7 @@ int test_hamt_basic() {
 }
 
 int test_hamt_persist() {
-	const char* repo_dir = "/tmp/ipfs_hamt_test";
+	const char* repo_dir = "./tmp/ipfs_hamt_test";
 	struct IpfsNode* local_node = NULL;
 	struct HAMTNode* hamt = NULL;
 	struct HashtableNode* node = NULL;

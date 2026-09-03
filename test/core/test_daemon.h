@@ -9,7 +9,7 @@
 int test_daemon_startup_shutdown() {
 	int retVal = 0;
 	pthread_t daemon_thread;
-	char* ipfs_path = "/tmp/.ipfs";
+	char* ipfs_path = "./tmp/.ipfs";
 	char* peer_id = NULL;
 
 	if (!drop_and_build_repository(ipfs_path, 4001, NULL, &peer_id)) {

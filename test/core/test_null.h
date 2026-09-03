@@ -10,7 +10,7 @@ int test_null_add_provider() {
 	pthread_t thread1, thread2;
 	int thread1_started = 0, thread2_started = 0;
 	struct MultiAddress* ma_peer1;
-	char* ipfs_path = "/tmp/test1";
+	char* ipfs_path = "./tmp/test1";
 
 	// create peer 1 that will be the "server" for this test
 	os_utils_setenv("IPFS_PATH", ipfs_path, 1);
@@ -24,7 +24,7 @@ int test_null_add_provider() {
 	thread1_started = 1;
 
 	// create peer 2 that will be the "client" for this test
-	ipfs_path = "/tmp/test2";
+	ipfs_path = "./tmp/test2";
 	os_utils_setenv("IPFS_PATH", ipfs_path, 1);
 	struct Libp2pVector* ma_vector = libp2p_utils_vector_new(1);
 	libp2p_utils_vector_add(ma_vector, ma_peer1);

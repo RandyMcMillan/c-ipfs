@@ -6,7 +6,7 @@
 
 int test_node_peerstore() {
 	int retVal = 0;
-	const char *repo_path = "/tmp/test1";
+	const char *repo_path = "./tmp/test1";
 	char* peer_id = NULL;
 	struct IpfsNode *local_node = NULL;
 	struct Libp2pPeer* peer = NULL;

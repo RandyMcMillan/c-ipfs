@@ -12,7 +12,7 @@
 #include "ipfs/blocks/blockstore.h"
 
 int test_pin_add_rm_load() {
-    const char* repo_dir = "/tmp/ipfs_pin_test";
+    const char* repo_dir = "./tmp/ipfs_pin_test";
     struct IpfsNode* local_node = NULL;
     int retVal = 0;
 
@@ -70,7 +70,7 @@ exit:
 }
 
 int test_gc_collect() {
-    const char* repo_dir = "/tmp/ipfs_gc_test";
+    const char* repo_dir = "./tmp/ipfs_gc_test";
     struct IpfsNode* local_node = NULL;
     int retVal = 0;
 

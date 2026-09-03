@@ -30,7 +30,7 @@ struct FSRepo* createAndOpenRepo(const char* dir) {
 int test_merkledag_get_data() {
 	int retVal = 0;
 
-	struct FSRepo* fs_repo = createAndOpenRepo("/tmp/.ipfs");
+	struct FSRepo* fs_repo = createAndOpenRepo("./tmp/.ipfs");
 
 	// create data for node
 	size_t binary_data_size = 256;
@@ -87,12 +87,12 @@ int test_merkledag_get_data() {
 int test_merkledag_add_data() {
 	int retVal = 0;
 
-	struct FSRepo* fs_repo = createAndOpenRepo("/tmp/.ipfs");
+	struct FSRepo* fs_repo = createAndOpenRepo("./tmp/.ipfs");
 	if (fs_repo == NULL)
 		return 0;
 
 	// get the size of the database
-	int start_file_size = os_utils_file_size("/tmp/.ipfs/datastore/data.mdb");
+	int start_file_size = os_utils_file_size("./tmp/.ipfs/datastore/data.mdb");
 
 	// create data for node
 	size_t binary_data_size = 256;
@@ -116,7 +116,7 @@ int test_merkledag_add_data() {
 	if (node1->hash == NULL)
 		return 0;
 
-	int first_add_size = os_utils_file_size("/tmp/.ipfs/datastore/data.mdb");
+	int first_add_size = os_utils_file_size("./tmp/.ipfs/datastore/data.mdb");
 	if (first_add_size == start_file_size) { // uh oh, database should have increased in size
 		ipfs_hashtable_node_free(node1);
 		return 0;
@@ -147,7 +147,7 @@ int test_merkledag_add_data() {
 		}
 	}
 
-	int second_add_size = os_utils_file_size("/tmp/.ipfs/datastore/data.mdb");
+	int second_add_size = os_utils_file_size("./tmp/.ipfs/datastore/data.mdb");
 	if (first_add_size != second_add_size) { // uh oh, the database shouldn't have changed size
 		printf("looks as if a new record was added when it shouldn't have. Old file size: %d, new file size: %d\n", first_add_size, second_add_size);
 		ipfs_hashtable_node_free(node1);
@@ -180,7 +180,7 @@ int test_merkledag_add_data() {
 	ipfs_hashtable_node_free(node1);
 	ipfs_hashtable_node_free(node2);
 	ipfs_hashtable_node_free(node3);
-	int third_add_size = os_utils_file_size("/tmp/.ipfs/datastore/data.mdb");
+	int third_add_size = os_utils_file_size("./tmp/.ipfs/datastore/data.mdb");
 	if (third_add_size == second_add_size || third_add_size < second_add_size) {// uh oh, it didn't add it
 		printf("Node 3 should have been added, but the file size did not change from %d.\n", third_add_size);
 		return 0;
@@ -195,7 +195,7 @@ int test_merkledag_add_node() {
 	int retVal = 0;
 	struct HashtableNode* node1 = NULL;
 
-	struct FSRepo* fs_repo = createAndOpenRepo("/tmp/.ipfs");
+	struct FSRepo* fs_repo = createAndOpenRepo("./tmp/.ipfs");
 	if (fs_repo == NULL) {
 		printf("Unable to create repo\n");
 		return 0;
@@ -232,7 +232,7 @@ int test_merkledag_add_node_with_links() {
 	struct HashtableNode* node1 = NULL;
 	struct HashtableNode* node2 = NULL;
 
-	struct FSRepo* fs_repo = createAndOpenRepo("/tmp/.ipfs");
+	struct FSRepo* fs_repo = createAndOpenRepo("./tmp/.ipfs");
 	if (fs_repo == NULL) {
 		printf("Unable to create repo\n");
 		return 0;
@@ -313,7 +313,7 @@ static int test_traverse_visit(struct HashtableNode* node, int depth, void* ctx)
 }
 
 int test_merkledag_traverse() {
-	struct FSRepo* fs_repo = createAndOpenRepo("/tmp/.ipfs");
+	struct FSRepo* fs_repo = createAndOpenRepo("./tmp/.ipfs");
 	if (fs_repo == NULL)
 		return 0;
 
@@ -395,7 +395,7 @@ int test_merkledag_traverse() {
 }
 
 int test_merkledag_link_ordering() {
-	struct FSRepo* fs_repo = createAndOpenRepo("/tmp/.ipfs");
+	struct FSRepo* fs_repo = createAndOpenRepo("./tmp/.ipfs");
 	if (fs_repo == NULL)
 		return 0;
 

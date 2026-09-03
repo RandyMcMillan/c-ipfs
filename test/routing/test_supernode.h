@@ -20,7 +20,7 @@ int test_routing_supernode_start() {
 	struct IpfsNode* ipfs_node = NULL;
 	struct Stream* stream = NULL;
 
-	if (!drop_build_and_open_repo("/tmp/.ipfs", &fs_repo))
+	if (!drop_build_and_open_repo("./tmp/.ipfs", &fs_repo))
 		goto exit;
 
 	ipfs_node = (struct IpfsNode*)malloc(sizeof(struct IpfsNode));
@@ -78,7 +78,7 @@ int test_routing_supernode_get_remote_value() {
 		goto exit;
 
 	// fire things up
-	if (!drop_build_and_open_repo("/tmp/.ipfs", &fs_repo))
+	if (!drop_build_and_open_repo("./tmp/.ipfs", &fs_repo))
 		goto exit;
 
 	ipfs_node = (struct IpfsNode*)malloc(sizeof(struct IpfsNode));
@@ -165,7 +165,7 @@ int test_routing_supernode_get_value() {
 	struct IpfsNode* ipfs_node = NULL;
 	int file_size = 1000;
 	unsigned char bytes[file_size];
-	char* fullFileName = "/tmp/temp_file.bin";
+	char* fullFileName = "./tmp/temp_file.bin";
 	struct HashtableNode* write_node = NULL;
 	size_t bytes_written = 0;
 	struct Libp2pVector* multiaddresses = NULL;
@@ -178,11 +178,11 @@ int test_routing_supernode_get_value() {
 	struct MultiAddress* addr = NULL;
 
 
-	if (!drop_build_and_open_repo("/tmp/.ipfs", &fs_repo))
+	if (!drop_build_and_open_repo("./tmp/.ipfs", &fs_repo))
 		goto exit;
 
 	// start daemon
-	pthread_create(&thread, NULL, start_daemon, (void*)"/tmp/.ipfs");
+	pthread_create(&thread, NULL, start_daemon, (void*)"./tmp/.ipfs");
 	thread_started = 1;
 
 	ipfs_node = (struct IpfsNode*)malloc(sizeof(struct IpfsNode));

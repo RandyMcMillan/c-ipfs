@@ -27,20 +27,31 @@
  * private methods
  */
 
-static int fs_repo_acquire_lock(struct FSRepo* repo) {
+static int fs_repo_acquire_lock_internal(struct FSRepo* repo, int lock_op) {
 	if (repo->lock_fd >= 0)
 		return 1;
 	char lock_path[512];
 	snprintf(lock_path, sizeof(lock_path), "%s/repo.lock", repo->path);
 	repo->lock_fd = open(lock_path, O_RDWR | O_CREAT, 0600);
-	if (repo->lock_fd < 0)
+	if (repo->lock_fd < 0) {
+		libp2p_logger_error("fs_repo", "open lockfile failed for %s: %s\n", repo->path, strerror(errno));
 		return 0;
-	if (flock(repo->lock_fd, LOCK_EX | LOCK_NB) != 0) {
+	}
+	if (flock(repo->lock_fd, lock_op | LOCK_NB) != 0) {
+		libp2p_logger_error("fs_repo", "flock failed for %s: %s (pid=%d)\n", repo->path, strerror(errno), getpid());
 		close(repo->lock_fd);
 		repo->lock_fd = -1;
 		return 0;
 	}
 	return 1;
+}
+
+static int fs_repo_acquire_lock(struct FSRepo* repo) {
+	return fs_repo_acquire_lock_internal(repo, LOCK_SH);
+}
+
+static int fs_repo_acquire_lock_exclusive(struct FSRepo* repo) {
+	return fs_repo_acquire_lock_internal(repo, LOCK_EX);
 }
 
 static void fs_repo_release_lock(struct FSRepo* repo) {
@@ -1058,8 +1069,8 @@ int ipfs_repo_fsrepo_init(struct FSRepo* repo) {
 	if (fs_repo_is_initialized_unsynced(repo->path))
 		return 0;
 
-	// acquire lock to prevent concurrent init
-	if (!fs_repo_acquire_lock(repo)) {
+	// acquire exclusive lock to prevent concurrent init
+	if (!fs_repo_acquire_lock_exclusive(repo)) {
 		libp2p_logger_error("fs_repo", "Unable to acquire lock during init of %s\n", repo->path);
 		return 0;
 	}
