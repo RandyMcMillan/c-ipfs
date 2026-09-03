@@ -36,6 +36,9 @@ static void print_nostr_help(FILE *out) {
     fprintf(out, "SUBCOMMANDS:\n");
     fprintf(out, "  note --content <text>                     Publish a text note (kind 1)\n");
     fprintf(out, "  publish --cid <cid> [--content <text>]    Publish IPFS content (kind 1064)\n");
+    fprintf(out, "  provider --cid <cid> [--addr <multiaddr>] Announce provider record (kind 1065)\n");
+    fprintf(out, "  pin-request --cid <cid> [--relay <url>]   Request remote pin (kind 1066)\n");
+    fprintf(out, "  pin-confirm --cid <cid> --request <id>    Confirm remote pin (kind 1067)\n");
     fprintf(out, "  manifest --cid <cid> --sha256 <h> --size <n>  PIP manifest (kind 39078)\n");
     fprintf(out, "            [--path <name>] [--encoding <e>]\n");
     fprintf(out, "  attest --manifest <id> --sha256 <h> --cid <c> PIP attestation (kind 39080)\n");
@@ -166,6 +169,72 @@ int ipfs_nostr(int argc, char** argv) {
         }
         if (!nostr_event_make_ipfs_content(ctx, &key, cid, content, &ev)) {
             fprintf(stderr, "Error: failed to create event\n");
+            goto cleanup;
+        }
+        if (!nostr_event_to_json(&ev, json_buf, sizeof(json_buf))) {
+            fprintf(stderr, "Error: failed to serialize event\n");
+            goto cleanup;
+        }
+        printf("%s\n", json_buf);
+        ret = 1;
+    }
+    else if (strcmp(subcmd, "provider") == 0) {
+        const char *cid = get_arg(argc, argv, "--cid");
+        const char *addr = get_arg(argc, argv, "--addr");
+        if (!cid) {
+            fprintf(stderr, "Error: --cid required\n");
+            goto cleanup;
+        }
+        if (!ipfs_validate_cid(cid)) {
+            fprintf(stderr, "SECURITY ERROR: Invalid CID payload format.\n");
+            goto cleanup;
+        }
+        if (!nostr_event_make_ipfs_provider(ctx, &key, cid, addr, &ev)) {
+            fprintf(stderr, "Error: failed to create provider event\n");
+            goto cleanup;
+        }
+        if (!nostr_event_to_json(&ev, json_buf, sizeof(json_buf))) {
+            fprintf(stderr, "Error: failed to serialize event\n");
+            goto cleanup;
+        }
+        printf("%s\n", json_buf);
+        ret = 1;
+    }
+    else if (strcmp(subcmd, "pin-request") == 0) {
+        const char *cid = get_arg(argc, argv, "--cid");
+        const char *relay = get_arg(argc, argv, "--relay");
+        if (!cid) {
+            fprintf(stderr, "Error: --cid required\n");
+            goto cleanup;
+        }
+        if (!ipfs_validate_cid(cid)) {
+            fprintf(stderr, "SECURITY ERROR: Invalid CID payload format.\n");
+            goto cleanup;
+        }
+        if (!nostr_event_make_ipfs_pin_request(ctx, &key, cid, relay, &ev)) {
+            fprintf(stderr, "Error: failed to create pin-request event\n");
+            goto cleanup;
+        }
+        if (!nostr_event_to_json(&ev, json_buf, sizeof(json_buf))) {
+            fprintf(stderr, "Error: failed to serialize event\n");
+            goto cleanup;
+        }
+        printf("%s\n", json_buf);
+        ret = 1;
+    }
+    else if (strcmp(subcmd, "pin-confirm") == 0) {
+        const char *cid = get_arg(argc, argv, "--cid");
+        const char *request_id = get_arg(argc, argv, "--request");
+        if (!cid) {
+            fprintf(stderr, "Error: --cid required\n");
+            goto cleanup;
+        }
+        if (!ipfs_validate_cid(cid)) {
+            fprintf(stderr, "SECURITY ERROR: Invalid CID payload format.\n");
+            goto cleanup;
+        }
+        if (!nostr_event_make_ipfs_pin_confirm(ctx, &key, cid, request_id, &ev)) {
+            fprintf(stderr, "Error: failed to create pin-confirm event\n");
             goto cleanup;
         }
         if (!nostr_event_to_json(&ev, json_buf, sizeof(json_buf))) {

@@ -51,6 +51,9 @@ OBJS = testit.o test_helper.o \
 	../transport/*.o \
 	../unixfs/unixfs.o ../unixfs/hamt.o \
 	../util/thread_pool.o ../util/time.o ../util/errs.o ../util/errs_impl.o \
+	../nostr/*.o \
+	../rbsr/rbsr.o \
+	../nostril/sha256.o \
 	../c-libp2p/c-protobuf/protobuf.o ../c-libp2p/c-protobuf/varint.o
 
 %.o: %.c $(DEPS)

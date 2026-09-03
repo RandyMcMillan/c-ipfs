@@ -41,6 +41,7 @@
 #include "pubsub/test_gossipsub.h"
 #include "transport/test_transport.h"
 #include "repo/test_repo_lock.h"
+#include "nostr/test_nostr_ipfs_kinds.h"
 #include "blocks/test_blockstore_shard.h"
 #include "dnslink/test_dns_cache.h"
 
@@ -230,6 +231,9 @@ int build_test_collection() {
 	add_test("test_bitswap_future_reject", test_bitswap_future_reject, 1);
 	add_test("test_gossipsub_graft_roundtrip", test_gossipsub_graft_roundtrip, 1);
 	add_test("test_gossipsub_prune_roundtrip", test_gossipsub_prune_roundtrip, 1);
+	add_test("test_nostr_ipfs_provider_kind", test_nostr_ipfs_provider_kind, 1);
+	add_test("test_nostr_ipfs_pin_request_kind", test_nostr_ipfs_pin_request_kind, 1);
+	add_test("test_nostr_ipfs_pin_confirm_kind", test_nostr_ipfs_pin_confirm_kind, 1);
 	add_test("test_transport_stream_struct_size", test_transport_stream_struct_size, 1);
 	add_test("test_transport_struct_size", test_transport_struct_size, 1);
 	add_test("test_transport_quic_create_without_lsquic", test_transport_quic_create_without_lsquic, 1);

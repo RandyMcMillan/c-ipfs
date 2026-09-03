@@ -223,3 +223,55 @@ int nostr_event_make_ipfs_content(void *ctx, struct NostrKey *key,
         return 0;
     return nostr_event_sign(ctx, key, ev);
 }
+
+int nostr_event_make_ipfs_provider(void *ctx, struct NostrKey *key,
+                                    const char *cid, const char *multiaddr,
+                                    struct NostrEvent *ev)
+{
+    unsigned char buf[32768];
+    nostr_event_init(ev);
+    ev->kind = NOSTR_KIND_IPFS_PROVIDER;
+    nostr_event_set_content(ev, multiaddr ? multiaddr : "");
+    if (!nostr_tags_add_cid(&ev->tags, cid))
+        return 0;
+    if (multiaddr && !nostr_tags_add(&ev->tags, "multiaddr", multiaddr))
+        return 0;
+    memcpy(ev->pubkey, key->pubkey, 32);
+    if (!nostr_event_commit(ev, buf, sizeof(buf)))
+        return 0;
+    return nostr_event_sign(ctx, key, ev);
+}
+
+int nostr_event_make_ipfs_pin_request(void *ctx, struct NostrKey *key,
+                                       const char *cid, const char *relay_hint,
+                                       struct NostrEvent *ev)
+{
+    unsigned char buf[32768];
+    nostr_event_init(ev);
+    ev->kind = NOSTR_KIND_IPFS_PIN_REQUEST;
+    nostr_event_set_content(ev, relay_hint ? relay_hint : "");
+    if (!nostr_tags_add_cid(&ev->tags, cid))
+        return 0;
+    memcpy(ev->pubkey, key->pubkey, 32);
+    if (!nostr_event_commit(ev, buf, sizeof(buf)))
+        return 0;
+    return nostr_event_sign(ctx, key, ev);
+}
+
+int nostr_event_make_ipfs_pin_confirm(void *ctx, struct NostrKey *key,
+                                       const char *cid, const char *request_event_id,
+                                       struct NostrEvent *ev)
+{
+    unsigned char buf[32768];
+    nostr_event_init(ev);
+    ev->kind = NOSTR_KIND_IPFS_PIN_CONFIRM;
+    nostr_event_set_content(ev, "");
+    if (!nostr_tags_add_cid(&ev->tags, cid))
+        return 0;
+    if (request_event_id && !nostr_tags_add_event_ref(&ev->tags, request_event_id))
+        return 0;
+    memcpy(ev->pubkey, key->pubkey, 32);
+    if (!nostr_event_commit(ev, buf, sizeof(buf)))
+        return 0;
+    return nostr_event_sign(ctx, key, ev);
+}

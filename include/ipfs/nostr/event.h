@@ -59,3 +59,12 @@ void nostr_event_print(struct NostrEvent *ev);
 int nostr_event_make_ipfs_content(void *ctx, struct NostrKey *key,
                                    const char *cid, const char *description,
                                    struct NostrEvent *ev);
+int nostr_event_make_ipfs_provider(void *ctx, struct NostrKey *key,
+                                    const char *cid, const char *multiaddr,
+                                    struct NostrEvent *ev);
+int nostr_event_make_ipfs_pin_request(void *ctx, struct NostrKey *key,
+                                       const char *cid, const char *relay_hint,
+                                       struct NostrEvent *ev);
+int nostr_event_make_ipfs_pin_confirm(void *ctx, struct NostrKey *key,
+                                       const char *cid, const char *request_event_id,
+                                       struct NostrEvent *ev);

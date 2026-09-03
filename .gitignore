@@ -66,6 +66,7 @@
 !test/pubsub/test_gossipsub.h
 !test/transport/test_transport.h
 !test/repo/test_repo_lock.h
+!test/nostr/test_nostr_ipfs_kinds.h
 !test/blocks/test_blockstore_shard.h
 !test/dnslink/test_dns_cache.h
 
