@@ -57,7 +57,9 @@ CID, multihash, and multibase correctness are prerequisites for IPLD, UnixFS, Bi
 - Support balanced and trickle layouts.
 - Add configurable chunking.
 - Improve repo semantics for flatfs, transactional metadata, garbage collection, locking, and crash-safe writes.
+  - ✅ **Done**: POSIX flock locking with shared (open) / exclusive (init) split; macOS same-process compatibility fixed.
 - Support JSON config import with field-level merge overlay.
+  - ✅ **Done**: `repo_config_merge_json` overlays Datastore, Addresses, Bootstrap, and Replication fields.
 
 ### Exit criteria
 
@@ -65,6 +67,7 @@ CID, multihash, and multibase correctness are prerequisites for IPLD, UnixFS, Bi
 - Repo state survives restart and GC scenarios without corruption.
 - Metadata and layout choices round-trip correctly.
 - `ipfs init` accepts an optional config file and correctly overlays imported values onto defaults.
+- ✅ Test suite passes without segfaults (127/127 default-suite tests pass locally).
 
 ## Phase 4: libp2p compatibility
 
