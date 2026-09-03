@@ -24,4 +24,7 @@
    int ipfs_dnslink_resolve_once (char ***p, char *domain);
    int ipfs_dnslink_parse_txt (char **path, char *txt);
    int ipfs_dnslink_parse_link_domain (char **domain, char**rest, char *txt);
+
+   int dns_cache_get(const char *domain, char *out_path, size_t max_len);
+   void dns_cache_put(const char *domain, const char *resolved_path, uint32_t ttl_sec);
 #endif // DNSLINK_H

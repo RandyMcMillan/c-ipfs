@@ -35,7 +35,8 @@ struct WantListQueue* ipfs_bitswap_wantlist_queue_new() {
 	struct WantListQueue* wantlist = (struct WantListQueue*) malloc(sizeof(struct WantListQueue));
 	if (wantlist != NULL) {
 		pthread_mutex_init(&wantlist->wantlist_mutex, NULL);
-		wantlist->queue = NULL;
+		wantlist->head = NULL;
+		wantlist->size = 0;
 	}
 	return wantlist;
 }
@@ -47,14 +48,14 @@ struct WantListQueue* ipfs_bitswap_wantlist_queue_new() {
  */
 int ipfs_bitswap_wantlist_queue_free(struct WantListQueue* wantlist) {
 	if (wantlist != NULL) {
-		if (wantlist->queue != NULL) {
-			for(int i = 0; i < wantlist->queue->total; i++) {
-				struct WantListQueueEntry* entry = (struct WantListQueueEntry*)libp2p_utils_vector_get(wantlist->queue, i);
-				ipfs_bitswap_wantlist_queue_entry_free(entry);
-			}
-			libp2p_utils_vector_free(wantlist->queue);
-			wantlist->queue = NULL;
+		struct WantListQueueEntry* curr = wantlist->head;
+		while (curr != NULL) {
+			struct WantListQueueEntry* next = curr->next;
+			ipfs_bitswap_wantlist_queue_entry_free(curr);
+			curr = next;
 		}
+		wantlist->head = NULL;
+		wantlist->size = 0;
 		free(wantlist);
 	}
 	return 1;
@@ -70,9 +71,6 @@ struct WantListQueueEntry* ipfs_bitswap_wantlist_queue_add(struct WantListQueue*
 	struct WantListQueueEntry* entry = NULL;
 	if (wantlist != NULL) {
 		pthread_mutex_lock(&wantlist->wantlist_mutex);
-		if (wantlist->queue == NULL) {
-			wantlist->queue = libp2p_utils_vector_new(1);
-		}
 		entry = ipfs_bitswap_wantlist_queue_find(wantlist, cid);
 		if (entry == NULL) {
 			// create a new one
@@ -80,7 +78,9 @@ struct WantListQueueEntry* ipfs_bitswap_wantlist_queue_add(struct WantListQueue*
 			entry->cid = ipfs_cid_copy(cid);
 			entry->priority = 1;
 			libp2p_utils_vector_add(entry->sessionsRequesting, session);
-			libp2p_utils_vector_add(wantlist->queue, entry);
+			entry->next = wantlist->head;
+			wantlist->head = entry;
+			wantlist->size++;
 		}
 		libp2p_utils_vector_add(entry->sessionsRequesting, session);
 		pthread_mutex_unlock(&wantlist->wantlist_mutex);
@@ -101,14 +101,16 @@ int ipfs_bitswap_wantlist_queue_remove(struct WantListQueue* wantlist, const str
 		if (entry != NULL) {
 			ipfs_bitswap_wantlist_queue_entry_decrement(entry, session);
 			if (entry->sessionsRequesting->total == 0) {
-				for (size_t i = 0; i < wantlist->queue->total; i++) {
-					struct WantListQueueEntry* current = (struct WantListQueueEntry*)libp2p_utils_vector_get(wantlist->queue, i);
-					if (current == entry) {
-						libp2p_utils_vector_delete(wantlist->queue, i);
-						ipfs_bitswap_wantlist_queue_entry_free(entry);
+				struct WantListQueueEntry** curr = &wantlist->head;
+				while (*curr != NULL) {
+					if (*curr == entry) {
+						*curr = entry->next;
+						wantlist->size--;
 						break;
 					}
+					curr = &(*curr)->next;
 				}
+				ipfs_bitswap_wantlist_queue_entry_free(entry);
 			}
 			pthread_mutex_unlock(&wantlist->wantlist_mutex);
 			return 1;
@@ -125,15 +127,16 @@ int ipfs_bitswap_wantlist_queue_remove(struct WantListQueue* wantlist, const str
  * @returns the WantListQueueEntry
  */
 struct WantListQueueEntry* ipfs_bitswap_wantlist_queue_find(struct WantListQueue* wantlist, const struct Cid* cid) {
-	for (size_t i = 0; i < wantlist->queue->total; i++) {
-		struct WantListQueueEntry* entry = (struct WantListQueueEntry*) libp2p_utils_vector_get(wantlist->queue, i);
-		if (entry == NULL) {
-			libp2p_logger_error("wantlist_queue", "Null entry found in wantlist queue at index %zu\n", i);
+	struct WantListQueueEntry* curr = wantlist->head;
+	while (curr != NULL) {
+		if (curr->cid == NULL) {
+			libp2p_logger_error("wantlist_queue", "Null CID found in wantlist queue entry\n");
 			return NULL;
 		}
-		if (ipfs_cid_compare(cid, entry->cid) == 0) {
-			return entry;
+		if (ipfs_cid_compare(cid, curr->cid) == 0) {
+			return curr;
 		}
+		curr = curr->next;
 	}
 	return NULL;
 }
@@ -147,19 +150,18 @@ struct WantListQueueEntry* ipfs_bitswap_wantlist_queue_find(struct WantListQueue
 struct WantListQueueEntry* ipfs_bitswap_wantlist_queue_pop(struct WantListQueue* wantlist) {
 	struct WantListQueueEntry* entry = NULL;
 
-	if (wantlist == NULL || wantlist->queue == NULL || wantlist->queue->total == 0)
+	if (wantlist == NULL || wantlist->head == NULL)
 		return entry;
 
-	//TODO: This should be a linked list, not an array
 	pthread_mutex_lock(&wantlist->wantlist_mutex);
-	for(int i = 0; i < wantlist->queue->total; i++) {
-		struct WantListQueueEntry* current = (struct WantListQueueEntry*)libp2p_utils_vector_get(wantlist->queue, i);
-		if (current->block == NULL && !current->asked_network) {
-			entry = current;
+	struct WantListQueueEntry* curr = wantlist->head;
+	while (curr != NULL) {
+		if (curr->block == NULL && !curr->asked_network) {
+			entry = curr;
 			break;
 		}
+		curr = curr->next;
 	}
-	//libp2p_utils_vector_delete(wantlist->queue, 0);
 	pthread_mutex_unlock(&wantlist->wantlist_mutex);
 	return entry;
 }
@@ -181,6 +183,9 @@ struct WantListQueueEntry* ipfs_bitswap_wantlist_queue_entry_new() {
 		entry->priority = 0;
 		entry->attempts = 0;
 		entry->asked_network = 0;
+		entry->next = NULL;
+		pthread_mutex_init(&entry->block_mutex, NULL);
+		pthread_cond_init(&entry->block_cond, NULL);
 	}
 	return entry;
 }
@@ -204,6 +209,9 @@ int ipfs_bitswap_wantlist_queue_entry_free(struct WantListQueueEntry* entry) {
 			libp2p_utils_vector_free(entry->sessionsRequesting);
 			entry->sessionsRequesting = NULL;
 		}
+		pthread_mutex_destroy(&entry->block_mutex);
+		pthread_cond_destroy(&entry->block_cond);
+		entry->next = NULL;
 		free(entry);
 	}
 	return 1;

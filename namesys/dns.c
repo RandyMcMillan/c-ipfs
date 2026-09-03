@@ -64,6 +64,18 @@ int ipfs_dns_resolver_resolve_once (char **path, char *name)
     if (!ipfs_isdomain_is_domain(domain)) {
         return ErrInvalidDomain;
     }
+
+    char cached_path[512];
+    if (dns_cache_get(domain, cached_path, sizeof(cached_path))) {
+        *path = malloc(strlen(cached_path) + 1);
+        if (!*path) {
+            ipfs_path_free_segments(&segments);
+            return ErrAllocFailed;
+        }
+        strcpy(*path, cached_path);
+        goto append_segments;
+    }
+
     //log.Infof("DNSResolver resolving %s", domain);
 
     if (pipe(p1) || pipe(p2)) {
@@ -141,9 +153,13 @@ int ipfs_dns_resolver_resolve_once (char **path, char *name)
     } while (c); // wait for child process finish.
 
     if (!*path) {
+        ipfs_path_free_segments(&segments);
         return ErrResolveFailed;
     }
 
+    dns_cache_put(domain, *path, 0);
+
+append_segments:
     if (ipfs_path_segments_length (segments) > 1) {
         name = *path + strlen(*path) - 1;
         while (*name == '/') {

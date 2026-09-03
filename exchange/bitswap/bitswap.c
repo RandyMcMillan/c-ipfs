@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <unistd.h> // for sleep()
 #include <pthread.h>
+#include <sys/time.h>
 #include "libp2p/os/utils.h"
 #include "libp2p/utils/logger.h"
 #include "libp2p/net/stream.h"
@@ -156,7 +157,10 @@ int ipfs_bitswap_has_block(struct Exchange* exchange, struct Block* block) {
 	// update requests
 	struct WantListQueueEntry* queueEntry = ipfs_bitswap_wantlist_queue_find(context->localWantlist, block->cid);
 	if (queueEntry != NULL) {
+		pthread_mutex_lock(&queueEntry->block_mutex);
 		queueEntry->block = block;
+		pthread_cond_broadcast(&queueEntry->block_cond);
+		pthread_mutex_unlock(&queueEntry->block_mutex);
 	}
 	// TODO: Announce to world that we now have the block
 	return 0;
@@ -187,25 +191,26 @@ int ipfs_bitswap_get_block(struct Exchange* exchange, struct Cid* cid, struct Bl
 		wantlist_session->context = (void*)bitswapContext->ipfsNode;
 		struct WantListQueueEntry* want_entry = ipfs_bitswap_want_manager_add(bitswapContext, cid, wantlist_session);
 		if (want_entry != NULL) {
-			// loop waiting for it to fill
-			while(1) {
-				if (want_entry->block != NULL) {
-					*block = ipfs_block_copy(want_entry->block);
-					// error or not, we no longer need the block (decrement reference count)
-					ipfs_bitswap_want_manager_remove(bitswapContext, cid);
-					if (*block == NULL) {
-						return 0;
-					}
-					return 1;
-				}
-				//TODO: This is a busy-loop. Find another way.
-				timeTaken += waitSecs;
-				if (timeTaken >= timeout) {
-					// It took too long. Stop looking.
-					ipfs_bitswap_want_manager_remove(bitswapContext, cid);
+			struct timespec ts;
+			struct timeval tv;
+			gettimeofday(&tv, NULL);
+			ts.tv_sec = tv.tv_sec + timeout;
+			ts.tv_nsec = tv.tv_usec * 1000;
+
+			pthread_mutex_lock(&want_entry->block_mutex);
+			while (want_entry->block == NULL) {
+				int rc = pthread_cond_timedwait(&want_entry->block_cond, &want_entry->block_mutex, &ts);
+				if (rc == ETIMEDOUT) {
 					break;
 				}
-				sleep(waitSecs);
+			}
+			if (want_entry->block != NULL) {
+				*block = ipfs_block_copy(want_entry->block);
+			}
+			pthread_mutex_unlock(&want_entry->block_mutex);
+			ipfs_bitswap_want_manager_remove(bitswapContext, cid);
+			if (*block != NULL) {
+				return 1;
 			}
 		}
 	}

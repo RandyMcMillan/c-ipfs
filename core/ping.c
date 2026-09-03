@@ -64,7 +64,7 @@ int ipfs_ping (int argc, char **argv)
 		peer_to_ping = ipfs_resolver_find_peer(argv[2], &local_node);
 	} else {
 		// perhaps they passed an IP and port
-		if (argc >= 3) {
+		if (argc >= 4) {
 			char* str = malloc(strlen(argv[2]) + strlen(argv[3]) + 100);
 			if (str == NULL) {
 				// memory issue
@@ -72,14 +72,28 @@ int ipfs_ping (int argc, char **argv)
 			}
 			sprintf(str, "/ip4/%s/tcp/%s", argv[2], argv[3]);
 			peer_to_ping = libp2p_peer_new();
-			if (peer_to_ping) {
-				peer_to_ping->addr_head = libp2p_utils_linked_list_new();
-				peer_to_ping->addr_head->item = multiaddress_new_from_string(str);
-				peer_to_ping->id = str;
-				peer_to_ping->id_size = strlen(str);
+			if (peer_to_ping == NULL) {
+				free(str);
+				goto exit;
 			}
+			peer_to_ping->addr_head = libp2p_utils_linked_list_new();
+			if (peer_to_ping->addr_head == NULL) {
+				libp2p_peer_free(peer_to_ping);
+				peer_to_ping = NULL;
+				free(str);
+				goto exit;
+			}
+			struct MultiAddress* ma = multiaddress_new_from_string(str);
+			if (ma == NULL) {
+				libp2p_peer_free(peer_to_ping);
+				peer_to_ping = NULL;
+				free(str);
+				goto exit;
+			}
+			peer_to_ping->addr_head->item = ma;
+			peer_to_ping->id = str;
+			peer_to_ping->id_size = strlen(str);
 		}
-		//TODO: Error checking
 	}
 
 	if (peer_to_ping == NULL)

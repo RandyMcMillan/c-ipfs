@@ -23,21 +23,41 @@ int ipfs_routing_generic_put_value (ipfs_routing* offlineRouting, const unsigned
         return err;
     }
 
-    nkey = malloc(key_size * 2); // FIXME: size of encoded key
+    size_t nkey_max = ((key_size + 4) / 5) * 8 + 1;
+    nkey = malloc(nkey_max);
     if (!nkey) {
         free (record);
         return -1;
     }
 
-    if (!ipfs_datastore_helper_ds_key_from_binary(key, key_size, (unsigned char*)nkey, key_size+1, &nkey_len)) {
+    if (!ipfs_datastore_helper_ds_key_from_binary(key, key_size, (unsigned char*)nkey, nkey_max, &nkey_len)) {
         free (nkey);
         free (record);
         return -1;
     }
 
-    // TODO: Save to db as offline storage.
-    free (record);
-    return 0; // success.
+    struct DatastoreRecord* ds_record = libp2p_datastore_record_new();
+    if (!ds_record) {
+        free (nkey);
+        free (record);
+        return -1;
+    }
+    ds_record->key = (uint8_t*)nkey;
+    ds_record->key_size = nkey_len;
+    ds_record->value = (uint8_t*)record;
+    ds_record->value_size = len;
+    ds_record->timestamp = 0;
+
+    struct Datastore* datastore = offlineRouting->local_node->repo->config->datastore;
+    if (!datastore || !datastore->datastore_put) {
+        libp2p_datastore_record_free(ds_record);
+        free (record);
+        return -1;
+    }
+
+    int put_ret = datastore->datastore_put(ds_record, datastore);
+    libp2p_datastore_record_free(ds_record);
+    return put_ret == 1 ? 0 : -1;
 }
 
 /***

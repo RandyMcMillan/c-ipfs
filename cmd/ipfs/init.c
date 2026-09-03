@@ -1,6 +1,8 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <pthread.h>
+#include <fcntl.h>
+#include <sys/file.h>
 
 #include "ipfs/cmd/ipfs/init.h"
 #include "ipfs/commands/request.h"
@@ -19,7 +21,25 @@ const int nBitsForKeypairDefault = 2048;
  * @returns 0 if a problem, otherwise a 1
  */
 int init_pre_run(struct Request* request) {
-	//TODO: make sure daemon is not running
+	// Check if repo is locked by another process (daemon running)
+	char* repo_path = request->invoc_context->config_root;
+	if (repo_path != NULL) {
+		char lock_path[512];
+		int len = snprintf(lock_path, sizeof(lock_path), "%s/repo.lock", repo_path);
+		if (len > 0 && (size_t)len < sizeof(lock_path)) {
+			int fd = open(lock_path, O_RDWR | O_CREAT, 0600);
+			if (fd >= 0) {
+				int locked = flock(fd, LOCK_EX | LOCK_NB);
+				if (locked != 0) {
+					close(fd);
+					fprintf(stderr, "Error: ipfs daemon is already running in this repo\n");
+					return 0;
+				}
+				flock(fd, LOCK_UN);
+				close(fd);
+			}
+		}
+	}
 	return 1;
 }
 
@@ -29,19 +49,28 @@ int init_pre_run(struct Request* request) {
  * @returns true(1) on success
  */
 int initialize_ipns_keyspace(struct FSRepo* repo) {
-	//open fs repo
+	// open fs repo
 	int retVal = ipfs_repo_fsrepo_open(repo);
 	if (retVal == 0)
 		return 0;
-	//TODO: make a new node, then close it
-	//TODO: setup offline routing on new node
+
+	// Build an offline node for IPNS keyspace initialization
 	struct IpfsNode* ipfs_node = NULL;
-	struct Context* ctx = NULL;
-	struct BuildCfg* bld_cfg = NULL;
-	//TODO: see line 185 of init.go, what does core.BldCfg{Repo: r} do? BldCfg is a structure
-	retVal = ipfs_core_builder_new_node(ctx, bld_cfg, ipfs_node);
-	//return namesys_initialize_keyspace(ctx, ipfs_node->DAG, ipfs_node->Namesys, ipfs_node->pinning, ipfs_node->private_key);
-	return retVal;
+	retVal = ipfs_node_offline_new(repo->path, &ipfs_node);
+	if (retVal == 0 || ipfs_node == NULL)
+		return 0;
+
+	// Setup offline routing
+	ipfs_node->routing = ipfs_routing_new_offline(ipfs_node, &repo->config->identity->private_key);
+	if (ipfs_node->routing == NULL) {
+		ipfs_node_free(ipfs_node);
+		return 0;
+	}
+
+	// TODO: Publish an empty directory to initialize the IPNS keyspace
+	// (Kubo publishes /ipfs/QmUNLLsPACCz1vLxQVkX7LXxXzr6bFt8hehz5GXhPxCgTz)
+	ipfs_node_free(ipfs_node);
+	return 1;
 }
 
 /**
@@ -60,8 +89,12 @@ int do_init(FILE* out_file, char* repo_root, int empty, int num_bits_for_keypair
 	// verify that it is not already initialized
 	if (fs_repo_is_initialized(repo_root))
 		return 0;
-	//TODO: If the conf is null, make one
-	if ( conf->identity->peer == NULL || conf->identity->peer->id == NULL) {
+	// If the conf is null, make one
+	if (conf == NULL) {
+		if (ipfs_repo_config_new(&conf) == 0)
+			return 0;
+	}
+	if (conf->identity == NULL || conf->identity->peer == NULL || conf->identity->peer->id == NULL) {
 		int retVal = ipfs_repo_config_init(conf, num_bits_for_keypair, repo_root, 4001, NULL);
 		if (retVal == 0)
 			return 0;
@@ -75,7 +108,7 @@ int do_init(FILE* out_file, char* repo_root, int empty, int num_bits_for_keypair
 	if (retVal == 0)
 		return 0;
 
-	//TODO: add default assets
+	// TODO: add default assets (readme, welcome page)
 	return initialize_ipns_keyspace(repo);
 }
 

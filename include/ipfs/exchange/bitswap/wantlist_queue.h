@@ -25,12 +25,15 @@ struct WantListQueueEntry {
 	struct Block* block;
 	int asked_network;
 	int attempts;
+	struct WantListQueueEntry* next;
+	pthread_mutex_t block_mutex;
+	pthread_cond_t block_cond;
 };
 
 struct WantListQueue {
 	pthread_mutex_t wantlist_mutex;
-	// a vector of WantListEntries
-	struct Libp2pVector* queue;
+	struct WantListQueueEntry* head;
+	size_t size;
 };
 
 /***

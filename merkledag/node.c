@@ -830,9 +830,24 @@ struct Link_Proc * Node_Resolve_Links(struct HashtableNode * N, char * path)
 		if(proclink)
 		{
 			LProc->links[i] = (struct NodeLink *)malloc(sizeof(struct NodeLink));
-			if (LProc->links[i] == NULL) { // TODO: What should we do if memory wasn't allocated here?
+			if (LProc->links[i] != NULL) {
 				memcpy(LProc->links[i], proclink, sizeof(struct NodeLink));
 				LProc->ammount++;
+			} else {
+				// Allocation failed: unwind previously allocated links
+				for (int j = 0; j < i; j++) {
+					if (LProc->links[j]) {
+						free(LProc->links[j]);
+						LProc->links[j] = NULL;
+					}
+				}
+				LProc->ammount = 0;
+				free(proclink);
+				for(int k=0;k<expected_link_ammount; k++) {
+					free(linknames[k]);
+				}
+				free(LProc);
+				return NULL;
 			}
 			free(proclink);
 		}

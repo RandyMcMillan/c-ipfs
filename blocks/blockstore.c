@@ -51,6 +51,103 @@ int ipfs_blockstore_free(struct Blockstore* blockstore) {
 	return 1;
 }
 
+static int blockstore_process_file(const char* blockstore_path, const char* rel_path, const char* file_name,
+		struct BlockstoreEntry** entries, struct BlockstoreEntry** last, int* count) {
+	if (strstr(file_name, ".data") == NULL)
+		return 0;
+
+	char* dot = strchr(file_name, '.');
+	char key_name[128];
+	if (dot && (size_t)(dot - file_name) < sizeof(key_name)) {
+		memcpy(key_name, file_name, dot - file_name);
+		key_name[dot - file_name] = '\0';
+	} else {
+		strncpy(key_name, file_name, sizeof(key_name) - 1);
+		key_name[sizeof(key_name) - 1] = '\0';
+	}
+
+	size_t hash_len = 0;
+	unsigned char hash[64];
+	if (!ipfs_datastore_helper_binary_from_ds_key((unsigned char*)key_name, strlen(key_name),
+		hash, sizeof(hash), &hash_len)) {
+		return 0;
+	}
+
+	struct BlockstoreEntry* entry = (struct BlockstoreEntry*)calloc(1, sizeof(struct BlockstoreEntry));
+	if (!entry) return -1;
+	entry->hash = (unsigned char*)malloc(hash_len);
+	if (!entry->hash) {
+		free(entry);
+		return -1;
+	}
+	memcpy(entry->hash, hash, hash_len);
+	entry->hash_size = hash_len;
+	entry->next = NULL;
+
+	char full_file_path[strlen(blockstore_path) + strlen(rel_path) + strlen(file_name) + 4];
+	if (os_utils_filepath_join(blockstore_path, rel_path, full_file_path, sizeof(full_file_path))) {
+		char tmp[sizeof(full_file_path)];
+		if (os_utils_filepath_join(full_file_path, file_name, tmp, sizeof(tmp))) {
+			struct stat st;
+			if (stat(tmp, &st) == 0)
+				entry->block_size = (size_t)st.st_size;
+		}
+	}
+
+	if (*last == NULL) {
+		*entries = entry;
+	} else {
+		(*last)->next = entry;
+	}
+	*last = entry;
+	(*count)++;
+	return 0;
+}
+
+static int blockstore_list_dir_recursive(const char* blockstore_path, const char* rel_path,
+		struct BlockstoreEntry** entries, struct BlockstoreEntry** last, int* count) {
+	char full_path[strlen(blockstore_path) + strlen(rel_path) + 2];
+	if (!os_utils_filepath_join(blockstore_path, rel_path, full_path, sizeof(full_path)))
+		return 0;
+
+	struct FileList* files = os_utils_list_directory(full_path);
+	struct FileList* current = files;
+	while (current != NULL) {
+		if (strcmp(current->file_name, ".") == 0 || strcmp(current->file_name, "..") == 0) {
+			current = current->next;
+			continue;
+		}
+
+		char child_path[strlen(full_path) + strlen(current->file_name) + 2];
+		if (!os_utils_filepath_join(full_path, current->file_name, child_path, sizeof(child_path))) {
+			current = current->next;
+			continue;
+		}
+
+		struct stat st;
+		if (stat(child_path, &st) == 0 && S_ISDIR(st.st_mode)) {
+			char child_rel[strlen(rel_path) + strlen(current->file_name) + 2];
+			if (os_utils_filepath_join(rel_path, current->file_name, child_rel, sizeof(child_rel))) {
+				if (blockstore_list_dir_recursive(blockstore_path, child_rel, entries, last, count) != 0) {
+					os_utils_free_file_list(files);
+					return -1;
+				}
+			}
+		} else {
+			char file_rel[strlen(rel_path) + strlen(current->file_name) + 2];
+			if (os_utils_filepath_join(rel_path, current->file_name, file_rel, sizeof(file_rel))) {
+				if (blockstore_process_file(blockstore_path, rel_path, current->file_name, entries, last, count) != 0) {
+					os_utils_free_file_list(files);
+					return -1;
+				}
+			}
+		}
+		current = current->next;
+	}
+	os_utils_free_file_list(files);
+	return 0;
+}
+
 /***
  * List all blocks in the blockstore.
  */
@@ -63,58 +160,9 @@ int ipfs_blockstore_list(const struct FSRepo* fs_repo, struct BlockstoreEntry** 
 	if (!os_utils_filepath_join(fs_repo->path, "blockstore", blockstore_path, sizeof(blockstore_path)))
 		return -1;
 
-	struct FileList* files = os_utils_list_directory(blockstore_path);
-	struct FileList* current = files;
-	while (current != NULL) {
-		// skip non-data files
-		if (strstr(current->file_name, ".data") == NULL) {
-			current = current->next;
-			continue;
-		}
-		// strip .data suffix to get base32 key
-		char* dot = strchr(current->file_name, '.');
-		if (dot) *dot = '\0';
+	if (blockstore_list_dir_recursive(blockstore_path, "", entries, &last, &count) != 0)
+		return -1;
 
-		size_t hash_len = 0;
-		unsigned char hash[64];
-		if (!ipfs_datastore_helper_binary_from_ds_key((unsigned char*)current->file_name, strlen(current->file_name),
-			hash, sizeof(hash), &hash_len)) {
-			current = current->next;
-			continue;
-		}
-
-		struct BlockstoreEntry* entry = (struct BlockstoreEntry*)calloc(1, sizeof(struct BlockstoreEntry));
-		if (!entry) {
-			os_utils_free_file_list(files);
-			return -1;
-		}
-		entry->hash = (unsigned char*)malloc(hash_len);
-		if (!entry->hash) {
-			free(entry);
-			os_utils_free_file_list(files);
-			return -1;
-		}
-		memcpy(entry->hash, hash, hash_len);
-		entry->hash_size = hash_len;
-		entry->next = NULL;
-		/* attempt to stat the file for size */
-		char full_file_path[strlen(blockstore_path) + strlen(current->file_name) + 2];
-		if (os_utils_filepath_join(blockstore_path, current->file_name, full_file_path, sizeof(full_file_path))) {
-			struct stat st;
-			if (stat(full_file_path, &st) == 0)
-				entry->block_size = (size_t)st.st_size;
-		}
-
-		if (last == NULL) {
-			*entries = entry;
-		} else {
-			last->next = entry;
-		}
-		last = entry;
-		count++;
-		current = current->next;
-	}
-	os_utils_free_file_list(files);
 	return count;
 }
 
@@ -184,19 +232,50 @@ unsigned char* ipfs_blockstore_hash_to_base32(const unsigned char* hash, size_t 
 	return buffer;
 }
 
+static int blockstore_mkdir_p(const char *path) {
+	char tmp[512];
+	char *p = NULL;
+	size_t len = strlen(path);
+	if (len >= sizeof(tmp)) return 0;
+	memcpy(tmp, path, len + 1);
+	if (tmp[len - 1] == '/')
+		tmp[len - 1] = '\0';
+	for (p = tmp + 1; *p; p++) {
+		if (*p == '/') {
+			*p = '\0';
+			mkdir(tmp, 0755);
+			*p = '/';
+		}
+	}
+	mkdir(tmp, 0755);
+	return 1;
+}
+
 char* ipfs_blockstore_path_get(const struct FSRepo* fs_repo, const char* filename) {
-	int filepath_size = strlen(fs_repo->path) +  12;
+	int filepath_size = strlen(fs_repo->path) + 12;
 	char filepath[filepath_size];
 	int retVal = os_utils_filepath_join(fs_repo->path, "blockstore", filepath, filepath_size);
 	if (retVal == 0) {
-		free(filepath);
-		return 0;
+		return NULL;
 	}
-	int complete_filename_size = strlen(filepath) + strlen(filename) + 8;
+
+	// 2-level shard: blockstore/AB/CD/ABCD...data
+	char shard1[4] = {filename[0], filename[1], '\0'};
+	char shard2[4] = {filename[2], filename[3], '\0'};
+	int shard_path_size = strlen(filepath) + 16;
+	char shard_path[shard_path_size];
+	char shard2_path[shard_path_size];
+	if (!os_utils_filepath_join(filepath, shard1, shard_path, shard_path_size))
+		return NULL;
+	if (!os_utils_filepath_join(shard_path, shard2, shard2_path, shard_path_size))
+		return NULL;
+	blockstore_mkdir_p(shard2_path);
+
+	int complete_filename_size = strlen(shard2_path) + strlen(filename) + 8;
 	char* complete_filename = (char*)malloc(complete_filename_size);
 	if (complete_filename == NULL)
 		return NULL;
-	retVal = os_utils_filepath_join(filepath, filename, complete_filename, complete_filename_size);
+	retVal = os_utils_filepath_join(shard2_path, filename, complete_filename, complete_filename_size);
 	if (retVal) {
 		strcat(complete_filename, ".data");
 	}

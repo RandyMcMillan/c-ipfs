@@ -221,38 +221,28 @@ int ipfs_core_http_process_dht_provide(struct IpfsNode* local_node, struct HttpR
 	if (res->bytes == NULL) {
 		res->bytes_size = 0;
 	} else {
+		const char* peer_id = local_node->identity && local_node->identity->peer && local_node->identity->peer->id
+			? local_node->identity->peer->id : "";
 		if (!failedCount) {
 			// complete success
-			// TODO: do the right thing
-			snprintf((char*)res->bytes, 1024,  "{\n\t\"ID\": \"<string>\"\n" \
-					"\t\"Type\": \"<int>\"\n"
-					"\t\"Responses\": [\n"
-					"\t\t{\n"
-					"\t\t\t\"ID\": \"<string>\"\n"
-					"\t\t\t\"Addrs\": [\n"
-					"\t\t\t\t\"<object>\"\n"
-					"\t\t\t]\n"
-					"\t\t}\n"
-					"\t]\n"
-					"\t\"Extra\": \"<string>\"\n"
-					"}\n"
-					);
+			snprintf((char*)res->bytes, 1024,
+				"{"
+				"\"ID\":\"%s\","
+				"\"Type\":4,"
+				"\"Responses\":[{\"ID\":\"%s\",\"Addrs\":[]}],"
+				"\"Extra\":\"\""
+				"}",
+				peer_id, peer_id);
 		} else {
 			// at least some failed
-			// TODO: do the right thing
-			snprintf((char*)res->bytes, 1024,  "{\n\t\"ID\": \"<string>\",\n" \
-					"\t\"Type\": \"<int>\",\n"
-					"\t\"Responses\": [\n"
-					"\t\t{\n"
-					"\t\t\t\"ID\": \"<string>\",\n"
-					"\t\t\t\"Addrs\": [\n"
-					"\t\t\t\t\"<object>\"\n"
-					"\t\t\t]\n"
-					"\t\t}\n"
-					"\t],\n"
-					"\t\"Extra\": \"<string>\"\n"
-					"}\n"
-					);
+			snprintf((char*)res->bytes, 1024,
+				"{"
+				"\"ID\":\"%s\","
+				"\"Type\":4,"
+				"\"Responses\":[{\"ID\":\"%s\",\"Addrs\":[]}],"
+				"\"Extra\":\"partial failure\""
+				"}",
+				peer_id, peer_id);
 		}
 		res->bytes_size = strlen((char*)res->bytes);
 	}
@@ -261,8 +251,7 @@ int ipfs_core_http_process_dht_provide(struct IpfsNode* local_node, struct HttpR
 
 int ipfs_core_http_process_dht_get(struct IpfsNode* local_node, struct HttpRequest* request, struct HttpResponse** response) {
 	int failedCount = 0;
-	// for now, we can only handle 1 argument at a time
-	if (request->arguments != NULL && request->arguments->total != 1)
+	if (request->arguments == NULL || request->arguments->total < 1)
 		return 0;
 
 	*response = ipfs_core_http_response_new();
@@ -285,7 +274,7 @@ int ipfs_core_http_process_dht_get(struct IpfsNode* local_node, struct HttpReque
 			continue;
 		}
 		ipfs_cid_free(cid);
-		//TODO: we need to handle multiple arguments
+		break; // dht get returns first successful value
 	}
 	return failedCount < request->arguments->total;
 }
@@ -319,13 +308,41 @@ int ipfs_core_http_process_swarm_connect(struct IpfsNode* local_node, struct Htt
 	const char* address = (char*) libp2p_utils_vector_get(request->arguments, 0);
 	if (address == NULL)
 		return 0;
-	// TODO: see if we are already connected, or at least already have this peer in our peerstore
 	// attempt to connect
 	struct MultiAddress* ma = multiaddress_new_from_string(address);
 	if (ma == NULL) {
 		libp2p_logger_error("http_request", "swarm_connect: Unable to convert %s to a MultiAddress.\n", address);
 		return 0;
 	}
+	char* peer_id = multiaddress_get_peer_id(ma);
+	if (peer_id != NULL && local_node->peerstore != NULL) {
+		struct Libp2pPeer* existing = libp2p_peerstore_get_peer(local_node->peerstore, (const unsigned char*)peer_id, strlen(peer_id));
+		if (existing != NULL && existing->sessionContext != NULL) {
+			libp2p_logger_debug("http_request", "swarm_connect: Already connected to peer %s.\n", peer_id);
+			free(peer_id);
+			multiaddress_free(ma);
+			*resp = ipfs_core_http_response_new();
+			if (*resp == NULL) {
+				libp2p_peer_free(existing);
+				return 0;
+			}
+			struct HttpResponse* response = *resp;
+			response->content_type = "application/json";
+			int json_len = 32 + strlen(address);
+			response->bytes = (uint8_t*)malloc(json_len);
+			if (response->bytes) {
+				snprintf((char*)response->bytes, json_len, "{ \"Strings\": [ \"%s\"] }", address);
+				response->bytes_size = strlen((char*)response->bytes);
+			}
+			libp2p_peer_free(existing);
+			return 1;
+		}
+		if (existing != NULL)
+			libp2p_peer_free(existing);
+	}
+	if (peer_id != NULL)
+		free(peer_id);
+
 	struct Libp2pPeer* new_peer = libp2p_peer_new_from_multiaddress(ma);
 	if (!libp2p_peer_connect(local_node->dialer, new_peer, local_node->peerstore, local_node->repo->config->datastore, 30)) {
 		libp2p_logger_error("http_request", "swarm_connect: Unable to connect to peer %s.\n", libp2p_peer_id_to_string(new_peer));
