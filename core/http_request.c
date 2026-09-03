@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <stdio.h>
 #include <curl/curl.h>
 #include "libp2p/crypto/encoding/base64.h"
 #include "libp2p/os/memstream.h"
@@ -453,8 +454,21 @@ static int ipfs_core_http_process_version(struct IpfsNode* local_node, struct Ht
 	if (!*response) return 0;
 	struct HttpResponse* res = *response;
 	res->content_type = "application/json";
-	res->bytes = (uint8_t*)strdup("{\"Version\":\"" C_IPFS_VERSION "\",\"Commit\":\"\",\"Repo\":\"12\",\"System\":\"amd64/darwin\",\"Golang\":\"\"}");
-	res->bytes_size = strlen((char*)res->bytes);
+	const char* format = "{\"Version\":\"%s\",\"Commit\":\"\",\"Repo\":\"12\",\"System\":\"amd64/darwin\",\"Golang\":\"\"}";
+	int bytes_needed = snprintf(NULL, 0, format, C_IPFS_VERSION);
+	if (bytes_needed < 0) {
+		ipfs_core_http_response_free(res);
+		*response = NULL;
+		return 0;
+	}
+	res->bytes = (uint8_t*)malloc((size_t)bytes_needed + 1);
+	if (!res->bytes) {
+		ipfs_core_http_response_free(res);
+		*response = NULL;
+		return 0;
+	}
+	snprintf((char*)res->bytes, (size_t)bytes_needed + 1, format, C_IPFS_VERSION);
+	res->bytes_size = (size_t)bytes_needed;
 	return 1;
 }
 

@@ -12,7 +12,7 @@ int test_flatfs_get_directory() {
 		return 0;
 
 	// buffer just right
-	retVal = ipfs_flatfs_get_directory(datastore_directory, proposed_filename, results, 22);
+	retVal = ipfs_flatfs_get_directory(datastore_directory, proposed_filename, results, 23);
 	if (retVal == 0)
 		return 0;
 	if (strcmp(results, "./tmp/ABC123XYZ_______") != 0)
@@ -20,7 +20,7 @@ int test_flatfs_get_directory() {
 
 	// name too long
 	proposed_filename = "12345678901234567";
-	retVal = ipfs_flatfs_get_directory(datastore_directory, proposed_filename, results, 22);
+	retVal = ipfs_flatfs_get_directory(datastore_directory, proposed_filename, results, 23);
 	if (retVal == 0)
 		return 0;
 	if (strcmp(results, "./tmp/1234567890123456") != 0)

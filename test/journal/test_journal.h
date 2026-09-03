@@ -245,7 +245,7 @@ int test_journal_db() {
 	if (mdb_env_set_maxdbs(mdb_env, (MDB_dbi)2) != 0)
 		return 0;
 
-	if (mdb_env_open(mdb_env, "/tmp", 0, S_IRWXU) != 0) {
+	if (mdb_env_open(mdb_env, "./tmp", 0, S_IRWXU) != 0) {
 		fprintf(stderr, "Unable to open environment.\n");
 		return 0;
 	}

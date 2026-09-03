@@ -62,7 +62,7 @@ int testit(const char* name, int (*func)(void)) {
 	if (retVal)
 		fprintf(stderr, "%s success!\n", name);
 	else
-		fprintf(stderr, "** Uh oh! %s failed.**\n", name);
+		fprintf(stderr, "** Uh oh! %s failed.** <------<<<\n", name);
 	return retVal == 0;
 }
 

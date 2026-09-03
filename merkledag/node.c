@@ -567,15 +567,12 @@ int ipfs_node_remove_link(struct HashtableNode* node, struct NodeLink* toRemove)
 	}
 	if (current != NULL) {
 		if (previous == NULL) {
-			// we're trying to delete the head
-			previous = current->next;
-			ipfs_node_link_free(current);
-			node->head_link = previous;
+			// removing the head of the list
+			node->head_link = current->next;
 		} else {
-			// we're in the middle or end
-			previous = current->next;
-			ipfs_node_link_free(current);
+			previous->next = current->next;
 		}
+		ipfs_node_link_free(current);
 		return 1;
 	}
 	return 0;
@@ -593,10 +590,11 @@ int ipfs_hashtable_node_free(struct HashtableNode * N)
 		// remove links
 		struct NodeLink* current = N->head_link;
 		while (current != NULL) {
-			struct NodeLink* toDelete = current;
 			current = current->next;
-			ipfs_node_remove_link(N, toDelete);
+			ipfs_node_link_free(N->head_link);
+			N->head_link = current;
 		}
+		N->head_link = NULL;
 		if(N->hash != NULL)
 		{
 			free(N->hash);
