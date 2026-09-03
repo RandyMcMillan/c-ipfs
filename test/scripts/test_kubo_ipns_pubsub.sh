@@ -45,7 +45,7 @@ wait_for_api() {
             tail -n 50 "${log_file}" || true
             return 1
         fi
-        if (echo >"/dev/tcp/127.0.0.1/${port}") >/dev/null 2>&1; then
+        if curl -fsS "http://127.0.0.1:${port}/api/v0/version" >/dev/null 2>&1; then
             return 0
         fi
         sleep 0.5
