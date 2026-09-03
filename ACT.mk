@@ -43,6 +43,7 @@ ACT_OPTIONAL_FLAGS += --rebuild
 endif
 ifeq ($(ACT_REUSE),true)
 ACT_OPTIONAL_FLAGS += --reuse
+ACT_EXTRA_FLAGS += --env REUSE=true
 endif
 ifeq ($(ACT_WATCH),true)
 ACT_OPTIONAL_FLAGS += --watch
