@@ -1,3 +1,28 @@
+## Current progress snapshot
+
+As of 2026-09-03, the repository has moved past the earlier cross-OS build failures and transport-helper crash into broader protocol-compliance work. The Docker/compose assets are under `docker/`, the stale host-artifact issue is addressed, and the test harness in `scripts/lldb-tests.sh` runs selected tests before falling back to LLDB on crashes.
+
+### What is currently working
+
+- Cross-platform Docker build assets are organized under `docker/`.
+- The default test suite is much more stable after the repo-lock, flatfs, journal, and linked-list cleanup fixes.
+- `test_core_api_get` and `test_core_api_dht_findprovs` were updated to use a live daemon when they need API-backed routing behavior.
+- `test_transport_registry_live_tcp_dial` now exercises the real multistream helper path again, after fixing the helper to negotiate on a raw connection and avoid the null `SessionContext` crash.
+- `c-libp2p` now has a discovery manager scaffold, a real mDNS UDP service, AutoNAT wire encoders, and an mplex scaffold wired into the build.
+- Focused discovery tests for the new mDNS and AutoNAT helpers pass locally.
+
+### Current blocker
+
+The remaining work is to turn the discovery scaffolding into fully interoperable relay/AutoNAT/hole-punching behavior and validate it against real peers. The broader suite still needs another full pass to catch any regressions outside the discovery path.
+
+### Near-term next steps
+
+1. Exercise the new mDNS/discovery path against live peers and confirm announcements are observed end-to-end.
+2. Expand AutoNAT, relay, and hole-punching beyond the current scaffolding where protocol behavior is still partial.
+3. Re-run the broader test suite and watch for regressions in the API, routing, and multi-node cases.
+
+---
+
 Now let me create a comprehensive analysis report:
 
 IPFS Specification Compliance Analysis Report: C-IPFS
@@ -57,7 +82,7 @@ Critical Gaps:
 ❌ Neither transport is wired into the active dialer or listener
 ⚠️ Modern security negotiation (Noise, TLS) unclear
 ⚠️ yamux multiplexer status unclear
-❌ NAT traversal, relay, AutoNAT, hole punching, mDNS missing
+⚠️ NAT traversal, relay, AutoNAT, hole punching, and mDNS are partially implemented or scaffolded
 Compliance Gap: Essential transport/security gaps prevent interoperability with modern Kubo
 Phase 5: Routing & Bitswap (PARTIAL)
 
@@ -142,7 +167,7 @@ Selectors: Not implemented
 Transports: QUIC, WebSocket (stubs exist but not wired into dialer/listener)
 Security: Noise, TLS status unclear
 Multiplexing: yamux status unclear
-NAT/Discovery: No relay, AutoNAT, hole punching, mDNS
+NAT/Discovery: Discovery scaffolding exists; mDNS is wired, while relay, AutoNAT, and hole punching remain partial
 Pubsub: Completely missing for IPNS distribution
 Fuzzing: No security testing infrastructure
 Multi-node tests: No cluster/interoperability CI
@@ -338,7 +363,7 @@ Critical Gaps:
 ❌ Neither transport is wired into the active dialer or listener
 ⚠️ Modern security negotiation (Noise, TLS) unclear
 ⚠️ yamux multiplexer status unclear
-❌ NAT traversal, relay, AutoNAT, hole punching, mDNS missing
+⚠️ NAT traversal, relay, AutoNAT, hole punching, and mDNS are partially implemented or scaffolded
 Compliance Gap: Essential transport/security gaps prevent interoperability with modern Kubo
 Phase 5: Routing & Bitswap (PARTIAL)
 
@@ -423,7 +448,7 @@ Selectors: Not implemented
 Transports: QUIC, WebSocket (stubs exist but not wired into dialer/listener)
 Security: Noise, TLS status unclear
 Multiplexing: yamux status unclear
-NAT/Discovery: No relay, AutoNAT, hole punching, mDNS
+NAT/Discovery: Discovery scaffolding exists; mDNS is wired, while relay, AutoNAT, and hole punching remain partial
 Pubsub: Completely missing for IPNS distribution
 Fuzzing: No security testing infrastructure
 Multi-node tests: No cluster/interoperability CI
@@ -691,15 +716,15 @@ Integrate with naming system
 Test with Kubo pubsub
 Implement NAT Traversal Features (Hard)
 
-What: Add relay, AutoNAT, hole punching, mDNS
-Effort: Very High (4 distinct features)
+What: Finish relay, AutoNAT, and hole-punching behavior; validate mDNS discovery end-to-end
+Effort: Very High (protocol-level interoperability work)
 Impact: Mobile/restricted networks
-Blockers: Depends on libp2p layer completion
+Blockers: Depends on broader libp2p interoperability and peer validation
 Approach:
-Start with relay (simplest)
-Add AutoNAT for NAT detection
+Expand relay to reservation/forwarding
+Add AutoNAT probe/session handling
 Add hole punching coordination
-Add mDNS for local discovery
+Validate mDNS announcements and peer discovery
 🔴 BLOCKED / ARCHITECTURAL (Requires major decisions first)
 
 Complete libp2p Security & Multiplexing (Blocked)
