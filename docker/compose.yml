@@ -1,9 +1,9 @@
 services:
   test:
     build:
-      context: .
-      dockerfile: Dockerfile.ubuntu-test
+      context: ..
+      dockerfile: docker/Dockerfile.ubuntu-test
     working_dir: /workspace
     volumes:
-      - .:/workspace
+      - ..:/workspace
     command: ["sh", "-lc", "make clean && make test"]
