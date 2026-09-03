@@ -611,12 +611,19 @@ int ipfs_nostr(int argc, char** argv) {
         curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, sync_download_cb);
         curl_easy_setopt(curl, CURLOPT_WRITEDATA, &st);
         curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+        curl_easy_setopt(curl, CURLOPT_FAILONERROR, 1L);
         CURLcode res = curl_easy_perform(curl);
         curl_easy_cleanup(curl);
         fclose(fp);
 
         if (res != CURLE_OK) {
             fprintf(stderr, "Error: download failed: %s\n", curl_easy_strerror(res));
+            goto cleanup;
+        }
+
+        long http_code = 0;
+        if (curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code) == CURLE_OK && http_code >= 400) {
+            fprintf(stderr, "Error: download failed with HTTP status %ld\n", http_code);
             goto cleanup;
         }
 
