@@ -10,6 +10,8 @@
 #include "ipfs/repo/fsrepo/fs_repo.h"
 #include "ipfs/routing/routing.h"
 
+struct Libp2pDiscovery;
+
 /***
  * Holds information about the local node
  */
@@ -41,6 +43,7 @@ struct IpfsNode {
 	struct ApiContext* api_context;
 	struct Dialer* dialer;
 	struct SwarmContext* swarm;
+	struct Libp2pDiscovery* discovery;
 	//struct Pinner pinning; // an interface
 	//struct Mount** mounts;
 	// Additional fields (routing, exchange, blockstore) are attached at runtime

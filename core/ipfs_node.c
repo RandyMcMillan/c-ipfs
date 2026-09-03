@@ -4,6 +4,8 @@
 #include "libp2p/conn/dialer.h"
 #include "libp2p/identify/identify.h"
 #include "libp2p/net/multistream.h"
+#include "libp2p/mplex/mplex.h"
+#include "libp2p/discovery/discovery.h"
 #include "libp2p/utils/vector.h"
 #include "libp2p/secio/secio.h"
 #include "libp2p/routing/dht_protocol.h"
@@ -27,6 +29,7 @@ struct IpfsNode* ipfs_node_new() {
 		node->repo = NULL;
 		node->routing = NULL;
 		node->api_context = NULL;
+		node->discovery = NULL;
 	}
 	return node;
 }
@@ -46,6 +49,8 @@ struct Libp2pVector* ipfs_node_online_build_protocol_handlers(struct IpfsNode* n
 		libp2p_utils_vector_add(retVal, libp2p_net_multistream_build_protocol_handler(retVal));
 		// yamux
 		libp2p_utils_vector_add(retVal, libp2p_yamux_build_protocol_handler());
+		// mplex scaffold
+		libp2p_utils_vector_add(retVal, libp2p_mplex_build_protocol_handler(retVal));
 		// identify
 		libp2p_utils_vector_add(retVal, libp2p_identify_build_protocol_handler(node->identity->peer->id, node->identity->peer->id_size));
 	}
@@ -102,6 +107,21 @@ int ipfs_node_online_new(const char* repo_path, struct IpfsNode** node) {
 	local_node->exchange = ipfs_bitswap_new(local_node);
 	local_node->swarm = libp2p_swarm_new(local_node->protocol_handlers, local_node->repo->config->datastore, local_node->repo->config->filestore);
 	local_node->dialer = libp2p_conn_dialer_new(local_node->identity->peer, local_node->peerstore, &local_node->identity->private_key, local_node->swarm);
+	local_node->discovery = libp2p_discovery_new();
+	if (local_node->discovery != NULL) {
+		libp2p_discovery_config_t discovery_config = {
+			.mdns_enabled = local_node->repo->config->discovery.mdns.enabled,
+			.mdns_interval = local_node->repo->config->discovery.mdns.interval,
+			.relay_enabled = local_node->repo->config->discovery.relay.enabled,
+			.relay_hop = local_node->repo->config->discovery.relay.hop,
+			.autonat_enabled = local_node->repo->config->discovery.autonat.enabled,
+			.hole_punch_enabled = local_node->repo->config->discovery.hole_punch.enabled
+		};
+		libp2p_discovery_configure(local_node->discovery, &discovery_config);
+		if (discovery_config.mdns_enabled || discovery_config.relay_enabled || discovery_config.autonat_enabled || discovery_config.hole_punch_enabled) {
+			libp2p_discovery_start(local_node->discovery);
+		}
+	}
 
 	// fire up the API
 	api_start(local_node, 10, 5);
@@ -149,6 +169,21 @@ int ipfs_node_offline_new(const char* repo_path, struct IpfsNode** node) {
 	local_node->exchange = ipfs_bitswap_new(local_node);
 	local_node->swarm = libp2p_swarm_new(local_node->protocol_handlers, local_node->repo->config->datastore, local_node->repo->config->filestore);
 	local_node->dialer = libp2p_conn_dialer_new(local_node->identity->peer, local_node->peerstore, &local_node->identity->private_key, local_node->swarm);
+	local_node->discovery = libp2p_discovery_new();
+	if (local_node->discovery != NULL) {
+		libp2p_discovery_config_t discovery_config = {
+			.mdns_enabled = local_node->repo->config->discovery.mdns.enabled,
+			.mdns_interval = local_node->repo->config->discovery.mdns.interval,
+			.relay_enabled = local_node->repo->config->discovery.relay.enabled,
+			.relay_hop = local_node->repo->config->discovery.relay.hop,
+			.autonat_enabled = local_node->repo->config->discovery.autonat.enabled,
+			.hole_punch_enabled = local_node->repo->config->discovery.hole_punch.enabled
+		};
+		libp2p_discovery_configure(local_node->discovery, &discovery_config);
+		if (discovery_config.mdns_enabled || discovery_config.relay_enabled || discovery_config.autonat_enabled || discovery_config.hole_punch_enabled) {
+			libp2p_discovery_start(local_node->discovery);
+		}
+	}
 
 	if (api_running(local_node))
 		local_node->mode = MODE_API_AVAILABLE;
@@ -184,6 +219,9 @@ int ipfs_node_free(struct IpfsNode* node) {
 		}
 		if (node->blockstore != NULL) {
 			ipfs_blockstore_free(node->blockstore);
+		}
+		if (node->discovery != NULL) {
+			libp2p_discovery_free(node->discovery);
 		}
 		free(node);
 	}

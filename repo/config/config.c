@@ -159,6 +159,10 @@ int ipfs_repo_config_init(struct RepoConfig* config, unsigned int num_bits_for_k
 
 	config->discovery.mdns.enabled = 1;
 	config->discovery.mdns.interval = 10;
+	config->discovery.relay.enabled = 0;
+	config->discovery.relay.hop = 0;
+	config->discovery.autonat.enabled = 0;
+	config->discovery.hole_punch.enabled = 0;
 	
 	config->mounts.ipfs = "/ipfs";
 	config->mounts.ipns = "/ipns";
@@ -248,4 +252,3 @@ int ipfs_repo_config_free(struct RepoConfig* config) {
 int repo_config_martial_to_json(struct RepoConfig* config) {
 	return 0;
 }
-

@@ -14,8 +14,24 @@ struct MDNS {
 	int interval;
 };
 
+struct Relay {
+	int enabled;
+	int hop;
+};
+
+struct AutoNAT {
+	int enabled;
+};
+
+struct HolePunch {
+	int enabled;
+};
+
 struct Discovery {
 	struct MDNS mdns;
+	struct Relay relay;
+	struct AutoNAT autonat;
+	struct HolePunch hole_punch;
 };
 
 struct Mounts {
