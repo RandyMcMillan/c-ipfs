@@ -1,8 +1,12 @@
 #include <pthread.h>
+#include <unistd.h>
+#include <stdio.h>
+#include <string.h>
 
 #include "../test_helper.h"
 #include "libp2p/utils/logger.h"
 #include "ipfs/cmd/cli.h"
+#include "ipfs/cmd/ipfs/id.h"
 #include "ipfs/core/client_api.h"
 #include "ipfs/core/daemon.h"
 #include "ipfs/core/http_request.h"
@@ -556,7 +560,12 @@ int test_core_api_id() {
 		goto exit;
 	}
 
-	if (strstr((char*)resp->bytes, local_node->identity->peer->id) != NULL) {
+	if (strstr((char*)resp->bytes, "\"ID\":\"") != NULL &&
+		strstr((char*)resp->bytes, local_node->identity->peer->id) != NULL &&
+		strstr((char*)resp->bytes, "\"PublicKey\":\"") != NULL &&
+		strstr((char*)resp->bytes, "\"Addresses\":[") != NULL &&
+		strstr((char*)resp->bytes, "\"AgentVersion\":\"c-ipfs/") != NULL &&
+		strstr((char*)resp->bytes, "\"ProtocolVersion\":\"ipfs/0.1.0\"") != NULL) {
 		retVal = 1;
 	}
 
