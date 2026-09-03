@@ -14,6 +14,27 @@ KUBO_BIN="${TMP_DIR}/kubo_bin/ipfs"
 c_ipfs_pid=""
 kubo_pid=""
 
+wait_for_api() {
+    local pid="$1"
+    local port="$2"
+    local label="$3"
+    local log_file="$4"
+    for _ in $(seq 1 60); do
+        if ! kill -0 "${pid}" 2>/dev/null; then
+            echo "${label} daemon exited before the API became ready"
+            tail -n 50 "${log_file}" || true
+            return 1
+        fi
+        if (echo >"/dev/tcp/127.0.0.1/${port}") >/dev/null 2>&1; then
+            return 0
+        fi
+        sleep 0.5
+    done
+    echo "Timed out waiting for ${label} API on port ${port}"
+    tail -n 50 "${log_file}" || true
+    return 1
+}
+
 cleanup() {
     if [ -n "${c_ipfs_pid}" ] && kill -0 "${c_ipfs_pid}" 2>/dev/null; then
         kill -9 "${c_ipfs_pid}" 2>/dev/null || true
@@ -54,34 +75,24 @@ IPFS_PATH="${C_REPO}" "${C_IPFS_BIN}" daemon > "${TMP_DIR}/c_ipfs.log" 2>&1 &
 c_ipfs_pid=$!
 
 echo "Waiting for c-ipfs daemon API..."
-until IPFS_PATH="${C_REPO}" "${C_IPFS_BIN}" id >/dev/null 2>&1; do
-    sleep 0.5
-done
+wait_for_api "${c_ipfs_pid}" 5001 "c-ipfs" "${TMP_DIR}/c_ipfs.log" || exit 1
 
 C_ID=$(IPFS_PATH="${C_REPO}" "${C_IPFS_BIN}" id | awk '/^ID/ {print $2; exit}')
-C_ADDR=$(IPFS_PATH="${C_REPO}" "${C_IPFS_BIN}" id | awk '/^  \// {print $1; exit}')
 if [ -z "${C_ID}" ]; then
     echo "Failed to read c-ipfs peer ID"
     exit 1
 fi
-if [ -z "${C_ADDR}" ]; then
-    C_ADDR="/ip4/127.0.0.1/tcp/4001"
-fi
-C_PEER_ADDR="${C_ADDR}/p2p/${C_ID}"
+C_PEER_ADDR="/ip4/127.0.0.1/tcp/4001/p2p/${C_ID}"
 
 echo "=== Starting Kubo daemon with PubSub enabled ==="
 IPFS_PATH="${K_REPO}" "${KUBO_BIN}" daemon --enable-pubsub-experiment > "${TMP_DIR}/kubo.log" 2>&1 &
 kubo_pid=$!
 
 echo "Waiting for Kubo daemon API..."
-until IPFS_PATH="${K_REPO}" "${KUBO_BIN}" id >/dev/null 2>&1; do
-    sleep 0.5
-done
-
+wait_for_api "${kubo_pid}" 5011 "Kubo" "${TMP_DIR}/kubo.log" || exit 1
 KUBO_ID=$(IPFS_PATH="${K_REPO}" "${KUBO_BIN}" id -f="<id>")
 KUBO_ADDR="/ip4/127.0.0.1/tcp/4011/p2p/${KUBO_ID}"
 IPFS_PATH="${K_REPO}" "${KUBO_BIN}" swarm connect "${C_PEER_ADDR}" || true
-IPFS_PATH="${C_REPO}" "${C_IPFS_BIN}" swarm connect "${KUBO_ADDR}" || true
 
 for _ in $(seq 1 20); do
     if IPFS_PATH="${K_REPO}" "${KUBO_BIN}" swarm peers 2>/dev/null | grep -q "${C_ID}"; then
