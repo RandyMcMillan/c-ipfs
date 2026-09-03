@@ -437,8 +437,9 @@ int ipfs_cid_cast(const unsigned char* incoming, size_t incoming_size, struct Ci
 /**
  * Compare two cids
  *
- * TODO: find a common denominator between versions and codecs so that
- * we can compare apples to apples.
+ * Multihash is compared first: same hash means same content regardless
+ * of version or codec differences. For ordering, fall back to version,
+ * then codec, then hash bytes.
  *
  * @param a side A
  * @param b side B
