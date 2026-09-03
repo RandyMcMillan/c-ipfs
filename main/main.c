@@ -27,7 +27,7 @@ static void print_help(FILE* out) {
 	fprintf(out, "  object get    Get a dag object\n");
 	fprintf(out, "  daemon        Run the IPFS daemon\n");
 	fprintf(out, "  ping <peer>   Send echo requests to a peer\n");
-	fprintf(out, "  swarm         Swarm management\n");
+	fprintf(out, "  swarm         Swarm management options\n");
 	fprintf(out, "  name          Publish and resolve IPNS names\n");
 	fprintf(out, "  dns <domain>  DNS link resolution\n");
 	fprintf(out, "  nostr         Nostr hybrid protocol (publish, repo, patch, issue)\n");
@@ -145,9 +145,10 @@ int get_cli_verb(int argc, char** argv) {
  * Basic parsing of command line arguments to figure out where the user wants to go
  */
 int parse_arguments(int argc, char** argv) {
+	int saw_help = 0;
 	for (int i = 1; i < argc; i++) {
 		if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) {
-			return HELP;
+			saw_help = 1;
 		}
 	}
 	int index = get_cli_verb(argc, argv);
@@ -156,6 +157,9 @@ int parse_arguments(int argc, char** argv) {
 	}
 	if (strcmp("help", argv[index]) == 0) {
 		return HELP;
+	}
+	if (saw_help && strcmp("swarm", argv[index]) == 0) {
+		return SWARM;
 	}
 	if (strcmp("init", argv[index]) == 0) {
 		return INIT;
