@@ -12,6 +12,7 @@
 #include "ipfs/core/builder.h"
 #include "ipfs/repo/config/config.h"
 #include "ipfs/repo/fsrepo/fs_repo.h"
+#include "ipfs/namesys/publisher.h"
 
 const int nBitsForKeypairDefault = 2048;
 
@@ -67,8 +68,11 @@ int initialize_ipns_keyspace(struct FSRepo* repo) {
 		return 0;
 	}
 
-	// TODO: Publish an empty directory to initialize the IPNS keyspace
-	// (Kubo publishes /ipfs/QmUNLLsPACCz1vLxQVkX7LXxXzr6bFt8hehz5GXhPxCgTz)
+	/* Publish an empty directory to initialize the IPNS keyspace.
+	 * Kubo uses /ipfs/QmUNLLsPACCz1vLxQVkX7LXxXzr6bFt8hehz5GXhPxCgTz */
+	if (!ipfs_namesys_publisher_publish(ipfs_node, "/ipfs/QmUNLLsPACCz1vLxQVkX7LXxXzr6bFt8hehz5GXhPxCgTz")) {
+		fprintf(stderr, "Warning: failed to initialize IPNS keyspace.\n");
+	}
 	ipfs_node_free(ipfs_node);
 	return 1;
 }
@@ -118,15 +122,23 @@ int do_init(FILE* out_file, char* repo_root, int empty, int num_bits_for_keypair
  * @returns 0 if a problem, otherwise a 1
  */
 int init_run(struct Request* request) {
-	// TODO: make sure offline
-	// TODO: check parameters for logic errors
-	// TODO: Initialize
+	if (!request || !request->invoc_context || !request->invoc_context->config_root) {
+		fprintf(stderr, "Error: init requires a valid repository path.\n");
+		return 0;
+	}
+
 	struct RepoConfig* conf;
 	if (ipfs_repo_config_new(&conf) == 0)
 		return 0;
-	// TODO: handle files in request
-	// do the heavy lifting
+
+	/* TODO: handle config file imports passed in request arguments */
+
 	int num_bits_for_key_pair = request->cmd.options[0]->default_int_val;
+	if (num_bits_for_key_pair < 1024) {
+		fprintf(stderr, "Error: key size must be at least 1024 bits.\n");
+		return 0;
+	}
+
 	return do_init(stdout, request->invoc_context->config_root, 1, num_bits_for_key_pair, conf);
 }
 
