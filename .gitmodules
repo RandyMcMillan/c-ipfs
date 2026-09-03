@@ -15,3 +15,6 @@
 [submodule "libwebsockets"]
 	path = libwebsockets
 	url = https://github.com/RandyMcMillan/libwebsockets.git
+[submodule "boringssl"]
+	path = boringssl
+	url = https://github.com/RandyMcMillan/boringssl.git
