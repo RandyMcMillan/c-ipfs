@@ -141,35 +141,75 @@ int ipfs_routing_online_find_remote_providers(struct IpfsRouting* routing, const
 
 int ipfs_routing_offline_find_providers (ipfs_routing* routing, const unsigned char *key, size_t key_size, struct Libp2pVector** peers)
 {
-	//if (routing->local_node->mode == MODE_API_AVAILABLE) {
-		//TODO: we need to ask the api to do this for us
-	//} else
-	//{
-		unsigned char* peer_id;
-		int peer_id_size;
-		struct Libp2pPeer *peer;
-
-		// see if we can find the key, and retrieve the peer who has it
-		if (!libp2p_providerstore_get(routing->local_node->providerstore, key, key_size, &peer_id, &peer_id_size)) {
-			libp2p_logger_debug("offline", "%s: Unable to find provider locally... Asking network\n", libp2p_peer_id_to_string(routing->local_node->identity->peer));
-			// we need to look remotely
-			return ipfs_routing_online_find_remote_providers(routing, key, key_size, peers);
-		}
-
-		libp2p_logger_debug("offline", "%s: Found provider locally. Searching for peer.\n", libp2p_peer_id_to_string(routing->local_node->identity->peer));
-		// now translate the peer id into a peer to get the multiaddresses
-		peer = libp2p_peerstore_get_peer(routing->local_node->peerstore, peer_id, peer_id_size);
-		free(peer_id);
-		if (peer == NULL) {
-			libp2p_logger_error("offline", "find_providers: We said we had the peer, but then we couldn't find it.\n");
+	if (routing->local_node->mode == MODE_API_AVAILABLE) {
+		unsigned char buffer[256];
+		if (!ipfs_cid_hash_to_base58(key, key_size, &buffer[0], 256)) {
+			libp2p_logger_error("offline", "find_providers: Unable to convert hash to Base58.\n");
 			return 0;
 		}
 
-		libp2p_logger_debug("offline", "%s: Found peer %s.\n", libp2p_peer_id_to_string(routing->local_node->identity->peer), libp2p_peer_id_to_string(peer));
+		char* response = NULL;
+		struct HttpRequest* request = ipfs_core_http_request_new();
+		request->command = "dht";
+		request->sub_command = "findprovs";
+		libp2p_utils_vector_add(request->arguments, buffer);
+		size_t response_size = 0;
+		if (!ipfs_core_http_request_post(routing->local_node, request, &response, &response_size, "", 0)) {
+			libp2p_logger_error("offline", "find_providers: API call failed.\n");
+			ipfs_core_http_request_free(request);
+			return 0;
+		}
+		ipfs_core_http_request_free(request);
 
 		*peers = libp2p_utils_vector_new(1);
-		libp2p_utils_vector_add(*peers, peer);
-	//}
+		// Simple peer ID extraction from JSON: look for "ID":"..." in Responses array
+		char* ptr = response;
+		while (ptr && (ptr = strstr(ptr, "\"ID\":\"")) != NULL) {
+			ptr += 6; // skip past "ID":"
+			char* end = strchr(ptr, '"');
+			if (!end) break;
+			size_t id_len = end - ptr;
+			if (id_len > 0 && id_len < 128) {
+				char id_str[128];
+				memcpy(id_str, ptr, id_len);
+				id_str[id_len] = '\0';
+				struct Libp2pPeer* peer = libp2p_peer_new();
+				if (peer) {
+					peer->id = strdup(id_str);
+					peer->id_size = id_len;
+					libp2p_utils_vector_add(*peers, peer);
+				}
+			}
+			ptr = end + 1;
+		}
+		free(response);
+		return (*peers)->total > 0 ? 1 : 0;
+	}
+
+	unsigned char* peer_id;
+	int peer_id_size;
+	struct Libp2pPeer *peer;
+
+	// see if we can find the key, and retrieve the peer who has it
+	if (!libp2p_providerstore_get(routing->local_node->providerstore, key, key_size, &peer_id, &peer_id_size)) {
+		libp2p_logger_debug("offline", "%s: Unable to find provider locally... Asking network\n", libp2p_peer_id_to_string(routing->local_node->identity->peer));
+		// we need to look remotely
+		return ipfs_routing_online_find_remote_providers(routing, key, key_size, peers);
+	}
+
+	libp2p_logger_debug("offline", "%s: Found provider locally. Searching for peer.\n", libp2p_peer_id_to_string(routing->local_node->identity->peer));
+	// now translate the peer id into a peer to get the multiaddresses
+	peer = libp2p_peerstore_get_peer(routing->local_node->peerstore, peer_id, peer_id_size);
+	free(peer_id);
+	if (peer == NULL) {
+		libp2p_logger_error("offline", "find_providers: We said we had the peer, but then we couldn't find it.\n");
+		return 0;
+	}
+
+	libp2p_logger_debug("offline", "%s: Found peer %s.\n", libp2p_peer_id_to_string(routing->local_node->identity->peer), libp2p_peer_id_to_string(peer));
+
+	*peers = libp2p_utils_vector_new(1);
+	libp2p_utils_vector_add(*peers, peer);
 	return 1;
 }
 
@@ -188,7 +228,6 @@ int ipfs_routing_offline_find_peer (ipfs_routing* offlineRouting, const unsigned
 int ipfs_routing_offline_provide (ipfs_routing* offlineRouting, const unsigned char *incoming_hash, size_t incoming_hash_size)
 {
 	if (offlineRouting->local_node->mode == MODE_API_AVAILABLE) {
-		//TODO: publish this through the api
 		unsigned char buffer[256];
 		if (!ipfs_cid_hash_to_base58(incoming_hash, incoming_hash_size, &buffer[0], 256)) {
 			libp2p_logger_error("offline", "Unable to convert hash to its Base58 representation.\n");
