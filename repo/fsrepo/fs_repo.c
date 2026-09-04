@@ -151,7 +151,8 @@ int repo_config_write_config_file(char* full_filename, struct RepoConfig* config
 				} else {
 					size_t out_size = 0;
 					libp2p_crypto_private_key_protobuf_encode(priv_key, protobuf, protobuf_size, &out_size);
-					int retVal = libp2p_crypto_encoding_base64_encode(protobuf, protobuf_size, encoded_buffer, encoded_size, &encoded_size);
+					encoded_size = libp2p_crypto_encoding_base64_encode_size(out_size);
+					int retVal = libp2p_crypto_encoding_base64_encode(protobuf, out_size, encoded_buffer, encoded_size, &encoded_size);
 					encoded_buffer[encoded_size] = 0;
 					if (retVal == 0)
 						write_ok = 0;
@@ -1213,4 +1214,3 @@ int ipfs_repo_fsrepo_unixfs_read(const unsigned char* hash, size_t hash_length, 
 	retVal = ipfs_blockstore_get_unixfs(hash, hash_length, unix_fs, fs_repo);
 	return retVal;
 }
-

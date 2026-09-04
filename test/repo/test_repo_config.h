@@ -120,7 +120,15 @@ int test_repo_config_write() {
 	ipfs_repo_config_free(repoConfig);
 	
 	// check to see if the file exists
-	return os_utils_file_exists("./tmp/.ipfs/config");
+	if (!os_utils_file_exists("./tmp/.ipfs/config"))
+		return 0;
+
+	struct FSRepo* repo = NULL;
+	if (!ipfs_repo_fsrepo_new("./tmp/.ipfs", NULL, &repo))
+		return 0;
+	int retVal = fs_repo_open_config(repo);
+	ipfs_repo_fsrepo_free(repo);
+	return retVal;
 }
 
 /***
