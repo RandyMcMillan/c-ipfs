@@ -1,0 +1,48 @@
+name: Periodic CI (macOS + Kubo Interop)
+
+on:
+  schedule:
+    # Run every 6 hours at an offset minute to avoid GitHub herd traffic
+    - cron: '47 */6 * * *'
+  workflow_dispatch:
+    inputs:
+      kubo_version:
+        description: Kubo release version for interop tests
+        type: string
+        required: false
+        default: v0.43.0
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  trigger-macos-ci:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger CI with macOS build
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh workflow run ci.yml \
+            --repo ${{ github.repository }} \
+            --ref ${{ github.ref_name }} \
+            -f macos_build=true \
+            -f clang_build=false
+
+  trigger-kubo-interop:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Kubo Interoperability
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh workflow run kubo-interop.yml \
+            --repo ${{ github.repository }} \
+            --ref ${{ github.ref_name }} \
+            -f interop_mode=ci \
+            -f verbose=false \
+            -f kubo_version=${{ inputs.kubo_version || 'v0.43.0' }}
