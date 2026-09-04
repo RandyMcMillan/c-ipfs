@@ -18,3 +18,6 @@
 [submodule "boringssl"]
 	path = boringssl
 	url = https://github.com/RandyMcMillan/boringssl.git
+[submodule "c-libnostr"]
+	path = c-libnostr
+	url = https://github.com/RandyMcMillan/c-libnostr.git
