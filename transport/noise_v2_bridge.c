@@ -144,6 +144,10 @@ struct Stream *ipfs_noise_handshake_legacy(struct Stream *legacy_raw_stream,
         return NULL;
     }
 
+    /* Wire parent_stream so handle_upgrade propagates to the raw TCP stream,
+     * which updates session_context->default_stream for yamux. */
+    legacy_noise->parent_stream = legacy_raw_stream;
+
     libp2p_logger_info("noise_bridge", "Noise handshake completed and bridged to legacy stream\n");
     return legacy_noise;
 }

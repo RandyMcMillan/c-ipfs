@@ -82,8 +82,10 @@ static int bridge_write(void *stream_context, struct StreamMessage *msg) {
 }
 
 static int bridge_handle_upgrade(struct Stream *stream, struct Stream *new_stream) {
-    (void)stream;
-    (void)new_stream;
+    /* Propagate upgrade to parent stream so session_context->default_stream is updated */
+    if (stream->parent_stream && stream->parent_stream->handle_upgrade) {
+        return stream->parent_stream->handle_upgrade(stream->parent_stream, new_stream);
+    }
     return 1;
 }
 
