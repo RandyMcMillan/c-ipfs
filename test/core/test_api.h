@@ -26,7 +26,7 @@ int test_core_api_startup_shutdown() {
 
 	//libp2p_logger_add_class("api");
 
-	if (!drop_and_build_repository(repo_path, 4001, NULL, &peer_id))
+	if (!drop_and_build_repository_without_bootstrap(repo_path, 4001, &peer_id))
 		goto exit;
 
 	// this should start the api
