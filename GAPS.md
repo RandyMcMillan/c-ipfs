@@ -26,76 +26,67 @@ Generated: 2026-09-04
   name in addition to architecture.
 
 ## P2P Transport Stack
-- [ ] **QUIC transport** — `transport/quic_transport.c` is a stub. Needs:
-  - lsquic engine lifecycle tied to swarm dialer
-  - libp2p-TLS 1.3 handshake (not Noise) per spec
-  - Multiaddr parsing for `/quic-v1` and `/webtransport`
-  - Integration with `transport/registry.c` for `dial()` dispatch
-- [ ] **WebSocket transport** — `transport/ws_transport.c` is a stub. Needs:
-  - libwebsockets event loop integration (or threaded wrapper)
-  - `/ws` and `/wss` multiaddr parsing
-  - TLS wrapper for secure websockets
-  - Registry integration
-- [ ] **Transport registry dial dispatch** — `registry.dial()` currently only
-  handles TCP. Needs to iterate registered transports (TCP, QUIC, WS) and
-  attempt each based on multiaddr protocol stack.
-- [ ] **Swarm dialer protocol upgrade** — `libp2p_swarm_connect()` in v2 is not
-  linked into legacy swarm. The legacy `exchange/bitswap/engine.c` still uses
-  the old TCP-only dial path. Need to bridge v2 multistream-SECIO-Yamux
-  upgrade into legacy `Stream` lifecycle.
+- [~] **QUIC transport** — `transport/quic_transport.c` compiles and links.
+  lsquic engine stub is present; needs end-to-end handshake verification.
+- [~] **WebSocket transport** — `transport/ws_transport.c` compiles and links.
+  libwebsockets integration is stubbed; needs event loop wiring.
+- [~] **Transport registry dial dispatch** — `transport/registry.c`,
+  `transport/dnsaddr_resolver.c`, and `transport/swarm_dialer_v2_bridge.c`
+  compile and link. The registry iterates transports, but bitswap engine
+  still uses the legacy TCP-only path for the actual block exchange.
+- [~] **Swarm dialer protocol upgrade** — `security/secio_noise_fallback.c`
+  provides Noise-first with SECIO fallback. Yamux wrapper is linked via
+  `transport/v2_stream_wrapper.c`. Full end-to-end verify against Kubo
+  pending.
 
 ## libp2p Security & Multiplexing
-- [ ] **Noise handshake completion** — `libp2p_noise_handshake_raw()` is linked
-  but never invoked from the main dial path. Need to negotiate `/noise` via
-  multistream before calling the v2 bridge.
-- [ ] **SECIO deprecation** — Legacy code still uses SECIO. Kubo dropped SECIO
-  years ago. Need to default to Noise and fall back to SECIO only for old
-  peers.
-- [ ] **Yamux integration** — `libp2p_yamux_session_new` etc. are available from
-  v2 but not wired into legacy connection handling. Need a yamux wrapper
-  around the legacy `Stream` struct.
+- [~] **Noise handshake completion** — `libp2p_noise_handshake_raw()` is linked
+  and called from `security/secio_noise_fallback.c`. Needs live peer test.
+- [~] **SECIO deprecation** — `security/secio_noise_fallback.c` implements
+  Noise-first with SECIO fallback. Legacy SECIO code remains for old peers.
+- [~] **Yamux integration** — `transport/v2_stream_wrapper.c` and
+  `transport/swarm_dialer_v2_bridge.c` wrap v2 yamux stubs into the legacy
+  stream lifecycle. Needs integration test.
 - [ ] **Identify protocol v2** — `identify_v2.o` exists but is not linked into
   the main binary. Need to send/recv identify over yamux streams post-handshake.
 
 ## Nostr / Hybrid Protocol
-- [ ] **c-libnostr symbol collision resolution** — Internal `nostr/event.o` and
-  `c-libnostr/build/libnostr.a` collide on `nostr_event_sign`,
-  `nostr_event_verify`, `nostr_key_generate`, etc. Long-term fix: rename
-  internal symbols to `ipfs_nostr_*` prefix or migrate fully to c-libnostr.
-- [ ] **NIP-34 git integration** — CLI flags `--maintainer`, `--topic`,
-  `--participant` are implemented in `cmd/ipfs/nostr.c`, but the git-over-nostr
-  relay push/pull path is not wired to c-libnostr relay client.
-- [ ] **Nostr relay send/receive** — c-libnostr has relay protocol support
-  (requires cJSON + libwebsockets). Need to enable `NOSTR_FEATURE_RELAY=ON`
-  and integrate with IPFS content routing announcements.
-- [ ] **Hybrid content routing** — No code yet for announcing IPFS CIDs over
-  Nostr kind-1 or kind-30023 events, or resolving CIDs via Nostr relay queries.
+- [x] **c-libnostr symbol collision resolution** — All internal `nostr/*.o`
+  symbols renamed to `ipfs_nostr_*` prefix. `c-libnostr/build/libnostr.a`
+  now links cleanly into the main binary.
+- [~] **NIP-34 git integration** — CLI flags and internal event builders are
+  implemented in `cmd/ipfs/nostr.c` and `nostr/git.c`. Relay push/pull
+  still needs c-libnostr relay client wiring.
+- [~] **Nostr relay send/receive** — c-libnostr is linked. `NOSTR_FEATURE_RELAY`
+  is OFF in the top-level Makefile to keep build times low; enabling it
+  requires libwebsockets + cJSON linked into c-libnostr.
+- [~] **Hybrid content routing** — `routing/nostr_hybrid_routing.c` implements
+  CID announce/resolve over Nostr kind-30023 events. Needs live relay test.
 
 ## Repository & Versioning
-- [ ] **Repo version mismatch** — Desktop Kubo expects repo version 18;
-  c-ipfs init creates version 12. Need to bump repo config version and
-  implement migration path.
+- [~] **Repo version mismatch** — `repo/fsrepo/fs_repo_version.c` targets
+  version 18 and implements a migration stub. Need to verify against Kubo.
 - [ ] **Repo lock portability** — `fs_repo_lock()` uses `flock(LOCK_EX | LOCK_NB)`
   which works on POSIX but may not interact correctly with Kubo repo locks
   (Kubo uses go-fslock with different semantics).
 
 ## DHT & Routing
-- [ ] **DHT provide/get offline errors** — Tests `test_core_api_cat` and
-  `test_core_api_dht_findprovs` fail with "[Error][offline] Unable to call API
-  for dht publish." The daemon starts but DHT is not brought online.
-- [ ] **Bootstrap peer resolution** — Tests use hardcoded localhost peers.
-  Need DNS resolution for `/dnsaddr/bootstrap.libp2p.io` and fallback to
-  known IPv4 bootstrap nodes.
-- [ ] **Kubo interoperability** — `test_kubo_interop.sh` times out waiting for
-  API on port 5011. The C daemon may not be exposing the HTTP RPC API in a
-  way Kubo expects, or the port binding is failing silently.
+- [~] **DHT provide/get offline errors** — `routing/dht_server_api.c` adds a
+  stub DHT RPC server thread. Provide/get still return mock data; needs
+  live Kademlia table integration.
+- [~] **Bootstrap peer resolution** — `transport/dnsaddr_resolver.c` resolves
+  `/dnsaddr/` domains to IPv4 multiaddrs. Needs integration into the
+  bootstrap dial sequence.
+- [x] **Kubo interoperability HTTP RPC** — `core/api_kubo_rpc.c` serves
+  `/api/v0/version` and `/api/v0/id` on port 5011. Wired into daemon
+  lifecycle (starts in pthread, stops gracefully via poll loop).
 
 ## Testing & CI
-- [ ] **Silent smoke test failures** — Some CI steps may fail without
-  propagating exit codes. Need `set -euo pipefail` in all shell test blocks.
-- [ ] **macOS CI matrix** — `macos-latest` is available via workflow_dispatch
-  but not exercised automatically. The periodic workflow added in
-  `.github/workflows/ci-periodic.yml` addresses this.
+- [x] **Silent smoke test failures** — All shell test blocks use
+  `set -euo pipefail`; failures now propagate correctly.
+- [x] **macOS CI matrix** — `macos-latest` is available via workflow_dispatch
+  in `.github/workflows/ci.yml`. Periodic runner added in
+  `.github/workflows/ci-periodic.yml`.
 - [x] **Test binary segfault / exit 1** — v2 collision fixed; `test_ipfs` no
   longer segfaults at startup.  However, the suite crashes in CI with heap
   corruption (see below).
