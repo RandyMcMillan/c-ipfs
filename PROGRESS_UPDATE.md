@@ -13,6 +13,8 @@ As of 2026-09-03, the repository has moved past the earlier cross-OS build failu
 - **Transport registry created and wired into node lifecycle:** `transport/registry.c`, `include/ipfs/transport/registry.h`, and tests are in place. `ipfs_node_online_new` populates the registry with QUIC and WebSocket transports.
 - **libwebsockets submodule integrated into build system:** `libwebsockets/build-c-ipfs/lib/libwebsockets.a` is produced via CMake and linked into `main/ipfs` and `test/test_ipfs`.
 - **QUIC and WebSocket listen stubs implemented:** `quic_listen` and `ws_listen` are implemented in `transport/quic_transport.c` and `transport/ws_transport.c` (compiled conditionally via `HAS_LSQUIC` / `HAS_LIBWEBSOCKETS`).
+- **QUIC/WebSocket stubs wired into swarm dialer:** `transport/stream_bridge.c` wraps `libp2p_stream_t` into c-libp2p `struct Stream`. `core/net.c` `ipsf_core_net_dial` now tries the transport registry first for `/quic` and `/ws` peer addresses, falling back to the legacy TCP dialer.
+- **Cross-platform nostril build fixed:** Root `Makefile` now removes stale `nostril/config.h`, `nostril/configurator`, and secp256k1 configure cache when the host architecture changes (e.g., macOS ARM64 → Linux x86_64 act containers).
 - **Critical segfix fixed:** `ipfs_node_online_new` now correctly sets `local_node->mode = MODE_ONLINE` (was `MODE_OFFLINE`), preventing `ipfs_node_free` from calling `ipfs_routing_offline_free` on a Kademlia routing object. This resolves the Ubuntu CI segfault in `test_core_api_startup_shutdown` and the Kubo interop daemon crash.
 
 ### Recently resolved
