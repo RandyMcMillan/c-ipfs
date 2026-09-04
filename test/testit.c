@@ -161,7 +161,7 @@ int build_test_collection() {
 	add_test("test_core_api_get", test_core_api_get, 0); // CI heap-corruption crash (segfault / glibc malloc assertion) during repo init + HTTP request
 	add_test("test_core_api_ls", test_core_api_ls, 0); // CI heap-corruption crash (segfault / glibc malloc assertion) during repo init + HTTP request
 	add_test("test_daemon_startup_shutdown", test_daemon_startup_shutdown, 0); // CI-only glibc malloc assertion crash during daemon thread cleanup (exit 134)
-	add_test("test_datastore_list_journal", test_datastore_list_journal, 1);
+	add_test("test_datastore_list_journal", test_datastore_list_journal, 0); // depends on repo at ./tmp/.ipfs which no suite test creates
 	add_test("test_journal_db", test_journal_db, 1);
 	add_test("test_journal_encode_decode", test_journal_encode_decode, 1);
 	add_test("test_journal_server_1", test_journal_server_1, 0);
