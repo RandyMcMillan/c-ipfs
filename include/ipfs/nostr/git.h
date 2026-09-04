@@ -17,6 +17,10 @@ struct NostrGitRepo {
     char euc[64];            /* earliest unique commit id */
     char relays[4][512];     /* relay URLs */
     int num_relays;
+    char maintainers[8][65]; /* p tags - maintainer pubkeys (hex) */
+    int num_maintainers;
+    char topics[8][64];      /* t tags - topics */
+    int num_topics;
 };
 
 /* NIP-34 patch / issue */
@@ -26,6 +30,8 @@ struct NostrGitPatch {
     char euc[64];            /* r tag earliest unique commit */
     char subject[256];       /* subject line */
     char body[65536];        /* patch content or issue markdown */
+    char participants[8][65]; /* p tags - participant pubkeys (hex) */
+    int num_participants;
 };
 
 /* Create a NIP-34 repo announcement event (kind 30617) */

@@ -24,6 +24,12 @@ int nostr_git_repo_announce(void *ctx, struct NostrKey *key,
         if (!nostr_tags_add(&ev->tags, "clone", repo->clone)) return 0;
     if (repo->euc[0])
         if (!nostr_tags_add_n(&ev->tags, 3, "r", repo->euc, "euc")) return 0;
+    for (int i = 0; i < repo->num_maintainers; i++) {
+        if (!nostr_tags_add_pubkey(&ev->tags, repo->maintainers[i])) return 0;
+    }
+    for (int i = 0; i < repo->num_topics; i++) {
+        if (!nostr_tags_add(&ev->tags, "t", repo->topics[i])) return 0;
+    }
 
     memcpy(ev->pubkey, key->pubkey, 32);
     if (!nostr_event_commit(ev, buf, sizeof(buf))) return 0;
@@ -42,8 +48,13 @@ int nostr_git_patch_publish(void *ctx, struct NostrKey *key,
 
     snprintf(a_tag, sizeof(a_tag), "30617:%s:%s", patch->repo_pubkey, patch->repo_id);
     if (!nostr_tags_add(&ev->tags, "a", a_tag)) return 0;
+    if (patch->subject[0])
+        if (!nostr_tags_add(&ev->tags, "subject", patch->subject)) return 0;
     if (patch->euc[0])
         if (!nostr_tags_add(&ev->tags, "r", patch->euc)) return 0;
+    for (int i = 0; i < patch->num_participants; i++) {
+        if (!nostr_tags_add_pubkey(&ev->tags, patch->participants[i])) return 0;
+    }
 
     memcpy(ev->pubkey, key->pubkey, 32);
     if (!nostr_event_commit(ev, buf, sizeof(buf))) return 0;
@@ -64,6 +75,9 @@ int nostr_git_issue_publish(void *ctx, struct NostrKey *key,
     if (!nostr_tags_add(&ev->tags, "a", a_tag)) return 0;
     if (issue->subject[0])
         if (!nostr_tags_add(&ev->tags, "subject", issue->subject)) return 0;
+    for (int i = 0; i < issue->num_participants; i++) {
+        if (!nostr_tags_add_pubkey(&ev->tags, issue->participants[i])) return 0;
+    }
 
     memcpy(ev->pubkey, key->pubkey, 32);
     if (!nostr_event_commit(ev, buf, sizeof(buf))) return 0;

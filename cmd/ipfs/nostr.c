@@ -45,15 +45,16 @@ static void print_nostr_help(FILE *out) {
     fprintf(out, "  sync --cid <cid> [--sha256 <h>]           Fetch CID via gateway and verify\n");
     fprintf(out, "       [--gateway <url>] [--output <path>]\n");
     fprintf(out, "  repo --id <id> --name <name> --cid <cid>  Announce git repo over IPFS (kind 30617)\n");
+    fprintf(out, "       [--maintainer <pubkey>] [--topic <t>]\n");
     fprintf(out, "  state --repo <pubkey:id> [--refs <file>]  Publish repo state with RBSR (kind 30618)\n");
     fprintf(out, "  grasp --relay <url> [--relay <url>...]    Publish grasp relay list (kind 10317)\n");
     fprintf(out, "  verify --event <json>                     Weak-verify event signature\n");
     fprintf(out, "  status --event <id> --status <s>          Set status: open/merged/closed/draft\n");
     fprintf(out, "  test                                      Self-test signing + verification\n");
     fprintf(out, "  patch --repo <pubkey:id> --subject <s>    Publish a git patch (kind 1617)\n");
-    fprintf(out, "          --body <text> [--euc <commit>]\n");
+    fprintf(out, "          --body <text> [--euc <commit>] [--participant <pubkey>]\n");
     fprintf(out, "  issue --repo <pubkey:id> --subject <s>    Publish an issue (kind 1621)\n");
-    fprintf(out, "          --body <text>\n");
+    fprintf(out, "          --body <text> [--participant <pubkey>]\n");
     fprintf(out, "\nOPTIONS:\n");
     fprintf(out, "  --seckey <hex>    Use existing 32-byte secret key (instead of generating)\n");
 }
@@ -257,7 +258,22 @@ int ipfs_nostr(int argc, char** argv) {
             fprintf(stderr, "SECURITY ERROR: Invalid CID payload format.\n");
             goto cleanup;
         }
-        if (!nostr_git_repo_announce_ipfs(ctx, &key, id, name, cid, euc, &ev)) {
+        struct NostrGitRepo repo = {0};
+        strncpy(repo.repo_id, id, sizeof(repo.repo_id) - 1);
+        strncpy(repo.name, name, sizeof(repo.name) - 1);
+        snprintf(repo.clone, sizeof(repo.clone), "ipfs://%s", cid);
+        if (euc) strncpy(repo.euc, euc, sizeof(repo.euc) - 1);
+        for (int i = 2; i < argc - 1 && repo.num_maintainers < 8; i++) {
+            if (strcmp(argv[i], "--maintainer") == 0) {
+                strncpy(repo.maintainers[repo.num_maintainers++], argv[i + 1], 64);
+            }
+        }
+        for (int i = 2; i < argc - 1 && repo.num_topics < 8; i++) {
+            if (strcmp(argv[i], "--topic") == 0) {
+                strncpy(repo.topics[repo.num_topics++], argv[i + 1], 63);
+            }
+        }
+        if (!nostr_git_repo_announce(ctx, &key, &repo, &ev)) {
             fprintf(stderr, "Error: failed to create repo event\n");
             goto cleanup;
         }
@@ -455,6 +471,11 @@ int ipfs_nostr(int argc, char** argv) {
         strncpy(patch.subject, subject, sizeof(patch.subject) - 1);
         strncpy(patch.body, body, sizeof(patch.body) - 1);
         if (euc) strncpy(patch.euc, euc, sizeof(patch.euc) - 1);
+        for (int i = 2; i < argc - 1 && patch.num_participants < 8; i++) {
+            if (strcmp(argv[i], "--participant") == 0) {
+                strncpy(patch.participants[patch.num_participants++], argv[i + 1], 64);
+            }
+        }
         if (!nostr_git_patch_publish(ctx, &key, &patch, &ev)) {
             fprintf(stderr, "Error: failed to create patch event\n");
             goto cleanup;
@@ -485,6 +506,11 @@ int ipfs_nostr(int argc, char** argv) {
         strncpy(issue.repo_id, colon + 1, sizeof(issue.repo_id) - 1);
         strncpy(issue.subject, subject, sizeof(issue.subject) - 1);
         strncpy(issue.body, body, sizeof(issue.body) - 1);
+        for (int i = 2; i < argc - 1 && issue.num_participants < 8; i++) {
+            if (strcmp(argv[i], "--participant") == 0) {
+                strncpy(issue.participants[issue.num_participants++], argv[i + 1], 64);
+            }
+        }
         if (!nostr_git_issue_publish(ctx, &key, &issue, &ev)) {
             fprintf(stderr, "Error: failed to create issue event\n");
             goto cleanup;
