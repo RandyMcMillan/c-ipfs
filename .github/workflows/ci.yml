@@ -8,6 +8,11 @@ on:
         type: boolean
         required: false
         default: false
+      macos_build:
+        description: Also run macOS build
+        type: boolean
+        required: false
+        default: false
   push:
     branches: [master, main]
   pull_request:
@@ -29,9 +34,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os:
-          - ubuntu-latest
-          - macos-latest
+        os: ${{ fromJSON((github.event_name == 'workflow_dispatch' && inputs.macos_build == true && '["ubuntu-latest", "macos-latest"]') || '["ubuntu-latest"]') }}
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
