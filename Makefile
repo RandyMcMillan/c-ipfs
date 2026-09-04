@@ -60,8 +60,21 @@ nostril:
 		(if [ ! -x ./configure ]; then ./autogen.sh; fi) && \
 		CFLAGS="-std=c99 -O2" ./configure --disable-shared --enable-module-ecdh --enable-module-schnorrsig --enable-module-extrakeys; \
 	fi
-	@# Remove stale config.h so ./configurator regenerates it for the current platform
-	rm -f nostril/config.h
+	@# Remove stale generated files so ./configurator and secp256k1 rebuild for
+	@# the current platform (macOS vs Linux act containers).
+	rm -f nostril/config.h nostril/configurator nostril/*.o nostril/*.a
+	@if [ -f nostril/deps/secp256k1/config.log ]; then \
+		host_triplet=$$(grep '^host_triplet=' nostril/deps/secp256k1/config.log | head -1 | sed 's/host_triplet=//'); \
+		current_arch=$$(uname -m); \
+		case "$$current_arch" in \
+			arm64) expected_host="aarch64-apple-darwin*" ;; \
+			x86_64) expected_host="x86_64-apple-darwin*" ;; \
+		esac; \
+		if ! echo "$$host_triplet" | grep -q "$$current_arch" 2>/dev/null; then \
+			echo "  CLEAN stale secp256k1 configure cache ($$host_triplet != $$current_arch)"; \
+			rm -rf nostril/deps/secp256k1/config.log nostril/deps/secp256k1/config.status nostril/deps/secp256k1/Makefile nostril/deps/secp256k1/src/*.lo nostril/deps/secp256k1/src/.libs; \
+		fi; \
+	fi
 	cd nostril && $(MAKE) config.h libsecp256k1.a
 
 libwebsockets:

@@ -6,7 +6,11 @@
 #include <errno.h>
 #include "ipfs/core/net.h"
 #include "ipfs/core/ipfs_node.h"
+#include "ipfs/transport/transport.h"
+#include "ipfs/transport/stream_bridge.h"
 #include "libp2p/conn/dialer.h"
+#include "libp2p/conn/session.h"
+#include "libp2p/swarm/swarm.h"
 #include "libp2p/utils/logger.h"
 
 /**
@@ -83,6 +87,72 @@ int ipfs_core_net_listen(struct IpfsNode* node, char* protocol, struct IpfsListe
 	return 1;
 }
 
+/**
+ * Attempt to dial a peer via the transport registry (QUIC / WebSocket).
+ * On success, sets up the peer's session context and adds to swarm.
+ *
+ * @param node the local node
+ * @param peer the peer to dial
+ * @return true(1) on success, false(0) otherwise
+ */
+static int ipfs_net_dial_registry(const struct IpfsNode* node, struct Libp2pPeer* peer) {
+	if (!node || !peer || !peer->addr_head)
+		return 0;
+
+	struct Libp2pLinkedList* curr = peer->addr_head;
+	while (curr) {
+		struct MultiAddress* ma = (struct MultiAddress*)curr->item;
+		if (!ma || !ma->string) {
+			curr = curr->next;
+			continue;
+		}
+
+		/* Only attempt registry dial for QUIC or WebSocket addresses */
+		if (strstr(ma->string, "/quic") == NULL && strstr(ma->string, "/ws") == NULL) {
+			curr = curr->next;
+			continue;
+		}
+
+		libp2p_stream_t* lstream = NULL;
+		if (transport_registry_dial((transport_registry_t*)&node->transport_registry,
+					    ma->string, &lstream) != 0 || lstream == NULL) {
+			libp2p_logger_debug("net",
+				    "Registry dial failed for %s, trying next address.\n",
+				    ma->string);
+			curr = curr->next;
+			continue;
+		}
+
+		struct Stream* bridge = ipfs_transport_stream_bridge_new(lstream, ma->string);
+		if (!bridge) {
+			lstream->close(lstream);
+			curr = curr->next;
+			continue;
+		}
+
+		/* Set up session context */
+		if (peer->sessionContext == NULL) {
+			peer->sessionContext = libp2p_session_context_new();
+		}
+		if (peer->sessionContext != NULL) {
+			peer->sessionContext->insecure_stream = bridge;
+			peer->sessionContext->default_stream = bridge;
+			peer->sessionContext->datastore = node->repo->config->datastore;
+			peer->sessionContext->filestore = node->repo->config->filestore;
+		}
+
+		peer->connection_type = CONNECTION_TYPE_CONNECTED;
+		libp2p_swarm_add_peer(node->swarm, peer);
+
+		libp2p_logger_debug("net",
+			    "Registry dial succeeded to %s via %s\n",
+			    peer->id ? peer->id : "?", ma->string);
+		return 1;
+	}
+
+	return 0;
+}
+
 /***
  * Dial a peer
  * @param node this node
@@ -103,6 +173,13 @@ int ipsf_core_net_dial(const struct IpfsNode* node, const char* peer_id, const c
 		return 0;
 	}
 
+	/* Try transport registry first for QUIC / WebSocket addresses */
+	if (ipfs_net_dial_registry(node, peer)) {
+		libp2p_logger_debug("net", "Dial to peer %s succeeded via transport registry.\n", peer_id);
+		return 1;
+	}
+
+	/* Fall back to legacy TCP dialer */
 	if (!libp2p_peer_connect(node->dialer, peer, node->peerstore, node->repo->config->datastore, 10)) {
 		libp2p_logger_error("net", "Dial failed: could not connect to peer %s.\n", peer_id);
 		return 0;
