@@ -64,7 +64,6 @@ OBJS = main.o \
 	../transport/quic_transport.o ../transport/ws_transport.o ../transport/registry.o ../transport/stream_bridge.o ../transport/v2_stream_wrapper.o ../transport/noise_v2_bridge.o \
 	../unixfs/unixfs.o ../unixfs/hamt.o \
 	../c-libp2p/c-protobuf/protobuf.o ../c-libp2p/c-protobuf/varint.o \
-	../c-libp2p/v2/libp2p_v2.a \
 	../util/errs.o \
 	../util/time.o \
 	../util/thread_pool.o \
@@ -72,11 +71,16 @@ OBJS = main.o \
 	../rbsr/rbsr.o \
 	../nostril/sha256.o
 
+V2_OBJS = ../c-libp2p/v2/src/conn/noise.o ../c-libp2p/v2/src/conn/multistream.o
+
+$(V2_OBJS):
+	$(MAKE) -C ../c-libp2p/v2
+
 %.o: %.c $(DEPS)
 	$(CC) -c -o $@ $< $(CFLAGS)
 
-ipfs: $(OBJS) $(SECP256K1_AR)
-	$(CC) -o $@ $^ $(LFLAGS) ../lmdb/libraries/liblmdb/liblmdb.a
+ipfs: $(OBJS) $(SECP256K1_AR) $(V2_OBJS)
+	$(CC) -o $@ $(OBJS) $(SECP256K1_AR) $(LFLAGS) $(V2_OBJS) ../lmdb/libraries/liblmdb/liblmdb.a
 
 all: ipfs
 

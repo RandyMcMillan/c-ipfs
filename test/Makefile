@@ -69,7 +69,6 @@ OBJS = testit.o test_helper.o \
 	../thirdparty/ipfsaddr/ipfs_addr.o \
 	../transport/quic_transport.o ../transport/ws_transport.o ../transport/registry.o ../transport/stream_bridge.o \
 	../transport/v2_stream_wrapper.o ../transport/noise_v2_bridge.o \
-	../c-libp2p/v2/libp2p_v2.a \
 	../unixfs/unixfs.o ../unixfs/hamt.o \
 	../util/thread_pool.o ../util/time.o ../util/errs.o ../util/errs_impl.o \
 	../nostr/event.o ../nostr/git.o ../nostr/kind.o ../nostr/pip.o ../nostr/tag.o \
@@ -77,11 +76,16 @@ OBJS = testit.o test_helper.o \
 	../nostril/sha256.o \
 	../c-libp2p/c-protobuf/protobuf.o ../c-libp2p/c-protobuf/varint.o
 
+V2_OBJS = ../c-libp2p/v2/src/conn/noise.o ../c-libp2p/v2/src/conn/multistream.o
+
+$(V2_OBJS):
+	$(MAKE) -C ../c-libp2p/v2
+
 %.o: %.c $(DEPS)
 	$(CC) -c -o $@ $< $(CFLAGS)
 
-test_ipfs: $(OBJS)
-	$(CC) -o $@ $^ $(LFLAGS) ../lmdb/libraries/liblmdb/liblmdb.a
+test_ipfs: $(OBJS) $(V2_OBJS)
+	$(CC) -o $@ $(OBJS) $(LFLAGS) $(V2_OBJS) ../lmdb/libraries/liblmdb/liblmdb.a
 
 all: test_ipfs
 
