@@ -1,6 +1,6 @@
 #include "ipfs/nostr/kind.h"
 
-const char* nostr_kind_description(int kind) {
+const char* ipfs_nostr_kind_description(int kind) {
     switch (kind) {
         case NOSTR_KIND_SET_METADATA:      return "set_metadata";
         case NOSTR_KIND_TEXT_NOTE:         return "text_note";

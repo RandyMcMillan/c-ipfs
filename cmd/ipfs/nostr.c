@@ -137,20 +137,20 @@ int ipfs_nostr(int argc, char** argv) {
             fprintf(stderr, "Error: --content required\n");
             goto cleanup;
         }
-        nostr_event_init(&ev);
+        ipfs_nostr_event_init(&ev);
         ev.kind = NOSTR_KIND_TEXT_NOTE;
-        nostr_event_set_content(&ev, content);
+        ipfs_nostr_event_set_content(&ev, content);
         memcpy(ev.pubkey, key.pubkey, 32);
         unsigned char nbuf[4096];
-        if (!nostr_event_commit(&ev, nbuf, sizeof(nbuf))) {
+        if (!ipfs_nostr_event_commit(&ev, nbuf, sizeof(nbuf))) {
             fprintf(stderr, "Error: failed to commit event\n");
             goto cleanup;
         }
-        if (!nostr_event_sign(ctx, &key, &ev)) {
+        if (!ipfs_nostr_event_sign(ctx, &key, &ev)) {
             fprintf(stderr, "Error: failed to sign event\n");
             goto cleanup;
         }
-        if (!nostr_event_to_json(&ev, json_buf, sizeof(json_buf))) {
+        if (!ipfs_nostr_event_to_json(&ev, json_buf, sizeof(json_buf))) {
             fprintf(stderr, "Error: failed to serialize event\n");
             goto cleanup;
         }
@@ -168,11 +168,11 @@ int ipfs_nostr(int argc, char** argv) {
             fprintf(stderr, "SECURITY ERROR: Invalid CID payload format.\n");
             goto cleanup;
         }
-        if (!nostr_event_make_ipfs_content(ctx, &key, cid, content, &ev)) {
+        if (!ipfs_nostr_event_make_ipfs_content(ctx, &key, cid, content, &ev)) {
             fprintf(stderr, "Error: failed to create event\n");
             goto cleanup;
         }
-        if (!nostr_event_to_json(&ev, json_buf, sizeof(json_buf))) {
+        if (!ipfs_nostr_event_to_json(&ev, json_buf, sizeof(json_buf))) {
             fprintf(stderr, "Error: failed to serialize event\n");
             goto cleanup;
         }
@@ -190,11 +190,11 @@ int ipfs_nostr(int argc, char** argv) {
             fprintf(stderr, "SECURITY ERROR: Invalid CID payload format.\n");
             goto cleanup;
         }
-        if (!nostr_event_make_ipfs_provider(ctx, &key, cid, addr, &ev)) {
+        if (!ipfs_nostr_event_make_ipfs_provider(ctx, &key, cid, addr, &ev)) {
             fprintf(stderr, "Error: failed to create provider event\n");
             goto cleanup;
         }
-        if (!nostr_event_to_json(&ev, json_buf, sizeof(json_buf))) {
+        if (!ipfs_nostr_event_to_json(&ev, json_buf, sizeof(json_buf))) {
             fprintf(stderr, "Error: failed to serialize event\n");
             goto cleanup;
         }
@@ -212,11 +212,11 @@ int ipfs_nostr(int argc, char** argv) {
             fprintf(stderr, "SECURITY ERROR: Invalid CID payload format.\n");
             goto cleanup;
         }
-        if (!nostr_event_make_ipfs_pin_request(ctx, &key, cid, relay, &ev)) {
+        if (!ipfs_nostr_event_make_ipfs_pin_request(ctx, &key, cid, relay, &ev)) {
             fprintf(stderr, "Error: failed to create pin-request event\n");
             goto cleanup;
         }
-        if (!nostr_event_to_json(&ev, json_buf, sizeof(json_buf))) {
+        if (!ipfs_nostr_event_to_json(&ev, json_buf, sizeof(json_buf))) {
             fprintf(stderr, "Error: failed to serialize event\n");
             goto cleanup;
         }
@@ -234,11 +234,11 @@ int ipfs_nostr(int argc, char** argv) {
             fprintf(stderr, "SECURITY ERROR: Invalid CID payload format.\n");
             goto cleanup;
         }
-        if (!nostr_event_make_ipfs_pin_confirm(ctx, &key, cid, request_id, &ev)) {
+        if (!ipfs_nostr_event_make_ipfs_pin_confirm(ctx, &key, cid, request_id, &ev)) {
             fprintf(stderr, "Error: failed to create pin-confirm event\n");
             goto cleanup;
         }
-        if (!nostr_event_to_json(&ev, json_buf, sizeof(json_buf))) {
+        if (!ipfs_nostr_event_to_json(&ev, json_buf, sizeof(json_buf))) {
             fprintf(stderr, "Error: failed to serialize event\n");
             goto cleanup;
         }
@@ -273,11 +273,11 @@ int ipfs_nostr(int argc, char** argv) {
                 strncpy(repo.topics[repo.num_topics++], argv[i + 1], 63);
             }
         }
-        if (!nostr_git_repo_announce(ctx, &key, &repo, &ev)) {
+        if (!ipfs_nostr_git_repo_announce(ctx, &key, &repo, &ev)) {
             fprintf(stderr, "Error: failed to create repo event\n");
             goto cleanup;
         }
-        if (!nostr_event_to_json(&ev, json_buf, sizeof(json_buf))) {
+        if (!ipfs_nostr_event_to_json(&ev, json_buf, sizeof(json_buf))) {
             fprintf(stderr, "Error: failed to serialize event\n");
             goto cleanup;
         }
@@ -342,11 +342,11 @@ int ipfs_nostr(int argc, char** argv) {
             rbsr_set_free(&set);
         }
 
-        if (!nostr_git_state_publish(ctx, &key, repo_pubkey, repo_id, rbsr_json, &ev)) {
+        if (!ipfs_nostr_git_state_publish(ctx, &key, repo_pubkey, repo_id, rbsr_json, &ev)) {
             fprintf(stderr, "Error: failed to create state event\n");
             goto cleanup;
         }
-        if (!nostr_event_to_json(&ev, json_buf, sizeof(json_buf))) {
+        if (!ipfs_nostr_event_to_json(&ev, json_buf, sizeof(json_buf))) {
             fprintf(stderr, "Error: failed to serialize event\n");
             goto cleanup;
         }
@@ -365,11 +365,11 @@ int ipfs_nostr(int argc, char** argv) {
             fprintf(stderr, "Error: at least one --relay required\n");
             goto cleanup;
         }
-        if (!nostr_git_grasp_publish(ctx, &key, relays, num_relays, &ev)) {
+        if (!ipfs_nostr_git_grasp_publish(ctx, &key, relays, num_relays, &ev)) {
             fprintf(stderr, "Error: failed to create grasp event\n");
             goto cleanup;
         }
-        if (!nostr_event_to_json(&ev, json_buf, sizeof(json_buf))) {
+        if (!ipfs_nostr_event_to_json(&ev, json_buf, sizeof(json_buf))) {
             fprintf(stderr, "Error: failed to serialize event\n");
             goto cleanup;
         }
@@ -405,11 +405,11 @@ int ipfs_nostr(int argc, char** argv) {
             fprintf(stderr, "Error: status must be open/merged/closed/draft\n");
             goto cleanup;
         }
-        if (!nostr_git_status_publish(ctx, &key, event_id, status_kind, &ev)) {
+        if (!ipfs_nostr_git_status_publish(ctx, &key, event_id, status_kind, &ev)) {
             fprintf(stderr, "Error: failed to create status event\n");
             goto cleanup;
         }
-        if (!nostr_event_to_json(&ev, json_buf, sizeof(json_buf))) {
+        if (!ipfs_nostr_event_to_json(&ev, json_buf, sizeof(json_buf))) {
             fprintf(stderr, "Error: failed to serialize event\n");
             goto cleanup;
         }
@@ -425,14 +425,14 @@ int ipfs_nostr(int argc, char** argv) {
         struct NostrEvent tev;
         if (!nostr_key_generate(ctx, &tkey)) { printf("FAIL: keygen\n"); pass = 0; }
         else {
-            nostr_event_init(&tev);
+            ipfs_nostr_event_init(&tev);
             tev.kind = NOSTR_KIND_TEXT_NOTE;
             strncpy(tev.content, "test", sizeof(tev.content));
             memcpy(tev.pubkey, tkey.pubkey, 32);
             unsigned char tbuf[4096];
-            if (!nostr_event_commit(&tev, tbuf, sizeof(tbuf))) { printf("FAIL: commit\n"); pass = 0; }
-            else if (!nostr_event_sign(ctx, &tkey, &tev)) { printf("FAIL: sign\n"); pass = 0; }
-            else if (!nostr_event_verify(ctx, &tev)) { printf("FAIL: verify\n"); pass = 0; }
+            if (!ipfs_nostr_event_commit(&tev, tbuf, sizeof(tbuf))) { printf("FAIL: commit\n"); pass = 0; }
+            else if (!ipfs_nostr_event_sign(ctx, &tkey, &tev)) { printf("FAIL: sign\n"); pass = 0; }
+            else if (!ipfs_nostr_event_verify(ctx, &tev)) { printf("FAIL: verify\n"); pass = 0; }
             else printf("PASS: sign/verify\n");
         }
 
@@ -476,11 +476,11 @@ int ipfs_nostr(int argc, char** argv) {
                 strncpy(patch.participants[patch.num_participants++], argv[i + 1], 64);
             }
         }
-        if (!nostr_git_patch_publish(ctx, &key, &patch, &ev)) {
+        if (!ipfs_nostr_git_patch_publish(ctx, &key, &patch, &ev)) {
             fprintf(stderr, "Error: failed to create patch event\n");
             goto cleanup;
         }
-        if (!nostr_event_to_json(&ev, json_buf, sizeof(json_buf))) {
+        if (!ipfs_nostr_event_to_json(&ev, json_buf, sizeof(json_buf))) {
             fprintf(stderr, "Error: failed to serialize event\n");
             goto cleanup;
         }
@@ -511,11 +511,11 @@ int ipfs_nostr(int argc, char** argv) {
                 strncpy(issue.participants[issue.num_participants++], argv[i + 1], 64);
             }
         }
-        if (!nostr_git_issue_publish(ctx, &key, &issue, &ev)) {
+        if (!ipfs_nostr_git_issue_publish(ctx, &key, &issue, &ev)) {
             fprintf(stderr, "Error: failed to create issue event\n");
             goto cleanup;
         }
-        if (!nostr_event_to_json(&ev, json_buf, sizeof(json_buf))) {
+        if (!ipfs_nostr_event_to_json(&ev, json_buf, sizeof(json_buf))) {
             fprintf(stderr, "Error: failed to serialize event\n");
             goto cleanup;
         }
@@ -549,11 +549,11 @@ int ipfs_nostr(int argc, char** argv) {
         m.mtu = 0;
         strncpy(m.encoding, encoding ? encoding : "tar.gz", sizeof(m.encoding) - 1);
         strncpy(m.path, path ? path : "", sizeof(m.path) - 1);
-        if (!nostr_pip_manifest_create(ctx, &key, &m, &ev)) {
+        if (!ipfs_nostr_pip_manifest_create(ctx, &key, &m, &ev)) {
             fprintf(stderr, "Error: failed to create manifest event\n");
             goto cleanup;
         }
-        if (!nostr_event_to_json(&ev, json_buf, sizeof(json_buf))) {
+        if (!ipfs_nostr_event_to_json(&ev, json_buf, sizeof(json_buf))) {
             fprintf(stderr, "Error: failed to serialize event\n");
             goto cleanup;
         }
@@ -576,11 +576,11 @@ int ipfs_nostr(int argc, char** argv) {
             fprintf(stderr, "SECURITY ERROR: Invalid SHA-256 hex string.\n");
             goto cleanup;
         }
-        if (!nostr_pip_attest_create(ctx, &key, root_id, sha256_hex, manifest_id, &ev)) {
+        if (!ipfs_nostr_pip_attest_create(ctx, &key, root_id, sha256_hex, manifest_id, &ev)) {
             fprintf(stderr, "Error: failed to create attest event\n");
             goto cleanup;
         }
-        if (!nostr_event_to_json(&ev, json_buf, sizeof(json_buf))) {
+        if (!ipfs_nostr_event_to_json(&ev, json_buf, sizeof(json_buf))) {
             fprintf(stderr, "Error: failed to serialize event\n");
             goto cleanup;
         }

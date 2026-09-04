@@ -5,7 +5,7 @@
 #include "ipfs/nostr/kind.h"
 #include "ipfs/nostr/tag.h"
 
-int nostr_pip_manifest_create(void *ctx, struct NostrKey *key,
+int ipfs_nostr_pip_manifest_create(void *ctx, struct NostrKey *key,
                                struct NostrPipManifest *m,
                                struct NostrEvent *ev)
 {
@@ -30,16 +30,16 @@ int nostr_pip_manifest_create(void *ctx, struct NostrKey *key,
              m->packets, m->depth, m->mtu,
              m->encoding, m->path);
 
-    nostr_event_init(ev);
+    ipfs_nostr_event_init(ev);
     ev->kind = NOSTR_KIND_PIP_MANIFEST;
-    nostr_event_set_content(ev, content);
+    ipfs_nostr_event_set_content(ev, content);
     memcpy(ev->pubkey, key->pubkey, 32);
-    if (!nostr_event_commit(ev, buf, sizeof(buf)))
+    if (!ipfs_nostr_event_commit(ev, buf, sizeof(buf)))
         return 0;
-    return nostr_event_sign(ctx, key, ev);
+    return ipfs_nostr_event_sign(ctx, key, ev);
 }
 
-int nostr_pip_attest_create(void *ctx, struct NostrKey *key,
+int ipfs_nostr_pip_attest_create(void *ctx, struct NostrKey *key,
                              const char *root_id,
                              const char *sha256_hex,
                              const char *manifest_id,
@@ -59,18 +59,18 @@ int nostr_pip_attest_create(void *ctx, struct NostrKey *key,
              "}",
              root_id, sha256_hex, manifest_id);
 
-    nostr_event_init(ev);
+    ipfs_nostr_event_init(ev);
     ev->kind = NOSTR_KIND_PIP_ATTEST;
-    nostr_event_set_content(ev, content);
+    ipfs_nostr_event_set_content(ev, content);
     if (manifest_id)
-        nostr_tags_add_event_ref(&ev->tags, manifest_id);
+        ipfs_nostr_tags_add_event_ref(&ev->tags, manifest_id);
     memcpy(ev->pubkey, key->pubkey, 32);
-    if (!nostr_event_commit(ev, buf, sizeof(buf)))
+    if (!ipfs_nostr_event_commit(ev, buf, sizeof(buf)))
         return 0;
-    return nostr_event_sign(ctx, key, ev);
+    return ipfs_nostr_event_sign(ctx, key, ev);
 }
 
-int nostr_pip_seal_create(void *ctx, struct NostrKey *key,
+int ipfs_nostr_pip_seal_create(void *ctx, struct NostrKey *key,
                            const char *root_id,
                            const char *sha256_hex,
                            const char **attest_ids, int num_attests,
@@ -97,16 +97,16 @@ int nostr_pip_seal_create(void *ctx, struct NostrKey *key,
     }
     p += snprintf(p, end - p, "]}");
 
-    nostr_event_init(ev);
+    ipfs_nostr_event_init(ev);
     ev->kind = NOSTR_KIND_PIP_SEAL;
-    nostr_event_set_content(ev, content);
+    ipfs_nostr_event_set_content(ev, content);
     memcpy(ev->pubkey, key->pubkey, 32);
-    if (!nostr_event_commit(ev, buf, sizeof(buf)))
+    if (!ipfs_nostr_event_commit(ev, buf, sizeof(buf)))
         return 0;
-    return nostr_event_sign(ctx, key, ev);
+    return ipfs_nostr_event_sign(ctx, key, ev);
 }
 
-int nostr_pip_ack_create(void *ctx, struct NostrKey *key,
+int ipfs_nostr_pip_ack_create(void *ctx, struct NostrKey *key,
                           const char *root_id,
                           const char *manifest_id,
                           const int *received, int num_received,
@@ -146,18 +146,18 @@ int nostr_pip_ack_create(void *ctx, struct NostrKey *key,
     }
     p += snprintf(p, end - p, "}");
 
-    nostr_event_init(ev);
+    ipfs_nostr_event_init(ev);
     ev->kind = NOSTR_KIND_PIP_ACK;
-    nostr_event_set_content(ev, content);
+    ipfs_nostr_event_set_content(ev, content);
     if (manifest_id)
-        nostr_tags_add_event_ref(&ev->tags, manifest_id);
+        ipfs_nostr_tags_add_event_ref(&ev->tags, manifest_id);
     memcpy(ev->pubkey, key->pubkey, 32);
-    if (!nostr_event_commit(ev, buf, sizeof(buf)))
+    if (!ipfs_nostr_event_commit(ev, buf, sizeof(buf)))
         return 0;
-    return nostr_event_sign(ctx, key, ev);
+    return ipfs_nostr_event_sign(ctx, key, ev);
 }
 
-int nostr_pip_request_create(void *ctx, struct NostrKey *key,
+int ipfs_nostr_pip_request_create(void *ctx, struct NostrKey *key,
                               const char *root_id,
                               const char *request_id,
                               struct NostrEvent *ev)
@@ -175,11 +175,11 @@ int nostr_pip_request_create(void *ctx, struct NostrKey *key,
              "}",
              request_id ? request_id : "req-0", root_id);
 
-    nostr_event_init(ev);
+    ipfs_nostr_event_init(ev);
     ev->kind = NOSTR_KIND_PIP_REQUEST;
-    nostr_event_set_content(ev, content);
+    ipfs_nostr_event_set_content(ev, content);
     memcpy(ev->pubkey, key->pubkey, 32);
-    if (!nostr_event_commit(ev, buf, sizeof(buf)))
+    if (!ipfs_nostr_event_commit(ev, buf, sizeof(buf)))
         return 0;
-    return nostr_event_sign(ctx, key, ev);
+    return ipfs_nostr_event_sign(ctx, key, ev);
 }

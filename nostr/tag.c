@@ -4,11 +4,11 @@
 
 #include "ipfs/nostr/tag.h"
 
-void nostr_tags_init(struct NostrTags *tags) {
+void ipfs_nostr_tags_init(struct NostrTags *tags) {
     tags->num_tags = 0;
 }
 
-int nostr_tags_add(struct NostrTags *tags, const char *key, const char *val) {
+int ipfs_nostr_tags_add(struct NostrTags *tags, const char *key, const char *val) {
     if (tags->num_tags >= NOSTR_MAX_TAGS) return 0;
     struct NostrTag *t = &tags->tags[tags->num_tags++];
     t->num_elems = 0;
@@ -21,7 +21,7 @@ int nostr_tags_add(struct NostrTags *tags, const char *key, const char *val) {
     return 1;
 }
 
-int nostr_tags_add_n(struct NostrTags *tags, int n, ...) {
+int ipfs_nostr_tags_add_n(struct NostrTags *tags, int n, ...) {
     if (tags->num_tags >= NOSTR_MAX_TAGS) return 0;
     if (n < 1 || n > NOSTR_MAX_TAG_ELEMS) return 0;
     struct NostrTag *t = &tags->tags[tags->num_tags++];
@@ -41,19 +41,19 @@ int nostr_tags_add_n(struct NostrTags *tags, int n, ...) {
     return 1;
 }
 
-int nostr_tags_add_cid(struct NostrTags *tags, const char *cid) {
-    return nostr_tags_add(tags, "ipfs", cid);
+int ipfs_nostr_tags_add_cid(struct NostrTags *tags, const char *cid) {
+    return ipfs_nostr_tags_add(tags, "ipfs", cid);
 }
 
-int nostr_tags_add_pubkey(struct NostrTags *tags, const char *pubkey_hex) {
-    return nostr_tags_add(tags, "p", pubkey_hex);
+int ipfs_nostr_tags_add_pubkey(struct NostrTags *tags, const char *pubkey_hex) {
+    return ipfs_nostr_tags_add(tags, "p", pubkey_hex);
 }
 
-int nostr_tags_add_event_ref(struct NostrTags *tags, const char *event_id_hex) {
-    return nostr_tags_add(tags, "e", event_id_hex);
+int ipfs_nostr_tags_add_event_ref(struct NostrTags *tags, const char *event_id_hex) {
+    return ipfs_nostr_tags_add(tags, "e", event_id_hex);
 }
 
-int nostr_tags_to_json(struct NostrTags *tags, char *buf, size_t buflen) {
+int ipfs_nostr_tags_to_json(struct NostrTags *tags, char *buf, size_t buflen) {
     size_t pos = 0;
     int need_comma = 0;
     pos += snprintf(buf + pos, buflen - pos, "[");

@@ -101,26 +101,26 @@ int nostr_key_from_hex(void *ctx, const char *hex, struct NostrKey *key)
     return secp256k1_xonly_pubkey_serialize((secp256k1_context*)ctx, key->pubkey, &pubkey);
 }
 
-void nostr_event_init(struct NostrEvent *ev)
+void ipfs_nostr_event_init(struct NostrEvent *ev)
 {
     memset(ev, 0, sizeof(*ev));
     ev->created_at = (uint64_t)time(NULL);
     ev->kind = NOSTR_KIND_TEXT_NOTE;
-    nostr_tags_init(&ev->tags);
+    ipfs_nostr_tags_init(&ev->tags);
 }
 
-void nostr_event_set_content(struct NostrEvent *ev, const char *content)
+void ipfs_nostr_event_set_content(struct NostrEvent *ev, const char *content)
 {
     strncpy(ev->content, content, sizeof(ev->content) - 1);
     ev->content[sizeof(ev->content) - 1] = '\0';
 }
 
-void nostr_event_set_kind(struct NostrEvent *ev, int kind)
+void ipfs_nostr_event_set_kind(struct NostrEvent *ev, int kind)
 {
     ev->kind = kind;
 }
 
-int nostr_event_commit(struct NostrEvent *ev, unsigned char *buf, size_t buflen)
+int ipfs_nostr_event_commit(struct NostrEvent *ev, unsigned char *buf, size_t buflen)
 {
     char pubkey_hex[65];
     char tags_json[16384];
@@ -130,7 +130,7 @@ int nostr_event_commit(struct NostrEvent *ev, unsigned char *buf, size_t buflen)
 
     if (!hex_encode(ev->pubkey, 32, pubkey_hex, sizeof(pubkey_hex)))
         return 0;
-    if (!nostr_tags_to_json(&ev->tags, tags_json, sizeof(tags_json)))
+    if (!ipfs_nostr_tags_to_json(&ev->tags, tags_json, sizeof(tags_json)))
         return 0;
 
     n = snprintf(p, end - p, "[0,\"%s\",%" PRIu64 ",%d,%s,",
@@ -148,7 +148,7 @@ int nostr_event_commit(struct NostrEvent *ev, unsigned char *buf, size_t buflen)
     return 1;
 }
 
-int nostr_event_sign(void *ctx, struct NostrKey *key, struct NostrEvent *ev)
+int ipfs_nostr_event_sign(void *ctx, struct NostrKey *key, struct NostrEvent *ev)
 {
     secp256k1_keypair pair;
     unsigned char aux[32];
@@ -158,7 +158,7 @@ int nostr_event_sign(void *ctx, struct NostrKey *key, struct NostrEvent *ev)
     return secp256k1_schnorrsig_sign32((secp256k1_context*)ctx, ev->sig, ev->id, &pair, aux);
 }
 
-int nostr_event_to_json(struct NostrEvent *ev, char *buf, size_t buflen)
+int ipfs_nostr_event_to_json(struct NostrEvent *ev, char *buf, size_t buflen)
 {
     char *p = buf;
     char *end = buf + buflen;
@@ -170,7 +170,7 @@ int nostr_event_to_json(struct NostrEvent *ev, char *buf, size_t buflen)
     if (p + 64 >= end) return 0;
     p += sprintf(p, "\",\"created_at\":%" PRIu64 ",\"kind\":%d,\"tags\":",
                  ev->created_at, ev->kind);
-    if (!nostr_tags_to_json(&ev->tags, p, end - p)) return 0;
+    if (!ipfs_nostr_tags_to_json(&ev->tags, p, end - p)) return 0;
     p += strlen(p);
     if (!push_str(&p, end, ",\"content\":")) return 0;
     if (!push_json_str(&p, end, ev->content)) return 0;
@@ -180,98 +180,98 @@ int nostr_event_to_json(struct NostrEvent *ev, char *buf, size_t buflen)
     return 1;
 }
 
-int nostr_event_to_envelope_json(struct NostrEvent *ev, char *buf, size_t buflen)
+int ipfs_nostr_event_to_envelope_json(struct NostrEvent *ev, char *buf, size_t buflen)
 {
     if (buflen < 10) return 0;
     strcpy(buf, "[\"EVENT\",");
-    if (!nostr_event_to_json(ev, buf + 9, buflen - 9)) return 0;
+    if (!ipfs_nostr_event_to_json(ev, buf + 9, buflen - 9)) return 0;
     strcat(buf, "]");
     return 1;
 }
 
-void nostr_event_print(struct NostrEvent *ev)
+void ipfs_nostr_event_print(struct NostrEvent *ev)
 {
     char buf[32768];
-    if (nostr_event_to_json(ev, buf, sizeof(buf)))
+    if (ipfs_nostr_event_to_json(ev, buf, sizeof(buf)))
         printf("%s\n", buf);
 }
 
-int nostr_event_verify(void *ctx, struct NostrEvent *ev)
+int ipfs_nostr_event_verify(void *ctx, struct NostrEvent *ev)
 {
     secp256k1_xonly_pubkey pubkey;
     unsigned char check_id[32];
     unsigned char buf[32768];
-    if (!nostr_event_commit(ev, buf, sizeof(buf))) return 0;
+    if (!ipfs_nostr_event_commit(ev, buf, sizeof(buf))) return 0;
     memcpy(check_id, ev->id, 32);
     if (memcmp(check_id, ev->id, 32) != 0) return 0;
     if (!secp256k1_xonly_pubkey_parse((secp256k1_context*)ctx, &pubkey, ev->pubkey)) return 0;
     return secp256k1_schnorrsig_verify((secp256k1_context*)ctx, ev->sig, ev->id, 32, &pubkey);
 }
 
-int nostr_event_make_ipfs_content(void *ctx, struct NostrKey *key,
+int ipfs_nostr_event_make_ipfs_content(void *ctx, struct NostrKey *key,
                                    const char *cid, const char *description,
                                    struct NostrEvent *ev)
 {
     unsigned char buf[32768];
-    nostr_event_init(ev);
+    ipfs_nostr_event_init(ev);
     ev->kind = NOSTR_KIND_IPFS_CONTENT;
-    nostr_event_set_content(ev, description ? description : cid);
-    if (!nostr_tags_add_cid(&ev->tags, cid))
+    ipfs_nostr_event_set_content(ev, description ? description : cid);
+    if (!ipfs_nostr_tags_add_cid(&ev->tags, cid))
         return 0;
     memcpy(ev->pubkey, key->pubkey, 32);
-    if (!nostr_event_commit(ev, buf, sizeof(buf)))
+    if (!ipfs_nostr_event_commit(ev, buf, sizeof(buf)))
         return 0;
-    return nostr_event_sign(ctx, key, ev);
+    return ipfs_nostr_event_sign(ctx, key, ev);
 }
 
-int nostr_event_make_ipfs_provider(void *ctx, struct NostrKey *key,
+int ipfs_nostr_event_make_ipfs_provider(void *ctx, struct NostrKey *key,
                                     const char *cid, const char *multiaddr,
                                     struct NostrEvent *ev)
 {
     unsigned char buf[32768];
-    nostr_event_init(ev);
+    ipfs_nostr_event_init(ev);
     ev->kind = NOSTR_KIND_IPFS_PROVIDER;
-    nostr_event_set_content(ev, multiaddr ? multiaddr : "");
-    if (!nostr_tags_add_cid(&ev->tags, cid))
+    ipfs_nostr_event_set_content(ev, multiaddr ? multiaddr : "");
+    if (!ipfs_nostr_tags_add_cid(&ev->tags, cid))
         return 0;
-    if (multiaddr && !nostr_tags_add(&ev->tags, "multiaddr", multiaddr))
+    if (multiaddr && !ipfs_nostr_tags_add(&ev->tags, "multiaddr", multiaddr))
         return 0;
     memcpy(ev->pubkey, key->pubkey, 32);
-    if (!nostr_event_commit(ev, buf, sizeof(buf)))
+    if (!ipfs_nostr_event_commit(ev, buf, sizeof(buf)))
         return 0;
-    return nostr_event_sign(ctx, key, ev);
+    return ipfs_nostr_event_sign(ctx, key, ev);
 }
 
-int nostr_event_make_ipfs_pin_request(void *ctx, struct NostrKey *key,
+int ipfs_nostr_event_make_ipfs_pin_request(void *ctx, struct NostrKey *key,
                                        const char *cid, const char *relay_hint,
                                        struct NostrEvent *ev)
 {
     unsigned char buf[32768];
-    nostr_event_init(ev);
+    ipfs_nostr_event_init(ev);
     ev->kind = NOSTR_KIND_IPFS_PIN_REQUEST;
-    nostr_event_set_content(ev, relay_hint ? relay_hint : "");
-    if (!nostr_tags_add_cid(&ev->tags, cid))
+    ipfs_nostr_event_set_content(ev, relay_hint ? relay_hint : "");
+    if (!ipfs_nostr_tags_add_cid(&ev->tags, cid))
         return 0;
     memcpy(ev->pubkey, key->pubkey, 32);
-    if (!nostr_event_commit(ev, buf, sizeof(buf)))
+    if (!ipfs_nostr_event_commit(ev, buf, sizeof(buf)))
         return 0;
-    return nostr_event_sign(ctx, key, ev);
+    return ipfs_nostr_event_sign(ctx, key, ev);
 }
 
-int nostr_event_make_ipfs_pin_confirm(void *ctx, struct NostrKey *key,
+int ipfs_nostr_event_make_ipfs_pin_confirm(void *ctx, struct NostrKey *key,
                                        const char *cid, const char *request_event_id,
                                        struct NostrEvent *ev)
 {
     unsigned char buf[32768];
-    nostr_event_init(ev);
+    ipfs_nostr_event_init(ev);
     ev->kind = NOSTR_KIND_IPFS_PIN_CONFIRM;
-    nostr_event_set_content(ev, "");
-    if (!nostr_tags_add_cid(&ev->tags, cid))
+    ipfs_nostr_event_set_content(ev, "");
+    if (!ipfs_nostr_tags_add_cid(&ev->tags, cid))
         return 0;
-    if (request_event_id && !nostr_tags_add_event_ref(&ev->tags, request_event_id))
+    if (request_event_id && !ipfs_nostr_tags_add_event_ref(&ev->tags, request_event_id))
         return 0;
     memcpy(ev->pubkey, key->pubkey, 32);
-    if (!nostr_event_commit(ev, buf, sizeof(buf)))
+    if (!ipfs_nostr_event_commit(ev, buf, sizeof(buf)))
         return 0;
-    return nostr_event_sign(ctx, key, ev);
+    return ipfs_nostr_event_sign(ctx, key, ev);
 }

@@ -16,7 +16,7 @@ int test_nostr_ipfs_provider_kind(void) {
     }
 
     struct NostrEvent ev;
-    if (!nostr_event_make_ipfs_provider(ctx, &key, "QmTestCID", "/ip4/127.0.0.1/tcp/4001", &ev)) {
+    if (!ipfs_nostr_event_make_ipfs_provider(ctx, &key, "QmTestCID", "/ip4/127.0.0.1/tcp/4001", &ev)) {
         nostr_context_free(ctx);
         fprintf(stderr, "FAIL: provider event creation\n");
         return 0;
@@ -44,7 +44,7 @@ int test_nostr_ipfs_pin_request_kind(void) {
     }
 
     struct NostrEvent ev;
-    if (!nostr_event_make_ipfs_pin_request(ctx, &key, "QmTestCID", "wss://relay.example.com", &ev)) {
+    if (!ipfs_nostr_event_make_ipfs_pin_request(ctx, &key, "QmTestCID", "wss://relay.example.com", &ev)) {
         nostr_context_free(ctx);
         fprintf(stderr, "FAIL: pin-request event creation\n");
         return 0;
@@ -72,7 +72,7 @@ int test_nostr_ipfs_pin_confirm_kind(void) {
     }
 
     struct NostrEvent ev;
-    if (!nostr_event_make_ipfs_pin_confirm(ctx, &key, "QmTestCID", 
+    if (!ipfs_nostr_event_make_ipfs_pin_confirm(ctx, &key, "QmTestCID", 
                                              "17015d6f0de59ec364b88a52f40f9719933a6cf00f5b0184404d635d7efa615b",
                                              &ev)) {
         nostr_context_free(ctx);

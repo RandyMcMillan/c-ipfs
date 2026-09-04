@@ -39,32 +39,32 @@ int nostr_key_generate(void *ctx, struct NostrKey *key);
 int nostr_key_from_hex(void *ctx, const char *hex, struct NostrKey *key);
 
 /* Event lifecycle */
-void nostr_event_init(struct NostrEvent *ev);
-void nostr_event_set_content(struct NostrEvent *ev, const char *content);
-void nostr_event_set_kind(struct NostrEvent *ev, int kind);
+void ipfs_nostr_event_init(struct NostrEvent *ev);
+void ipfs_nostr_event_set_content(struct NostrEvent *ev, const char *content);
+void ipfs_nostr_event_set_kind(struct NostrEvent *ev, int kind);
 
 /* Event building */
-int nostr_event_commit(struct NostrEvent *ev, unsigned char *buf, size_t buflen);
-int nostr_event_sign(void *ctx, struct NostrKey *key, struct NostrEvent *ev);
-int nostr_event_verify(void *ctx, struct NostrEvent *ev);
+int ipfs_nostr_event_commit(struct NostrEvent *ev, unsigned char *buf, size_t buflen);
+int ipfs_nostr_event_sign(void *ctx, struct NostrKey *key, struct NostrEvent *ev);
+int ipfs_nostr_event_verify(void *ctx, struct NostrEvent *ev);
 
 /* Serialization */
-int nostr_event_to_json(struct NostrEvent *ev, char *buf, size_t buflen);
-int nostr_event_to_envelope_json(struct NostrEvent *ev, char *buf, size_t buflen);
+int ipfs_nostr_event_to_json(struct NostrEvent *ev, char *buf, size_t buflen);
+int ipfs_nostr_event_to_envelope_json(struct NostrEvent *ev, char *buf, size_t buflen);
 
 /* Pretty printing */
-void nostr_event_print(struct NostrEvent *ev);
+void ipfs_nostr_event_print(struct NostrEvent *ev);
 
 /* IPFS hybrid helpers */
-int nostr_event_make_ipfs_content(void *ctx, struct NostrKey *key,
+int ipfs_nostr_event_make_ipfs_content(void *ctx, struct NostrKey *key,
                                    const char *cid, const char *description,
                                    struct NostrEvent *ev);
-int nostr_event_make_ipfs_provider(void *ctx, struct NostrKey *key,
+int ipfs_nostr_event_make_ipfs_provider(void *ctx, struct NostrKey *key,
                                     const char *cid, const char *multiaddr,
                                     struct NostrEvent *ev);
-int nostr_event_make_ipfs_pin_request(void *ctx, struct NostrKey *key,
+int ipfs_nostr_event_make_ipfs_pin_request(void *ctx, struct NostrKey *key,
                                        const char *cid, const char *relay_hint,
                                        struct NostrEvent *ev);
-int nostr_event_make_ipfs_pin_confirm(void *ctx, struct NostrKey *key,
+int ipfs_nostr_event_make_ipfs_pin_confirm(void *ctx, struct NostrKey *key,
                                        const char *cid, const char *request_event_id,
                                        struct NostrEvent *ev);

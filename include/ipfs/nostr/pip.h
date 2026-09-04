@@ -20,26 +20,26 @@ struct NostrPipManifest {
 };
 
 /* Create a PIP transfer manifest event (kind 39078) */
-int nostr_pip_manifest_create(void *ctx, struct NostrKey *key,
+int ipfs_nostr_pip_manifest_create(void *ctx, struct NostrKey *key,
                                struct NostrPipManifest *m,
                                struct NostrEvent *ev);
 
 /* Create a PIP blob attestation event (kind 39080) */
-int nostr_pip_attest_create(void *ctx, struct NostrKey *key,
+int ipfs_nostr_pip_attest_create(void *ctx, struct NostrKey *key,
                              const char *root_id,
                              const char *sha256_hex,
                              const char *manifest_id,
                              struct NostrEvent *ev);
 
 /* Create a PIP quorum seal event (kind 39081) */
-int nostr_pip_seal_create(void *ctx, struct NostrKey *key,
+int ipfs_nostr_pip_seal_create(void *ctx, struct NostrKey *key,
                            const char *root_id,
                            const char *sha256_hex,
                            const char **attest_ids, int num_attests,
                            struct NostrEvent *ev);
 
 /* Create a PIP ACK/NAK event (kind 39076) */
-int nostr_pip_ack_create(void *ctx, struct NostrKey *key,
+int ipfs_nostr_pip_ack_create(void *ctx, struct NostrKey *key,
                           const char *root_id,
                           const char *manifest_id,
                           const int *received, int num_received,
@@ -48,7 +48,7 @@ int nostr_pip_ack_create(void *ctx, struct NostrKey *key,
                           struct NostrEvent *ev);
 
 /* Create a PIP transfer request event (kind 39077) */
-int nostr_pip_request_create(void *ctx, struct NostrKey *key,
+int ipfs_nostr_pip_request_create(void *ctx, struct NostrKey *key,
                               const char *root_id,
                               const char *request_id,
                               struct NostrEvent *ev);

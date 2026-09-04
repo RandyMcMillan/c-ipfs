@@ -19,11 +19,11 @@ struct NostrTags {
 	int num_tags;
 };
 
-void nostr_tags_init(struct NostrTags *tags);
-int  nostr_tags_add(struct NostrTags *tags, const char *key, const char *val);
-int  nostr_tags_add_n(struct NostrTags *tags, int n, ...);
-int  nostr_tags_add_cid(struct NostrTags *tags, const char *cid);
-int  nostr_tags_add_pubkey(struct NostrTags *tags, const char *pubkey_hex);
-int  nostr_tags_add_event_ref(struct NostrTags *tags, const char *event_id_hex);
+void ipfs_nostr_tags_init(struct NostrTags *tags);
+int  ipfs_nostr_tags_add(struct NostrTags *tags, const char *key, const char *val);
+int  ipfs_nostr_tags_add_n(struct NostrTags *tags, int n, ...);
+int  ipfs_nostr_tags_add_cid(struct NostrTags *tags, const char *cid);
+int  ipfs_nostr_tags_add_pubkey(struct NostrTags *tags, const char *pubkey_hex);
+int  ipfs_nostr_tags_add_event_ref(struct NostrTags *tags, const char *event_id_hex);
 
-int  nostr_tags_to_json(struct NostrTags *tags, char *buf, size_t buflen);
+int  ipfs_nostr_tags_to_json(struct NostrTags *tags, char *buf, size_t buflen);

@@ -53,4 +53,4 @@
 #define NOSTR_KIND_GIT_STATUS_DRAFT  1633  /* Status: draft */
 #define NOSTR_KIND_GIT_GRASP_LIST    10317 /* Grasp server list */
 
-const char* nostr_kind_description(int kind);
+const char* ipfs_nostr_kind_description(int kind);
