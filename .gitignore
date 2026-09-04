@@ -25,6 +25,12 @@ test/tmp/
 test/*.o.tmp
 test1.txt
 
+test/test_secp256k1_cross_boringssl.dSYM/
+test/test_secp256k1_cross_openssl.dSYM/
+test/test_secp256k1_cross_boringssl
+test/test_secp256k1_cross_openssl
+
+
 # Module source files
 !crypto/verify.c
 !crypto/verify_impl.c

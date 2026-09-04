@@ -80,8 +80,31 @@ test_ipfs: $(OBJS)
 
 all: test_ipfs
 
+# secp256k1 cross-verification: libsecp256k1 vs linked SSL library
+OPENSSL_LDFLAGS =
+ifeq ($(shell uname -s),Darwin)
+OPENSSL_LDFLAGS += -L/opt/homebrew/opt/openssl/lib
+endif
+SECP256K1_LDFLAGS = -L../nostril/deps/secp256k1/.libs -lsecp256k1
+
+test_secp256k1_cross_openssl: crypto/test_secp256k1_cross.c
+	$(CC) -o $@ $< $(CFLAGS) $(OPENSSL_LDFLAGS) -lssl -lcrypto $(SECP256K1_LDFLAGS) -lpthread
+
+test_secp256k1_cross_boringssl: crypto/test_secp256k1_cross.c
+	$(CC) -o $@ $< $(CFLAGS) -I../boringssl/include \
+		../boringssl/build-c-ipfs/libssl.a ../boringssl/build-c-ipfs/libcrypto.a \
+		$(SECP256K1_LDFLAGS) -lpthread -lz \
+		$(shell if [ "$$(uname -s)" = "Darwin" ]; then echo "-lc++"; else echo "-lstdc++"; fi)
+
+secp256k1-cross-verify: test_secp256k1_cross_openssl test_secp256k1_cross_boringssl
+	@echo "=== OpenSSL-linked verification ==="
+	./test_secp256k1_cross_openssl
+	@echo "=== BoringSSL-linked verification ==="
+	./test_secp256k1_cross_boringssl
+
 clean:
 	rm -f *.o
 	rm -f test_ipfs
+	rm -f test_secp256k1_cross_openssl test_secp256k1_cross_boringssl
 	
 rebuild: clean all
