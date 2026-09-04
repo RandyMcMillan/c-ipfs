@@ -68,7 +68,6 @@ static const struct lsquic_stream_if quic_stream_if = {
 };
 
 static int quic_dial(libp2p_transport_t *self, const char *multiaddr, libp2p_stream_t **out_stream) {
-    (void)out_stream;
     libp2p_quic_transport_t *quic = (libp2p_quic_transport_t *)self;
 
     char ip[64];
@@ -93,6 +92,16 @@ static int quic_dial(libp2p_transport_t *self, const char *multiaddr, libp2p_str
 
     if (!conn) return -1;
     lsquic_engine_process_conns(quic->engine);
+
+    /* TODO: QUIC is async; the real stream is created in on_new_stream.
+     * For now allocate a placeholder so callers don't get NULL. */
+    if (out_stream) {
+        quic_stream_impl_t *placeholder = calloc(1, sizeof(quic_stream_impl_t));
+        placeholder->base.read = quic_stream_read;
+        placeholder->base.write = quic_stream_write;
+        placeholder->base.close = quic_stream_close;
+        *out_stream = (libp2p_stream_t *)placeholder;
+    }
     return 0;
 }
 
