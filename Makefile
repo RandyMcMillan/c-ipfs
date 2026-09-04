@@ -49,6 +49,13 @@ lmdb:
 	cd lmdb/libraries/liblmdb && $(MAKE) all XCFLAGS="-fno-unwind-tables"
 
 nostril:
+	@# Pre-configure secp256k1 with conservative CFLAGS so older GCCs
+	@# (e.g. act containers) don't fail on auto-detected -std=gnu23.
+	@if [ ! -f nostril/deps/secp256k1/config.log ]; then \
+		cd nostril/deps/secp256k1 && \
+		(if [ ! -x ./configure ]; then ./autogen.sh; fi) && \
+		CFLAGS="-std=c99 -O2" ./configure --disable-shared --enable-module-ecdh --enable-module-schnorrsig --enable-module-extrakeys; \
+	fi
 	cd nostril && $(MAKE) config.h libsecp256k1.a
 
 libwebsockets:
