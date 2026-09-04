@@ -76,7 +76,7 @@ jobs:
           if [ ! -x ./configure ]; then
             ./autogen.sh
           fi
-          ./configure --disable-shared --enable-module-ecdh --enable-module-schnorrsig --enable-module-extrakeys
+          CFLAGS="-std=c99 -O2" ./configure --disable-shared --enable-module-ecdh --enable-module-schnorrsig --enable-module-extrakeys
           make -j libsecp256k1.la
           cp .libs/libsecp256k1.a ../../libsecp256k1.a || true
 
