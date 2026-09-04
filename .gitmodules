@@ -1,23 +1,23 @@
 [submodule "c-libp2p"]
 	path = c-libp2p
-	url = https://github.com/RandyMcMillan/c-libp2p.git
+	url = git@github.com:RandyMcMillan/c-libp2p.git
 [submodule "lmdb"]
 	path = lmdb
-	url = https://github.com/RandyMcMillan/lmdb.git
+	url = git@github.com:RandyMcMillan/lmdb.git
 	branch = mdb.master
 [submodule "nostril"]
 	path = nostril
-    url = https://github.com/RandyMcMillan/nostril.git
+    url = git@github.com:RandyMcMillan/nostril.git
     #ignore = dirty
 [submodule "lsquic"]
 	path = lsquic
-	url = https://github.com/RandyMcMillan/lsquic.git
+	url = git@github.com:RandyMcMillan/lsquic.git
 [submodule "libwebsockets"]
 	path = libwebsockets
-	url = https://github.com/RandyMcMillan/libwebsockets.git
+	url = git@github.com:RandyMcMillan/libwebsockets.git
 [submodule "boringssl"]
 	path = boringssl
-	url = https://github.com/RandyMcMillan/boringssl.git
+	url = git@github.com:RandyMcMillan/boringssl.git
 [submodule "c-libnostr"]
 	path = c-libnostr
-	url = https://github.com/RandyMcMillan/c-libnostr.git
+	url = git@github.com:RandyMcMillan/c-libnostr.git
