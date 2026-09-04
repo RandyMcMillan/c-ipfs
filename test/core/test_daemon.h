@@ -12,7 +12,7 @@ int test_daemon_startup_shutdown() {
 	char* ipfs_path = "./tmp/.ipfs";
 	char* peer_id = NULL;
 
-	if (!drop_and_build_repository(ipfs_path, 4001, NULL, &peer_id)) {
+	if (!drop_and_build_repository_without_bootstrap(ipfs_path, 4001, &peer_id)) {
 		fprintf(stderr, "Unable to drop and build repository at %s\n", ipfs_path);
 		goto exit;
 	}

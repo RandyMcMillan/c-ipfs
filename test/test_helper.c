@@ -10,6 +10,7 @@
 #include "ipfs/repo/fsrepo/fs_repo.h"
 #include "ipfs/core/daemon.h"
 #include "libp2p/os/utils.h"
+#include "libp2p/utils/vector.h"
 
 int cp(const char *to, const char *from)
 {
@@ -230,6 +231,16 @@ int drop_and_build_repository(const char* path, int swarm_port, struct Libp2pVec
 	_mkdir(path, S_IRWXU);
 
 	return make_ipfs_repository(path, swarm_port, bootstrap_peers, peer_id, NULL);
+}
+
+int drop_and_build_repository_without_bootstrap(const char* path, int swarm_port, char **peer_id) {
+	struct Libp2pVector* bootstrap_peers = libp2p_utils_vector_new(1);
+	if (bootstrap_peers == NULL)
+		return 0;
+
+	int retVal = drop_and_build_repository(path, swarm_port, bootstrap_peers, peer_id);
+	libp2p_utils_vector_free(bootstrap_peers);
+	return retVal;
 }
 
 /***

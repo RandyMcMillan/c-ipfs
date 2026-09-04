@@ -15,6 +15,11 @@ int drop_repository(const char* path);
  */
 int drop_and_build_repository(const char* dir, int swarm_port, struct Libp2pVector* bootstrap_peers, char** peer_id);
 
+/**
+ * Create a repository without bootstrap peers for isolated daemon tests.
+ */
+int drop_and_build_repository_without_bootstrap(const char* dir, int swarm_port, char** peer_id);
+
 /***
  * Drop a repository and build a new one
  * @param path where to create it
