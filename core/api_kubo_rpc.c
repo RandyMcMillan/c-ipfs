@@ -4,11 +4,15 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
+#include <poll.h>
 
 #include "ipfs/core/api_kubo_rpc.h"
 
 #define DEFAULT_HTTP_RPC_PORT 5011
 #define HTTP_RESP_404 "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n"
+
+static volatile int http_rpc_shutting_down = 0;
+static int http_rpc_server_fd = -1;
 
 static void handle_http_client(int client_fd) {
     char buffer[2048];
@@ -77,7 +81,17 @@ int ipfs_start_http_rpc_server(uint16_t port) {
 
     printf("[HTTP RPC] Listening for Kubo API requests on port %d\n", port ? port : DEFAULT_HTTP_RPC_PORT);
 
-    while (1) {
+    http_rpc_server_fd = server_fd;
+
+    while (!http_rpc_shutting_down) {
+        struct pollfd pfd = { .fd = server_fd, .events = POLLIN };
+        int ready = poll(&pfd, 1, 1000); // 1s timeout to check shutdown flag
+        if (ready < 0) {
+            if (errno == EINTR) continue;
+            break;
+        }
+        if (ready == 0) continue;
+
         int client_fd = accept(server_fd, NULL, NULL);
         if (client_fd >= 0) {
             handle_http_client(client_fd);
@@ -85,5 +99,14 @@ int ipfs_start_http_rpc_server(uint16_t port) {
     }
 
     close(server_fd);
+    http_rpc_server_fd = -1;
     return 0;
+}
+
+void ipfs_stop_http_rpc_server(void) {
+    http_rpc_shutting_down = 1;
+    if (http_rpc_server_fd >= 0) {
+        close(http_rpc_server_fd);
+        http_rpc_server_fd = -1;
+    }
 }

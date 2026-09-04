@@ -9,9 +9,16 @@
 #include "ipfs/core/null.h" // for ipfs_null_shutdown
 #include "ipfs/core/ipfs_node.h"
 #include "ipfs/core/bootstrap.h"
+#include "ipfs/core/api_kubo_rpc.h"
 #include "ipfs/repo/fsrepo/fs_repo.h"
 #include "ipfs/repo/init.h"
 #include "libp2p/utils/logger.h"
+
+static void* http_rpc_thread_wrapper(void* arg) {
+    uint16_t port = (uint16_t)(uintptr_t)arg;
+    ipfs_start_http_rpc_server(port);
+    return NULL;
+}
 
 int ipfs_daemon_start(char* repo_path) {
     int count_pths = 0, retVal = 0;
@@ -35,6 +42,12 @@ int ipfs_daemon_start(char* repo_path) {
     if (pthread_create(&work_pths[count_pths++], NULL, local_node->routing->Listen, &listen_param)) {
     		libp2p_logger_error("daemon", "Error creating thread for ipfs null listen\n");
     		goto exit;
+    }
+
+    // Create pthread for Kubo-compatible HTTP RPC server on port 5011.
+    if (pthread_create(&work_pths[count_pths++], NULL, http_rpc_thread_wrapper, (void*)(uintptr_t)5011) != 0) {
+        libp2p_logger_error("daemon", "Error creating thread for HTTP RPC server\n");
+        goto exit;
     }
 
     local_node->routing->Bootstrap(local_node->routing);
@@ -63,7 +76,8 @@ int ipfs_daemon_start(char* repo_path) {
 }
 
 int ipfs_daemon_stop() {
-	return ipfs_null_shutdown();
+    ipfs_stop_http_rpc_server();
+    return ipfs_null_shutdown();
 }
 
 int ipfs_daemon (int argc, char **argv)
