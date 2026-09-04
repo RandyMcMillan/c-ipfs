@@ -150,12 +150,18 @@ int make_ipfs_repository(const char* path, int swarm_port, struct Libp2pVector* 
  */
 int ipfs_repo_init(int argc, char** argv) {
 	char* repo_directory = NULL;
-	if (ipfs_repo_get_directory(argc, argv, &repo_directory)) {
-		printf("Directory already exists: %s\n", repo_directory);
+	repo_directory = ipfs_repo_get_home_directory(argc, argv);
+	if (repo_directory == NULL) {
+		fprintf(stderr, "Error: cannot determine repo directory\n");
 		return 0;
 	}
-	// make the directory
-	if (!os_mkdir(repo_directory)) {
+	// reject only if already initialized, not if directory merely exists
+	if (fs_repo_is_initialized(repo_directory)) {
+		fprintf(stderr, "Error: ipfs configuration file already exists below %s\n", repo_directory);
+		return 0;
+	}
+	// make the directory if it doesn't exist yet
+	if (!os_utils_directory_exists(repo_directory) && !os_mkdir(repo_directory)) {
 		return 0;
 	}
 	// look for optional config import file (first non-switch argument after init)

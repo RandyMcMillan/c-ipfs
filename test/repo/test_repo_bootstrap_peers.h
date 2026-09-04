@@ -6,33 +6,28 @@
 #include "ipfs/repo/config/bootstrap_peers.h"
 
 int test_repo_bootstrap_peers_init() {
-
+	/* Must stay in sync with repo/config/bootstrap_peers.c */
 	char* default_bootstrap_addresses[] = {
-		"/ip4/104.131.131.82/tcp/4001/ipfs/QmaCpDMGvV2BGHeYERUEnRQAwe3N8SzbUtfsmvsqQLuvuJ",  // mars.i.ipfs.io
-		"/ip4/104.236.176.52/tcp/4001/ipfs/QmSoLnSGccFuZQJzRadHn95W2CrSFmZuTdDWP8HXaHca9z",  // neptune.i.ipfs.io
-		"/ip4/104.236.179.241/tcp/4001/ipfs/QmSoLPppuBtQSGwKDZT2M73ULpjvfd3aZ6ha4oFGL1KrGM", // pluto.i.ipfs.io
-		"/ip4/162.243.248.213/tcp/4001/ipfs/QmSoLueR4xBeUbY9WZ9xGUUxunbKWcrNFTDAadQJmocnWm", // uranus.i.ipfs.io
-		"/ip4/128.199.219.111/tcp/4001/ipfs/QmSoLSafTMBsPKadTEgaXctDQVcqN88CNLHXMkTNwMKPnu", // saturn.i.ipfs.io
-		"/ip4/104.236.76.40/tcp/4001/ipfs/QmSoLV4Bbm51jM9C4gDYZQ9Cy3U6aXMJDAbzgu2fzaDs64",   // venus.i.ipfs.io
-		"/ip4/178.62.158.247/tcp/4001/ipfs/QmSoLer265NRgSp2LA3dPaeykiS1J6DifTC88f5uVQKNAd",  // earth.i.ipfs.io
-		"/ip4/178.62.61.185/tcp/4001/ipfs/QmSoLMeWqB7YGVLJN3pNLQpmmEk35v6wYtsMGLzSr5QBU3",   // mercury.i.ipfs.io
-		"/ip4/104.236.151.122/tcp/4001/ipfs/QmSoLju6m7xTh3DuokvT3886QRYqxAzb1kShaanJgW36yx", // jupiter.i.ipfs.io
+		"/ip4/104.131.131.82/tcp/4001/p2p/QmaCpDMGvV2BGHeYERUEnRQAwe3N8SzbUtfsmvsqQLuvuJ",
 	};
+	int expected_count = sizeof(default_bootstrap_addresses) / sizeof(default_bootstrap_addresses[0]);
 
 	struct Libp2pVector* list;
 	int retVal = 1;
 	repo_config_bootstrap_peers_retrieve(&list);
-	/*
-	if ( list->total != 9) {
-		printf("Size does not equal 9 in test_repo_bootstrap_peers_init\n");
+
+	if (list->total != expected_count) {
+		printf("Bootstrap peer count mismatch: expected %d, got %d\n", expected_count, list->total);
 		retVal = 0;
 	}
-	*/
-	for(int i = 0; i < list->total; i++) {
+
+	for(int i = 0; i < list->total && i < expected_count; i++) {
 		unsigned long strLen = strlen(default_bootstrap_addresses[i]);
 		struct MultiAddress* currAddr = (struct MultiAddress*)libp2p_utils_vector_get(list, i);
-		if (strncmp(currAddr->string, default_bootstrap_addresses[i], strLen) != 0)
-			printf("The value of element %d is: %s\n", i, currAddr->string);
+		if (strncmp(currAddr->string, default_bootstrap_addresses[i], strLen) != 0) {
+			printf("Bootstrap peer %d mismatch: expected %s, got %s\n", i, default_bootstrap_addresses[i], currAddr->string);
+			retVal = 0;
+		}
 	}
 	repo_config_bootstrap_peers_free(list);
 	return retVal;

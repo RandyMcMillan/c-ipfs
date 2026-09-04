@@ -386,11 +386,71 @@ int ipfs_core_http_process_swarm_connect(struct IpfsNode* local_node, struct Htt
 
 }
 
+int ipfs_core_http_process_swarm_peers(struct IpfsNode* local_node, struct HttpResponse** resp) {
+	*resp = ipfs_core_http_response_new();
+	struct HttpResponse* response = *resp;
+	if (response == NULL)
+		return 0;
+	response->content_type = "application/json";
+
+	// Count connected peers and calculate buffer size
+	size_t buf_size = 32; // {"Peers":[]}
+	struct Libp2pLinkedList* curr = local_node->peerstore->head_entry;
+	while (curr) {
+		struct PeerEntry* entry = (struct PeerEntry*)curr->item;
+		if (entry && entry->peer && entry->peer->connection_type == CONNECTION_TYPE_CONNECTED) {
+			// Rough estimate: {"Addr":"...","Peer":"...","Latency":"","Muxer":"","Direction":0},
+			struct Libp2pLinkedList* addr_curr = entry->peer->addr_head;
+			while (addr_curr) {
+				struct MultiAddress* ma = (struct MultiAddress*)addr_curr->item;
+				if (ma && ma->string)
+					buf_size += strlen(ma->string) + strlen(entry->peer->id) + 128;
+				addr_curr = addr_curr->next;
+			}
+		}
+		curr = curr->next;
+	}
+
+	response->bytes = (uint8_t*)malloc(buf_size);
+	if (response->bytes == NULL) {
+		response->bytes_size = 0;
+		return 0;
+	}
+
+	char* ptr = (char*)response->bytes;
+	ptr += sprintf(ptr, "{\"Peers\":[");
+	int first_peer = 1;
+	curr = local_node->peerstore->head_entry;
+	while (curr) {
+		struct PeerEntry* entry = (struct PeerEntry*)curr->item;
+		if (entry && entry->peer && entry->peer->connection_type == CONNECTION_TYPE_CONNECTED) {
+			struct Libp2pLinkedList* addr_curr = entry->peer->addr_head;
+			while (addr_curr) {
+				struct MultiAddress* ma = (struct MultiAddress*)addr_curr->item;
+				if (ma && ma->string) {
+					if (!first_peer)
+						ptr += sprintf(ptr, ",");
+					first_peer = 0;
+					ptr += sprintf(ptr, "{\"Addr\":\"%s\",\"Peer\":\"%s\",\"Latency\":\"\",\"Muxer\":\"\",\"Direction\":0}",
+						ma->string, entry->peer->id);
+				}
+				addr_curr = addr_curr->next;
+			}
+		}
+		curr = curr->next;
+	}
+	ptr += sprintf(ptr, "]}");
+	response->bytes_size = strlen((char*)response->bytes);
+	return 1;
+}
+
 int ipfs_core_http_process_swarm(struct IpfsNode* local_node, struct HttpRequest* request, struct HttpResponse** response) {
 	int retVal = 0;
 	if (strcmp(request->sub_command, "connect") == 0) {
 		// connect to a peer
 		retVal = ipfs_core_http_process_swarm_connect(local_node, request, response);
+	} else if (strcmp(request->sub_command, "peers") == 0) {
+		retVal = ipfs_core_http_process_swarm_peers(local_node, response);
 	}
 	return retVal;
 }

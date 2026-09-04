@@ -13,9 +13,11 @@ static void print_swarm_help(FILE* out) {
 	fprintf(out, "Available commands:\n");
 	fprintf(out, "  connect <multiaddress>     Connect to a peer\n");
 	fprintf(out, "  disconnect <multiaddress>  Disconnect from a peer (not implemented yet)\n");
+	fprintf(out, "  peers                      List connected peers\n");
 	fprintf(out, "\n");
 	fprintf(out, "Examples:\n");
 	fprintf(out, "  ipfs swarm connect /ip4/127.0.0.1/tcp/4001/p2p/QmPeerID\n");
+	fprintf(out, "  ipfs swarm peers\n");
 }
 
 /***
@@ -34,6 +36,28 @@ int ipfs_swarm_connect(struct IpfsNode* local_node, const char* address) {
 	request->command = "swarm";
 	request->sub_command = "connect";
 	libp2p_utils_vector_add(request->arguments, address);
+	int retVal = ipfs_core_http_request_get(local_node, request, &response, &response_size);
+	if (response != NULL && response_size > 0) {
+		fwrite(response, 1, response_size, stdout);
+		free(response);
+	}
+	ipfs_core_http_request_free(request);
+	return retVal;
+}
+
+/***
+ * List swarm peers
+ * @param local_node the local node
+ * @returns true(1) on success, false(0) otherwise
+ */
+int ipfs_swarm_peers(struct IpfsNode* local_node) {
+	char* response = NULL;
+	size_t response_size;
+	struct HttpRequest* request = ipfs_core_http_request_new();
+	if (request == NULL)
+		return 0;
+	request->command = "swarm";
+	request->sub_command = "peers";
 	int retVal = ipfs_core_http_request_get(local_node, request, &response, &response_size);
 	if (response != NULL && response_size > 0) {
 		fwrite(response, 1, response_size, stdout);
@@ -73,10 +97,19 @@ int ipfs_swarm (struct CliArguments* args) {
 		goto exit;
 	}
 
-	const char* path = args->argv[args->verb_index + 2];
+	const char* path = NULL;
+	if (args->argc > args->verb_index + 2)
+		path = args->argv[args->verb_index + 2];
+
 	// determine what we're doing
 	if (strcmp(which, "connect") == 0) {
+		if (!path) {
+			print_swarm_help(stderr);
+			goto exit;
+		}
 		retVal = ipfs_swarm_connect(client_node, path);
+	} else if (strcmp(which, "peers") == 0) {
+		retVal = ipfs_swarm_peers(client_node);
 	} else if (strcmp(which, "disconnect") == 0) {
 		libp2p_logger_error("swarm", "Swarm disconnect not implemented yet.\n");
 		retVal = 0;
