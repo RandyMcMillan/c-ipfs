@@ -210,7 +210,7 @@
 | `routing/` | 5 | Offline storage + duplicate peers |
 | `blocks/` | 0 | Storage sharding — resolved |
 | `journal/` | 0 | Replication / file grouping — resolved |
-| `transport/` | 0 | Registry, stubs, and build integration — resolved |
+| `transport/` | 0 | Registry, stubs, stream bridge, and build integration — resolved |
 | Other | 12 | — |
 
 ---

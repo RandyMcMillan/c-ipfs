@@ -86,18 +86,23 @@ CID, multihash, and multibase correctness are prerequisites for IPLD, UnixFS, Bi
 - ✅ Transport registry (`transport/registry.c`) with add/remove/dial/free and unit tests.
 - ✅ QUIC and WebSocket dial/listen/close stubs implemented in `transport/quic_transport.c` and `transport/ws_transport.c`.
 - ✅ Transport registry wired into `ipfs_node_online_new` / `ipfs_node_free` and `core/swarm.c` fallback dial.
+- ✅ **QUIC/WebSocket stubs wired into active swarm dialer:** `transport/stream_bridge.c` bridges `libp2p_stream_t` to c-libp2p `struct Stream`. `core/net.c` `ipsf_core_net_dial` tries the transport registry first for `/quic` and `/ws` addresses, then falls back to TCP.
 - ✅ libwebsockets submodule integrated into Make build; static library linked on macOS and Linux.
+- ✅ **BoringSSL submodule added and building** — `libssl.a` + `libcrypto.a` produced via CMake on macOS and Ubuntu CI.
+- ✅ **lsquic builds against BoringSSL** — produces `liblsquic.a`. Cached in CI to avoid 15+ minute rebuilds.
+- ✅ **OpenSSL/BoringSSL symbol conflict resolved** — `crypto/verify.c` uses libsecp256k1 for secp256k1 ECDSA verification. Ed25519 uses `EVP_PKEY_ED25519` (supported by both libraries).
+- ✅ **HAS_LSQUIC enabled in CI** — GitHub Actions workflow sets `HAS_LSQUIC: true` by default.
 
-### Current blocker
+### Current blockers
 
-lsquic requires a QUIC-capable TLS library. macOS ships LibreSSL (no QUIC). Ubuntu CI ships OpenSSL 3.0.x (no QUIC). We must add **BoringSSL as a submodule**, build it, and wire lsquic into the Make-based build before QUIC can be enabled at compile time.
+- **Kubo interoperability** — `test_kubo_interop.sh` fails because c-ipfs `swarm peers` command lacks a working implementation (returns usage error instead of peer list). Pre-existing, unrelated to transport/crypto work.
+- **Test suite timeout under HAS_LSQUIC** — Full `./test_ipfs` run takes longer than 5 minutes locally; may need timeout adjustment in CI.
 
 ### Next steps
 
-1. Add `boringssl` submodule and build `libssl.a` + `libcrypto.a` via CMake.
-2. Build `lsquic` against BoringSSL to produce `liblsquic.a`.
-3. Update `transport/Makefile`, `main/Makefile`, and `test/Makefile` to link BoringSSL + lsquic when `HAS_LSQUIC=1` is defined.
-4. Validate Kubo interoperability test after enabling transports.
+1. Fix `ipfs swarm peers` / `swarm connect` so Kubo interop harness can establish peering.
+2. Investigate test suite performance under BoringSSL linkage.
+3. Validate Kubo interoperability test after enabling transports.
 
 ### Exit criteria
 
