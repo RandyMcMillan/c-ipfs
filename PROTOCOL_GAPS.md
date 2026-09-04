@@ -1,6 +1,6 @@
 # Major Protocol Gaps — c-ipfs vs Kubo v0.43.0
 
-**Compiled:** 2026-09-03  
+**Compiled:** 2026-09-04  
 **Purpose:** Single-source reference for every remaining gap that blocks full spec compliance and Kubo interoperability. Each gap includes the specific file/area where work is needed, the Kubo behavior we must match, and an estimated complexity.
 
 ---
@@ -17,12 +17,12 @@
 ## P0 — Kubo Interop Blockers
 
 ### 1. Security Protocol: Noise XX (or TLS 1.3)
-- **Status:** `partial` — v2 Noise XX scaffold exists in `c-libp2p/v2/src/conn/noise.c` but is **not wired into the live daemon**
+- **Status:** `partial` — v2 Noise XX compiles cleanly in `c-libp2p/v2/src/conn/noise.c` (ChaCha20-Poly1305 + X25519 DH + HKDF). **Not wired into the live daemon yet.**
 - **Root cause:** The legacy c-libp2p stack only speaks SECIO. Kubo v0.43.0 removed SECIO entirely.
 - **What Kubo does:** Offers `/noise` as the only security protocol on incoming connections. Expects initiators to perform a Noise_XX_25519_ChaChaPoly_SHA256 handshake with libp2p-specific payloads (Ed25519 identity key + signature over static X25519 key).
 - **What we need:**
-  1. Complete the libp2p-specific payload extensions in `noise.c` (identity key exchange + signature verification).
-  2. Wire `libp2p_noise_handshake` into `c-libp2p/v2/src/swarm/swarm.c` (replace the SECIO call).
+  1. Add libp2p-specific payload extensions in `noise.c` (sign static X25519 key with Ed25519 identity key, verify remote signature).
+  2. Wire `libp2p_noise_handshake` into the live daemon path (currently only called from v2 `swarm.c`).
   3. Replace or augment the legacy `libp2p_conn_dialer_join_swarm` path in the main daemon so it uses the v2 stack.
 - **Files:** `c-libp2p/v2/src/conn/noise.c`, `c-libp2p/v2/src/swarm/swarm.c`, `core/daemon.c`, `core/bootstrap_impl.c`
 - **Complexity:** High
@@ -166,7 +166,7 @@
 | DAG-PB blocks | Partial | Unit tests pass |
 | UnixFS import/export | Partial | Unit tests pass |
 | FlatFS / LMDB repo | Partial | Unit tests pass |
-| TCP transport + multistream | Partial | Legacy stack works; v2 stack compiles |
+| TCP transport + multistream | Partial | Legacy stack works; v2 multistream handshake works |
 | SECIO | Partial | Legacy only; deprecated |
 | Yamux | Partial | Legacy stack works; v2 basic frames work |
 | `ipfs init` | Fixed | Empty-dir bug resolved |
@@ -174,7 +174,7 @@
 | `ipfs add/cat/get/id` | Partial | Basic smoke tests pass |
 | Bitswap message encoding | Partial | No session layer |
 | DHT message encoding | Partial | No standard-compliant iterative lookup |
-| Noise XX | Scaffold | v2 compiles, not wired |
+| Noise XX | Partial | v2 compiles cleanly; identity payload + wiring remaining |
 
 ---
 
