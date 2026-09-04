@@ -49,6 +49,10 @@ lmdb:
 	cd lmdb/libraries/liblmdb && $(MAKE) all XCFLAGS="-fno-unwind-tables"
 
 nostril:
+	@# Ensure secp256k1 submodule exists (it may have been deleted by a prior clean)
+	@if [ ! -d nostril/deps/secp256k1 ]; then \
+		cd nostril && git submodule update --init --recursive; \
+	fi
 	@# Pre-configure secp256k1 with conservative CFLAGS so older GCCs
 	@# (e.g. act containers) don't fail on auto-detected -std=gnu23.
 	@if [ ! -f nostril/deps/secp256k1/config.log ]; then \
@@ -94,7 +98,9 @@ clean-lmdb:
 	cd lmdb/libraries/liblmdb && $(MAKE) clean
 
 clean-nostril:
-	cd nostril && $(MAKE) clean
+	@# Don't run 'make clean' inside nostril because it does 'rm -rf deps/secp256k1',
+	@# which destroys the submodule and breaks subsequent builds.
+	cd nostril && rm -f nostril configurator *.o *.a config.h
 
 clean-libwebsockets:
 	rm -rf libwebsockets/build-c-ipfs
