@@ -18,9 +18,52 @@ concurrency:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
+  cache-factory:
+    runs-on: ubuntu-latest
+    outputs:
+      cache_key_ubuntu: ${{ steps.keys.outputs.ubuntu }}
+      cache_key_macos: ${{ steps.keys.outputs.macos }}
+    steps:
+      - name: Compute shared cache keys
+        id: keys
+        run: |
+          echo "ubuntu=Linux-shared-cache-${{ github.sha }}" >> "$GITHUB_OUTPUT"
+          echo "macos=macOS-shared-cache-${{ github.sha }}" >> "$GITHUB_OUTPUT"
+
+      - name: Dispatch Cache Factory
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh workflow run cache-factory.yml \
+            --repo ${{ github.repository }} \
+            --ref ${{ github.ref_name }} \
+            -f clean_build=false
+          echo "dispatched_at=$(date +%s)" >> "$GITHUB_ENV"
+          sleep 15
+          RUN_ID=$(gh run list \
+            --repo ${{ github.repository }} \
+            --workflow cache-factory.yml \
+            --branch ${{ github.ref_name }} \
+            --event workflow_dispatch \
+            --limit 1 \
+            --json databaseId --jq '.[0].databaseId')
+          echo "Cache Factory run id: $RUN_ID"
+          echo "run_id=$RUN_ID" >> "$GITHUB_ENV"
+
+      - name: Wait for Cache Factory run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run watch "$run_id" \
+            --repo ${{ github.repository }} \
+            --exit-status \
+            --interval 30
+
   trigger-macos-ci:
+    needs: cache-factory
     runs-on: ubuntu-latest
     steps:
       - name: Trigger CI with macOS build
@@ -31,9 +74,11 @@ jobs:
             --repo ${{ github.repository }} \
             --ref ${{ github.ref_name }} \
             -f macos_build=true \
-            -f clang_build=false
+            -f clang_build=false \
+            -f cache_key=${{ needs.cache-factory.outputs.cache_key_ubuntu }}
 
   trigger-kubo-interop:
+    needs: cache-factory
     runs-on: ubuntu-latest
     steps:
       - name: Trigger Kubo Interoperability
@@ -45,4 +90,5 @@ jobs:
             --ref ${{ github.ref_name }} \
             -f interop_mode=ci \
             -f verbose=false \
-            -f kubo_version=${{ inputs.kubo_version || 'v0.43.0' }}
+            -f kubo_version=${{ inputs.kubo_version || 'v0.43.0' }} \
+            -f cache_key=${{ needs.cache-factory.outputs.cache_key_ubuntu }}

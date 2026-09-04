@@ -13,6 +13,23 @@ on:
         type: boolean
         required: false
         default: false
+  workflow_call:
+    inputs:
+      clang_build:
+        description: Also run an optional clang build
+        type: boolean
+        required: false
+        default: false
+      macos_build:
+        description: Also run macOS build
+        type: boolean
+        required: false
+        default: false
+      cache_key:
+        description: Exact shared cache key produced by the Cache Factory to wait for
+        type: string
+        required: false
+        default: ''
   push:
     branches: [master, main]
   pull_request:
@@ -26,7 +43,63 @@ permissions:
   contents: read
 
 jobs:
+  wait-for-cache:
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ${{ fromJSON((github.event_name != 'push' && github.event_name != 'pull_request' && inputs.macos_build == true && '["ubuntu-latest", "macos-latest"]') || '["ubuntu-latest"]') }}
+    runs-on: ${{ matrix.os }}
+    outputs:
+      cache-hit: ${{ steps.shared-cache.outputs.cache-hit }}
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Resolve shared cache key
+        id: cache-key
+        run: |
+          KEY="${{ runner.os }}-shared-cache-$(git rev-parse HEAD)"
+          echo "key=$KEY" >> "$GITHUB_OUTPUT"
+          echo "Shared cache key: $KEY"
+
+      - name: Poll for shared cache from Cache Factory
+        if: inputs.cache_key != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          CACHE_KEY="${{ inputs.cache_key }}"
+          echo "Waiting for Cache Factory to publish: $CACHE_KEY"
+          for i in $(seq 1 60); do
+            if gh api "repos/${{ github.repository }}/actions/caches?key=$CACHE_KEY" --jq '.total_count' | grep -q '^[1-9]'; then
+              echo "Cache available after $i attempt(s)"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "Timed out waiting for cache; proceeding without it"
+          exit 0
+
+      - name: Restore shared cache
+        id: shared-cache
+        uses: ./.github/actions/cache-restore
+        with:
+          path: |
+            boringssl/build-c-ipfs
+            lsquic/build-c-ipfs
+            libwebsockets/build-c-ipfs
+            c-libnostr/build
+            nostril/deps/secp256k1
+            nostril/libsecp256k1.a
+            nostril/config.h
+          key: ${{ steps.cache-key.outputs.key }}
+          restore-keys: |
+            ${{ runner.os }}-shared-cache-
+
   build:
+    needs: wait-for-cache
     timeout-minutes: 25
     env:
       CLANG_BUILD: ${{ inputs.clang_build || false }}
@@ -34,10 +107,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: ${{ fromJSON((github.event_name == 'workflow_dispatch' && inputs.macos_build == true && '["ubuntu-latest", "macos-latest"]') || '["ubuntu-latest"]') }}
+        os: ${{ fromJSON((github.event_name != 'push' && github.event_name != 'pull_request' && inputs.macos_build == true && '["ubuntu-latest", "macos-latest"]') || '["ubuntu-latest"]') }}
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
         with:
           submodules: recursive
           fetch-depth: 0
@@ -48,15 +121,21 @@ jobs:
       - name: Update submodules
         run: git submodule update --init --recursive
 
-      - name: Cache BoringSSL + lsquic build
-        uses: actions/cache@v4
+      - name: Restore shared cache
+        id: shared-cache
+        uses: ./.github/actions/cache-restore
         with:
           path: |
             boringssl/build-c-ipfs
             lsquic/build-c-ipfs
-          key: ${{ runner.os }}-ssl-lsquic-${{ hashFiles('boringssl/**/*.c', 'boringssl/**/*.cc', 'boringssl/**/*.h', 'lsquic/**/*.c', 'lsquic/**/*.h', 'lsquic/CMakeLists.txt') }}
+            libwebsockets/build-c-ipfs
+            c-libnostr/build
+            nostril/deps/secp256k1
+            nostril/libsecp256k1.a
+            nostril/config.h
+          key: ${{ runner.os }}-shared-cache-${{ github.sha }}
           restore-keys: |
-            ${{ runner.os }}-ssl-lsquic-
+            ${{ runner.os }}-shared-cache-
 
       - name: Install dependencies (macOS)
         if: runner.os == 'macOS'
@@ -70,43 +149,14 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y build-essential libcurl4-openssl-dev autoconf automake libtool
 
-      - name: Build secp256k1
-        run: |
-          cd nostril/deps/secp256k1
-          if [ ! -x ./configure ]; then
-            ./autogen.sh
-          fi
-          CFLAGS="-std=c99 -O2" ./configure --disable-shared --enable-module-ecdh --enable-module-schnorrsig --enable-module-extrakeys
-          make -j libsecp256k1.la
-          cp .libs/libsecp256k1.a ../../libsecp256k1.a || true
-
-      - name: Build c-libp2p
-        run: cd c-libp2p && make all
-
-      - name: Build LMDB
-        run: cd lmdb/libraries/liblmdb && make all
-
-      - name: Build BoringSSL
-        run: |
-          if [ ! -f boringssl/build-c-ipfs/libssl.a ]; then
-            cmake -B boringssl/build-c-ipfs -S boringssl -DCMAKE_BUILD_TYPE=Release
-            cmake --build boringssl/build-c-ipfs -j$(nproc)
-          fi
-
-      - name: Build lsquic
-        run: |
-          if [ ! -f lsquic/build-c-ipfs/src/liblsquic/liblsquic.a ]; then
-            cmake -B lsquic/build-c-ipfs -S lsquic -DCMAKE_BUILD_TYPE=Release \
-              -DSSLLIB_INCLUDE="$PWD/boringssl/include" \
-              -DLIBSSL_LIB="$PWD/boringssl/build-c-ipfs"
-            cmake --build lsquic/build-c-ipfs -j$(nproc)
-          fi
-
       - name: Build c-ipfs
         run: |
           if [ "${BIND:-${ACT_BIND:-false}}" = "true" ]; then
             make all
           elif [ "${REUSE:-${ACT_REUSE:-false}}" = "true" ] && [ -f .act-reuse-ready ]; then
+            make all
+          elif [ "${HAS_SHARED_CACHE:-false}" = "true" ]; then
+            # Cache Factory published the dependency build outputs; reuse them.
             make all
           else
             make clean all
@@ -114,6 +164,8 @@ jobs:
           if [ "${REUSE:-${ACT_REUSE:-false}}" = "true" ] || [ "${BIND:-${ACT_BIND:-false}}" = "true" ]; then
             touch .act-reuse-ready
           fi
+        env:
+          HAS_SHARED_CACHE: ${{ steps.shared-cache.outputs.cache-hit }}
 
       - name: Build tests
         run: |
@@ -121,9 +173,13 @@ jobs:
             cd test && make all
           elif [ "${REUSE:-${ACT_REUSE:-false}}" = "true" ] && [ -f ../.act-reuse-ready ]; then
             cd test && make all
+          elif [ "${HAS_SHARED_CACHE:-false}" = "true" ]; then
+            cd test && make all
           else
             cd test && make clean all
           fi
+        env:
+          HAS_SHARED_CACHE: ${{ steps.shared-cache.outputs.cache-hit }}
 
       - name: Optional build — clang
         if: env.CLANG_BUILD == 'true'

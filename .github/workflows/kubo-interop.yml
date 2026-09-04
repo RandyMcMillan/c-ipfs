@@ -22,6 +22,28 @@ on:
         type: string
         required: false
         default: v0.43.0
+  workflow_call:
+    inputs:
+      interop_mode:
+        description: Interop harness mode
+        type: string
+        required: false
+        default: ci
+      verbose:
+        description: Enable verbose interop logging
+        type: boolean
+        required: false
+        default: false
+      kubo_version:
+        description: Kubo release version for interop tests
+        type: string
+        required: false
+        default: v0.43.0
+      cache_key:
+        description: Exact shared cache key produced by the Cache Factory to wait for
+        type: string
+        required: false
+        default: ''
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -31,11 +53,35 @@ permissions:
   contents: read
 
 jobs:
+  wait-for-cache:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+
+      - name: Poll for shared cache from Cache Factory
+        if: inputs.cache_key != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          CACHE_KEY="${{ inputs.cache_key }}"
+          echo "Waiting for Cache Factory to publish: $CACHE_KEY"
+          for i in $(seq 1 60); do
+            if gh api "repos/${{ github.repository }}/actions/caches?key=$CACHE_KEY" --jq '.total_count' | grep -q '^[1-9]'; then
+              echo "Cache available after $i attempt(s)"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "Timed out waiting for cache; proceeding without it"
+          exit 0
+
   kubo-interop:
+    needs: wait-for-cache
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
         with:
           submodules: recursive
           fetch-depth: 0
@@ -46,12 +92,29 @@ jobs:
       - name: Update submodules
         run: git submodule update --init --recursive
 
+      - name: Restore shared cache
+        id: shared-cache
+        uses: ./.github/actions/cache-restore
+        with:
+          path: |
+            boringssl/build-c-ipfs
+            lsquic/build-c-ipfs
+            libwebsockets/build-c-ipfs
+            c-libnostr/build
+            nostril/deps/secp256k1
+            nostril/libsecp256k1.a
+            nostril/config.h
+          key: Linux-shared-cache-${{ github.sha }}
+          restore-keys: |
+            Linux-shared-cache-
+
       - name: Install build dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential libcurl4-openssl-dev autoconf automake libtool
 
       - name: Build secp256k1
+        if: steps.shared-cache.outputs.cache-hit != 'true'
         run: |
           cd nostril/deps/secp256k1
           if [ ! -x ./configure ]; then
@@ -68,7 +131,14 @@ jobs:
         run: cd lmdb/libraries/liblmdb && make all
 
       - name: Build c-ipfs
-        run: make clean all
+        run: |
+          if [ "${HAS_SHARED_CACHE:-false}" = "true" ]; then
+            make all
+          else
+            make clean all
+          fi
+        env:
+          HAS_SHARED_CACHE: ${{ steps.shared-cache.outputs.cache-hit }}
 
       - name: Run Kubo Interoperability Harness
         env:
