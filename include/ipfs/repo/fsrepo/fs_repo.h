@@ -14,7 +14,7 @@
 /**
  * a structure to hold the repo info
  */
-#define IPFS_REPO_VERSION 12
+#define IPFS_REPO_VERSION 18
 
 struct FSRepo {
 	int closed;
