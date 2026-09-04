@@ -163,9 +163,9 @@ jobs:
       - name: Smoke test — nostr repo + patch + issue + state + grasp
         run: |
           cd main
-          ./ipfs nostr repo --id ci-repo --name "CI Repo" --cid QmRepoCID
-          ./ipfs nostr patch --repo 0000000000000000000000000000000000000000000000000000000000000000:ci-repo --subject "ci patch" --body "patch body"
-          ./ipfs nostr issue --repo 0000000000000000000000000000000000000000000000000000000000000000:ci-repo --subject "ci issue" --body "issue body"
+          ./ipfs nostr repo --id ci-repo --name "CI Repo" --cid QmRepoCID --maintainer 0000000000000000000000000000000000000000000000000000000000000001 --topic ipfs --topic c
+          ./ipfs nostr patch --repo 0000000000000000000000000000000000000000000000000000000000000000:ci-repo --subject "ci patch" --body "patch body" --participant 0000000000000000000000000000000000000000000000000000000000000002
+          ./ipfs nostr issue --repo 0000000000000000000000000000000000000000000000000000000000000000:ci-repo --subject "ci issue" --body "issue body" --participant 0000000000000000000000000000000000000000000000000000000000000003
           printf 'refs/heads/main abcdef1234567890abcdef1234567890abcdef12\nrefs/heads/dev 1234567890abcdef1234567890abcdef12345678\n' > /tmp/ci_refs.txt
           ./ipfs nostr state --repo 0000000000000000000000000000000000000000000000000000000000000000:ci-repo --refs /tmp/ci_refs.txt
           ./ipfs nostr grasp --relay wss://relay.damus.io --relay wss://relay.nostr.info
@@ -241,6 +241,16 @@ jobs:
             exit 1
           fi
           ./ipfs nostr sync --cid "$CID" --sha256 "$SHA256" --gateway "http://127.0.0.1:8080" --output ../tmp/sync_got.txt
+          if [ ! -f ../tmp/sync_got.txt ]; then
+            echo "Sync output file missing"
+            exit 1
+          fi
+          GOT_SHA256=$(shasum -a 256 ../tmp/sync_got.txt | awk '{print $1}')
+          if [ "$GOT_SHA256" != "$SHA256" ]; then
+            echo "SHA-256 mismatch: expected $SHA256, got $GOT_SHA256"
+            exit 1
+          fi
+          echo "Sync verified: $CID"
           kill "$GATEWAY_PID" 2>/dev/null || true
           trap - EXIT
 
@@ -251,12 +261,12 @@ jobs:
 
       - name: Smoke test — make selfhost
         run: |
-          make selfhost || true
+          make selfhost
 
       - name: Smoke test — test binary runs
         run: |
           cd test
-          timeout 60 ./test_ipfs || true
+          timeout 180 ./test_ipfs
 
       - name: Smoke test — git server push/pull
         run: |
