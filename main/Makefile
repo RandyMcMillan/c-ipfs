@@ -6,6 +6,11 @@ SECP256K1_AR = ../nostril/libsecp256k1.a
 $(SECP256K1_AR):
 	$(MAKE) -C ../nostril libsecp256k1.a
 
+# c-libnostr (hybrid Nostr protocol support)
+NOSTR_LIB = ../c-libnostr/build/libnostr.a
+$(NOSTR_LIB):
+	$(MAKE) -C ../c-libnostr build
+
 # lsquic + BoringSSL (optional; experimental due to OpenSSL symbol conflicts)
 LSQUIC_LIB = ../lsquic/build-c-ipfs/src/liblsquic/liblsquic.a
 BORINGSSL_LIB = ../boringssl/build-c-ipfs/libssl.a ../boringssl/build-c-ipfs/libcrypto.a
@@ -81,8 +86,8 @@ $(V2_OBJS):
 %.o: %.c $(DEPS)
 	$(CC) -c -o $@ $< $(CFLAGS)
 
-ipfs: $(OBJS) $(SECP256K1_AR) $(V2_OBJS)
-	$(CC) -o $@ $(OBJS) $(SECP256K1_AR) $(LFLAGS) $(V2_OBJS) ../lmdb/libraries/liblmdb/liblmdb.a
+ipfs: $(OBJS) $(SECP256K1_AR) $(V2_OBJS) $(NOSTR_LIB)
+	$(CC) -o $@ $(OBJS) $(SECP256K1_AR) $(LFLAGS) $(V2_OBJS) $(NOSTR_LIB) ../lmdb/libraries/liblmdb/liblmdb.a
 
 all: ipfs
 
