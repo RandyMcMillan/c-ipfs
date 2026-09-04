@@ -175,7 +175,8 @@ echo "Waiting for Kubo daemon API..."
 wait_for_api "${kubo_pid}" 5011 "Kubo" "${TMP_DIR}/kubo.log" || exit 1
 wait_for_port 4011 "Kubo swarm" || exit 1
 KUBO_ID=$(IPFS_PATH="${K_REPO}" "${KUBO_BIN}" id -f="<id>")
-KUBO_ADDR="/ip4/127.0.0.1/tcp/4011/p2p/${KUBO_ID}"
+# c-libp2p's multiaddress parser uses the legacy "ipfs" protocol name.
+KUBO_ADDR="/ip4/127.0.0.1/tcp/4011/ipfs/${KUBO_ID}"
 echo "Kubo Multiaddr: ${KUBO_ADDR}"
 echo "=== Test 1: Swarm connect c-ipfs <-> Kubo ==="
 if [ "${VERBOSE}" = "true" ]; then
