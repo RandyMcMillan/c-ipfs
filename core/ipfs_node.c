@@ -16,6 +16,7 @@
 #include "ipfs/exchange/bitswap/bitswap.h"
 #include "ipfs/journal/journal.h"
 #include "ipfs/transport/noise_v2_bridge.h"
+#include "ipfs/transport/transport.h"
 
 struct IpfsNode* ipfs_node_new() {
 	struct IpfsNode* node = malloc(sizeof(struct IpfsNode));
