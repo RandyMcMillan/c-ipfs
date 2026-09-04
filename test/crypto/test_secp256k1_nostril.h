@@ -7,7 +7,6 @@
 #include <openssl/evp.h>
 #include <openssl/ec.h>
 #include <openssl/sha.h>
-#include <openssl/param_build.h>
 
 /* Deterministic test secret key (32 bytes) */
 static const unsigned char TEST_SECKEY[32] = {
@@ -122,14 +121,25 @@ exit:
 }
 
 /**
- * Test: Cross-verify libsecp256k1 ECDSA signature with OpenSSL.
+ * Test: Cross-verify libsecp256k1 ECDSA signature with OpenSSL/BoringSSL.
  * Uses a real message, hashes it with SHA-256 for libsecp256k1 signing,
- * and verifies the original message with OpenSSL EVP (which hashes again).
+ * and verifies the original message with SSL EVP (which hashes again).
+ *
+ * When linked against BoringSSL (no secp256k1 support) this test is
+ * skipped and reports success.
  */
 int test_secp256k1_nostril_openssl_cross_verify(void) {
     int retVal = 0;
     const char *message = "cross-verify message";
     size_t message_len = strlen(message);
+
+    /* Skip cross-verify when linked SSL lacks secp256k1 (e.g. BoringSSL) */
+    EC_KEY *probe = EC_KEY_new_by_curve_name(NID_secp256k1);
+    if (!probe) {
+        printf("  [skip] Linked SSL library lacks secp256k1 (BoringSSL); cross-verify not applicable\n");
+        return 1;
+    }
+    EC_KEY_free(probe);
 
     /* Hash the message for libsecp256k1 (which expects a 32-byte digest) */
     unsigned char msg_hash[32];
@@ -167,43 +177,47 @@ int test_secp256k1_nostril_openssl_cross_verify(void) {
         goto cleanup_ctx;
     }
 
-    /* Verify with OpenSSL (hashes message internally with SHA-256) */
-    EVP_PKEY_CTX *pctx = EVP_PKEY_CTX_new_id(EVP_PKEY_EC, NULL);
-    if (!pctx) {
-        fprintf(stderr, "failed to create OpenSSL PKEY_CTX\n");
+    /* Verify with OpenSSL/BoringSSL using legacy EC_KEY APIs */
+    EC_KEY *ec_key = EC_KEY_new_by_curve_name(NID_secp256k1);
+    if (!ec_key) {
+        fprintf(stderr, "failed to create EC_KEY\n");
         goto cleanup_ctx;
     }
 
-    EVP_PKEY *pkey = NULL;
-    int openssl_ok = 0;
-
-    OSSL_PARAM_BLD *bld = OSSL_PARAM_BLD_new();
-    if (bld) {
-        OSSL_PARAM_BLD_push_utf8_string(bld, "group", "secp256k1", 0);
-        OSSL_PARAM_BLD_push_octet_string(bld, "pub", compressed_pubkey, pubkey_len);
-        OSSL_PARAM *params = OSSL_PARAM_BLD_to_param(bld);
-
-        if (EVP_PKEY_fromdata_init(pctx) == 1) {
-            EVP_PKEY_fromdata(pctx, &pkey, EVP_PKEY_PUBLIC_KEY, params);
-        }
-        OSSL_PARAM_free(params);
-        OSSL_PARAM_BLD_free(bld);
+    const unsigned char *pk_ptr = compressed_pubkey;
+    if (!o2i_ECPublicKey(&ec_key, &pk_ptr, (long)pubkey_len)) {
+        fprintf(stderr, "failed to parse compressed pubkey\n");
+        EC_KEY_free(ec_key);
+        goto cleanup_ctx;
     }
 
-    if (pkey) {
-        EVP_MD_CTX *md_ctx = EVP_MD_CTX_new();
-        if (EVP_DigestVerifyInit(md_ctx, NULL, EVP_sha256(), NULL, pkey) == 1) {
-            if (EVP_DigestVerifyUpdate(md_ctx, message, message_len) == 1) {
-                if (EVP_DigestVerifyFinal(md_ctx, der_sig, der_len) == 1) {
-                    openssl_ok = 1;
-                }
+    EVP_PKEY *pkey = EVP_PKEY_new();
+    if (!pkey || EVP_PKEY_set1_EC_KEY(pkey, ec_key) != 1) {
+        fprintf(stderr, "failed to create EVP_PKEY from EC_KEY\n");
+        if (pkey) EVP_PKEY_free(pkey);
+        EC_KEY_free(ec_key);
+        goto cleanup_ctx;
+    }
+    EC_KEY_free(ec_key);
+
+    EVP_MD_CTX *md_ctx = EVP_MD_CTX_new();
+    if (!md_ctx) {
+        fprintf(stderr, "failed to create MD_CTX\n");
+        EVP_PKEY_free(pkey);
+        goto cleanup_ctx;
+    }
+
+    int openssl_ok = 0;
+    if (EVP_DigestVerifyInit(md_ctx, NULL, EVP_sha256(), NULL, pkey) == 1) {
+        if (EVP_DigestVerifyUpdate(md_ctx, message, message_len) == 1) {
+            if (EVP_DigestVerifyFinal(md_ctx, der_sig, der_len) == 1) {
+                openssl_ok = 1;
             }
         }
-        EVP_MD_CTX_free(md_ctx);
-        EVP_PKEY_free(pkey);
     }
 
-    EVP_PKEY_CTX_free(pctx);
+    EVP_MD_CTX_free(md_ctx);
+    EVP_PKEY_free(pkey);
     secp256k1_context_destroy(ctx);
 
     if (!openssl_ok) {

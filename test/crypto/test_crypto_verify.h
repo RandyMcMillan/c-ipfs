@@ -60,11 +60,14 @@ exit:
 
 int test_crypto_verify_ed25519_roundtrip(void) {
     int retVal = 0;
-    EVP_PKEY *pkey = EVP_PKEY_Q_keygen(NULL, NULL, "ED25519");
-    if (!pkey) {
+    EVP_PKEY *pkey = NULL;
+    EVP_PKEY_CTX *gen_ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_ED25519, NULL);
+    if (!gen_ctx || EVP_PKEY_keygen_init(gen_ctx) <= 0 || EVP_PKEY_keygen(gen_ctx, &pkey) <= 0 || !pkey) {
         fprintf(stderr, "failed to generate Ed25519 key\n");
+        EVP_PKEY_CTX_free(gen_ctx);
         goto exit;
     }
+    EVP_PKEY_CTX_free(gen_ctx);
 
     // Extract raw public key
     uint8_t pubkey[32];
