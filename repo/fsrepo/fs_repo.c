@@ -596,7 +596,7 @@ int fs_repo_open_config(struct FSRepo* repo) {
 			|| strcmp((char*)test_peer_id, repo->config->identity->peer->id) != 0) {
 		libp2p_logger_error("fs_repo", "fs_repo_open_config: identity mismatch or build failed in %s (retVal=%d, test_peer_id=%s, computed=%s)\n",
 			full_filename, retVal, test_peer_id ? (char*)test_peer_id : "(null)",
-			repo->config->identity->peer->id ? repo->config->identity->peer->id : "(null)");
+			(repo->config->identity->peer && repo->config->identity->peer->id) ? repo->config->identity->peer->id : "(null)");
 		free(data);
 		free(priv_key_base64);
 		free(test_peer_id);
