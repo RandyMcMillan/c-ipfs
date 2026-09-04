@@ -44,6 +44,7 @@ selfhost: all
 # ---------------------------------------------------------------------------
 c-libp2p:
 	cd c-libp2p && $(MAKE) all
+	cd c-libp2p/v2 && $(MAKE) all
 
 lmdb:
 	cd lmdb/libraries/liblmdb && $(MAKE) all XCFLAGS="-fno-unwind-tables"
@@ -108,6 +109,7 @@ transport: libwebsockets
 # ---------------------------------------------------------------------------
 clean-c-libp2p:
 	cd c-libp2p && $(MAKE) clean
+	cd c-libp2p/v2 && $(MAKE) clean
 
 clean-lmdb:
 	cd lmdb/libraries/liblmdb && $(MAKE) clean

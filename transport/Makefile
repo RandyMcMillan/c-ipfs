@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -O0 -I../include -I../c-libp2p/include -I../c-libp2p/c-multiaddr/include -Wall -std=gnu99
+CFLAGS = -O0 -I../include -I../c-libp2p/include -I../c-libp2p/v2/include -I../c-libp2p/c-multiaddr/include -I../c-libp2p/c-protobuf -Wall -std=gnu99
 
 ifdef DEBUG
 CFLAGS += -g3
@@ -31,7 +31,7 @@ LFLAGS += $(LWS_LIB)
 endif
 
 DEPS =
-OBJS = quic_transport.o ws_transport.o registry.o stream_bridge.o
+OBJS = quic_transport.o ws_transport.o registry.o stream_bridge.o v2_stream_wrapper.o noise_v2_bridge.o
 
 %.o: %.c $(DEPS)
 	$(CC) -c -o $@ $< $(CFLAGS)

@@ -68,6 +68,8 @@ OBJS = testit.o test_helper.o \
 	../routing/supernode.o \
 	../thirdparty/ipfsaddr/ipfs_addr.o \
 	../transport/quic_transport.o ../transport/ws_transport.o ../transport/registry.o ../transport/stream_bridge.o \
+	../transport/v2_stream_wrapper.o ../transport/noise_v2_bridge.o \
+	../c-libp2p/v2/libp2p_v2.a \
 	../unixfs/unixfs.o ../unixfs/hamt.o \
 	../util/thread_pool.o ../util/time.o ../util/errs.o ../util/errs_impl.o \
 	../nostr/event.o ../nostr/git.o ../nostr/kind.o ../nostr/pip.o ../nostr/tag.o \

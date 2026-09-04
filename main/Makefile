@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -O0 -I../include -I../c-libp2p/include -I../c-libp2p/c-multihash/include -I../c-libp2p/c-multiaddr/include -I../c-libp2p/c-protobuf -I../lmdb/libraries/liblmdb -I../nostril -I../nostril/deps/secp256k1/include -g3 -Wall -std=gnu99
+CFLAGS = -O0 -I../include -I../c-libp2p/include -I../c-libp2p/v2/include -I../c-libp2p/c-multihash/include -I../c-libp2p/c-multiaddr/include -I../c-libp2p/c-protobuf -I../lmdb/libraries/liblmdb -I../nostril -I../nostril/deps/secp256k1/include -g3 -Wall -std=gnu99
 LWS_LIB = ../libwebsockets/build-c-ipfs/lib/libwebsockets.a
 LFLAGS = -L../c-libp2p -L../c-libp2p/c-multihash -L../c-libp2p/c-multiaddr -lp2p -lm -lmultihash -lmultiaddr -lpthread -lresolv -lcurl -lz $(LWS_LIB)
 SECP256K1_AR = ../nostril/libsecp256k1.a
@@ -61,9 +61,10 @@ OBJS = main.o \
 	../repo/config/*.o \
 	../routing/*.o \
 	../thirdparty/ipfsaddr/ipfs_addr.o \
-	../transport/quic_transport.o ../transport/ws_transport.o ../transport/registry.o ../transport/stream_bridge.o \
+	../transport/quic_transport.o ../transport/ws_transport.o ../transport/registry.o ../transport/stream_bridge.o ../transport/v2_stream_wrapper.o ../transport/noise_v2_bridge.o \
 	../unixfs/unixfs.o ../unixfs/hamt.o \
 	../c-libp2p/c-protobuf/protobuf.o ../c-libp2p/c-protobuf/varint.o \
+	../c-libp2p/v2/libp2p_v2.a \
 	../util/errs.o \
 	../util/time.o \
 	../util/thread_pool.o \

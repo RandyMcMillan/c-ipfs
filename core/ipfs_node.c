@@ -15,6 +15,7 @@
 #include "ipfs/core/ipfs_node.h"
 #include "ipfs/exchange/bitswap/bitswap.h"
 #include "ipfs/journal/journal.h"
+#include "ipfs/transport/noise_v2_bridge.h"
 
 struct IpfsNode* ipfs_node_new() {
 	struct IpfsNode* node = malloc(sizeof(struct IpfsNode));
@@ -108,6 +109,7 @@ int ipfs_node_online_new(const char* repo_path, struct IpfsNode** node) {
 	local_node->exchange = ipfs_bitswap_new(local_node);
 	local_node->swarm = libp2p_swarm_new(local_node->protocol_handlers, local_node->repo->config->datastore, local_node->repo->config->filestore);
 	local_node->dialer = libp2p_conn_dialer_new(local_node->identity->peer, local_node->peerstore, &local_node->identity->private_key, local_node->swarm);
+	local_node->dialer->noise_handshake = ipfs_noise_handshake_legacy_2arg;
 
 	// populate transport registry with available transports
 	libp2p_transport_t *quic = libp2p_quic_transport_create(NULL);
@@ -188,6 +190,7 @@ int ipfs_node_offline_new(const char* repo_path, struct IpfsNode** node) {
 	local_node->exchange = ipfs_bitswap_new(local_node);
 	local_node->swarm = libp2p_swarm_new(local_node->protocol_handlers, local_node->repo->config->datastore, local_node->repo->config->filestore);
 	local_node->dialer = libp2p_conn_dialer_new(local_node->identity->peer, local_node->peerstore, &local_node->identity->private_key, local_node->swarm);
+	local_node->dialer->noise_handshake = ipfs_noise_handshake_legacy_2arg;
 	local_node->discovery = libp2p_discovery_new();
 	if (local_node->discovery != NULL) {
 		const char* local_multiaddr = NULL;
