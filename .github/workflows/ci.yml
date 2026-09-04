@@ -324,6 +324,12 @@ jobs:
           cd test
           timeout 180 ./test_ipfs
 
+      - name: Smoke test — c-libnostr standalone
+        run: |
+          cd test
+          make test_c_libnostr_standalone
+          ./test_c_libnostr_standalone
+
       - name: Smoke test — git server push/pull
         run: |
           if [ "${ACT_CI:-}" = "true" ] || [ "${ACT:-}" = "true" ]; then

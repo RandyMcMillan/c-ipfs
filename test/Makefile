@@ -97,7 +97,7 @@ NOSTR_LIB = ../c-libnostr/build/libnostr.a
 test_c_libnostr_standalone: nostr/test_c_libnostr_standalone.c $(NOSTR_LIB)
 	$(CC) -o $@ $< $(CFLAGS) $(NOSTR_LIB) -L/opt/homebrew/opt/openssl/lib -lssl -lcrypto -L../nostril/deps/secp256k1/.libs -lsecp256k1 -lpthread
 
-all: test_ipfs
+all: test_ipfs test_c_libnostr_standalone
 
 # secp256k1 cross-verification: libsecp256k1 vs linked SSL library
 OPENSSL_LDFLAGS =
@@ -124,6 +124,7 @@ secp256k1-cross-verify: test_secp256k1_cross_openssl test_secp256k1_cross_boring
 clean:
 	rm -f *.o
 	rm -f test_ipfs
+	rm -f test_c_libnostr_standalone
 	rm -f test_secp256k1_cross_openssl test_secp256k1_cross_boringssl
 	
 rebuild: clean all
