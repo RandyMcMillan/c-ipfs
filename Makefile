@@ -20,9 +20,9 @@ prepare:
 		Darwin) bad_fmt='Mach-O' ;; \
 		*) bad_fmt='ELF' ;; \
 	esac; \
-	if find . -type f \( -name '*.o' -o -name '*.a' -o -name '*.so' -o -name '*.so.*' -o -name '*.dylib' -o -name '*.la' -o -name '*.lo' \) -exec file {} + 2>/dev/null | grep -vq "$$bad_fmt"; then \
+	if find . -type f \( -name '*.o' -o -name '*.so' -o -name '*.so.*' -o -name '*.dylib' \) -exec file {} + 2>/dev/null | grep -vq "$$bad_fmt"; then \
 		echo "  CLEAN stale foreign build outputs"; \
-		find . -type f \( -name '*.o' -o -name '*.a' -o -name '*.so' -o -name '*.so.*' -o -name '*.dylib' -o -name '*.la' -o -name '*.lo' \) -delete; \
+		find . -type f \( -name '*.o' -o -name '*.so' -o -name '*.so.*' -o -name '*.dylib' \) -delete; \
 	fi
 
 # ---------------------------------------------------------------------------
@@ -65,14 +65,12 @@ nostril:
 	@# the current platform (macOS vs Linux act containers).
 	rm -f nostril/config.h nostril/configurator nostril/*.o nostril/*.a
 	@if [ -f nostril/deps/secp256k1/config.log ]; then \
-		host_triplet=$$(grep '^host_triplet=' nostril/deps/secp256k1/config.log | head -1 | sed 's/host_triplet=//'); \
+		host_triplet=$$(grep "^host='" nostril/deps/secp256k1/config.log | head -1 | sed "s/host='//;s/'$$//"); \
 		current_arch=$$(uname -m); \
-		case "$$current_arch" in \
-			arm64) expected_host="aarch64-apple-darwin*" ;; \
-			x86_64) expected_host="x86_64-apple-darwin*" ;; \
-		esac; \
-		if ! echo "$$host_triplet" | grep -q "$$current_arch" 2>/dev/null; then \
-			echo "  CLEAN stale secp256k1 configure cache ($$host_triplet != $$current_arch)"; \
+		current_os=$$(uname -s | tr '[:upper:]' '[:lower:]'); \
+		if ! echo "$$host_triplet" | grep -q "$$current_arch" 2>/dev/null || \
+		   ! echo "$$host_triplet" | grep -q "$$current_os" 2>/dev/null; then \
+			echo "  CLEAN stale secp256k1 configure cache ($$host_triplet != $$current_arch-$$current_os)"; \
 			rm -rf nostril/deps/secp256k1/config.log nostril/deps/secp256k1/config.status nostril/deps/secp256k1/Makefile nostril/deps/secp256k1/src/*.lo nostril/deps/secp256k1/src/.libs; \
 		fi; \
 	fi
