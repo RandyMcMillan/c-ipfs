@@ -16,6 +16,11 @@ As of 2026-09-03, the repository has moved past the earlier cross-OS build failu
 - **QUIC/WebSocket stubs wired into swarm dialer:** `transport/stream_bridge.c` wraps `libp2p_stream_t` into c-libp2p `struct Stream`. `core/net.c` `ipsf_core_net_dial` now tries the transport registry first for `/quic` and `/ws` peer addresses, falling back to the legacy TCP dialer.
 - **Cross-platform nostril build fixed:** Root `Makefile` now removes stale `nostril/config.h`, `nostril/configurator`, and secp256k1 configure cache when the host architecture changes (e.g., macOS ARM64 → Linux x86_64 act containers).
 - **Critical segfix fixed:** `ipfs_node_online_new` now correctly sets `local_node->mode = MODE_ONLINE` (was `MODE_OFFLINE`), preventing `ipfs_node_free` from calling `ipfs_routing_offline_free` on a Kademlia routing object. This resolves the Ubuntu CI segfault in `test_core_api_startup_shutdown` and the Kubo interop daemon crash.
+- **`ipfs swarm peers` implemented:** `core/swarm.c` and `core/http_request.c` now support `ipfs swarm peers`, returning `{"Peers":[]}` JSON when no peers are connected.
+- **`/p2p/` multiaddr parsing fixed:** `c-libp2p/c-multiaddr` now recognizes `/p2p/` as an alias for `/ipfs/` when extracting peer IDs. This fixes `swarm connect` address parsing for Kubo-style multiaddrs.
+- **`repo init` fixed for existing empty directories:** `repo/init.c` no longer rejects initialization when the target directory already exists but is empty/uninitialized.
+- **Bootstrap peers updated:** `repo/config/bootstrap_peers.c` now includes the canonical libp2p bootstrap peer `/ip4/104.131.131.82/tcp/4001/p2p/QmaCpDMGvV2BGHeYERUEnRQAwe3N8SzbUtfsmvsqQLuvuJ` with dnsaddr entries documented as TODO for runtime resolution.
+- **c-libp2p v2 connection layer scaffold:** New standalone rewrite in `c-libp2p/v2/` with modern multistream handshake, SECIO stream wrapper, Yamux session multiplexer, TCP dialer, peerstore, and swarm connect. Compiles and runs independently.
 
 ### Recently resolved
 
@@ -28,16 +33,16 @@ As of 2026-09-03, the repository has moved past the earlier cross-OS build failu
 
 ### Current blockers
 
-- **Kubo interoperability** — `test_kubo_interop.sh` fails because c-ipfs `swarm peers` command lacks a working implementation (returns usage error instead of peer list). This is a pre-existing issue unrelated to transport/crypto work.
+- **Kubo interoperability — security protocol mismatch** — `test_kubo_interop.sh` now parses peer IDs correctly via `/p2p/` multiaddrs, but the actual TCP connection fails because c-libp2p only implements SECIO, while Kubo v0.43.0 removed SECIO and only supports Noise and TLS 1.3. This is the root cause of the "failed to negotiate security protocol: context deadline exceeded" error from Kubo.
 - **Test suite timeout under HAS_LSQUIC** — Full `./test_ipfs` run takes longer than 5 minutes locally; may need timeout adjustment in CI.
 
 ### Near-term next steps
 
-1. **Monitor CI run 33823367774** and fix any remaining build/test regressions from HAS_LSQUIC enablement.
-2. **Fix `ipfs swarm peers` / `swarm connect`** so Kubo interop harness can establish peering.
-3. **Investigate test suite performance** under BoringSSL linkage (possible `secp256k1_context_create` overhead or transport init delays).
-4. **Wire QUIC transport into active dialer** — `transport/quic_transport.c` stubs exist but are not exercised in real multiaddr negotiation.
-5. **Wire WebSocket transport** — `libwebsockets` builds but `ws_dial`/`ws_listen` stubs need completion and swarm integration.
+1. **Implement libp2p Noise XX handshake** in c-libp2p (or TLS 1.3) to achieve security protocol compatibility with Kubo v0.43.0.
+2. **Complete c-libp2p v2 connection layer** — A modern, standalone rewrite of the core connection stack (multistream, secio/noise, yamux, peerstore, swarm) is underway in `c-libp2p/v2/`. Build compiles; next step is Noise protocol replacement for SECIO and integration testing.
+3. **Wire QUIC transport into active dialer** — `transport/quic_transport.c` stubs exist but are not exercised in real multiaddr negotiation.
+4. **Wire WebSocket transport** — `libwebsockets` builds but `ws_dial`/`ws_listen` stubs need completion and swarm integration.
+5. **Investigate test suite performance** under BoringSSL linkage (possible `secp256k1_context_create` overhead or transport init delays).
 
 ---
 
