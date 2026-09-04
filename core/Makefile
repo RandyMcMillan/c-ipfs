@@ -7,7 +7,7 @@ endif
 
 LFLAGS = 
 DEPS = builder.h ipfs_node.h
-OBJS = builder.o daemon.o null.o ping.o bootstrap.o ipfs_node.o api.o client_api.o http_request.o swarm.o net_interfaces.o multipart.o api_gzip.o http_dht.o http_query.o bootstrap_impl.o
+OBJS = builder.o daemon.o null.o ping.o bootstrap.o ipfs_node.o api.o client_api.o http_request.o swarm.o net_interfaces.o multipart.o api_gzip.o http_dht.o http_query.o bootstrap_impl.o api_kubo_rpc.o
 
 %.o: %.c $(DEPS)
 	$(CC) -c -o $@ $< $(CFLAGS)
