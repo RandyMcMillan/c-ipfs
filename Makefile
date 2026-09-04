@@ -7,7 +7,7 @@ export DEBUG
 MODULES := blocks cid cmd commands core crypto exchange importer ipld journal merkledag multibase pin pubsub repo flatfs datastore thirdparty unixfs routing dnslink namesys path util rbsr nostr main transport
 
 # External submodules
-SUBMODULES := c-libp2p lmdb nostril libwebsockets boringssl lsquic
+SUBMODULES := c-libp2p lmdb nostril libwebsockets boringssl lsquic c-libnostr
 
 # Utility scripts
 SCRIPTS := scripts
@@ -96,6 +96,14 @@ lsquic: boringssl
 		cmake --build lsquic/build-c-ipfs -j$(shell sysctl -n hw.ncpu 2>/dev/null || echo 4); \
 	fi
 
+c-libnostr:
+	@if [ ! -f c-libnostr/build/libnostr.a ]; then \
+		cmake -B c-libnostr/build -S c-libnostr -DCMAKE_BUILD_TYPE=Release \
+			-DSECP256K1_LIB_DIR=$(PWD)/nostril/deps/secp256k1/.libs \
+			-DNOSTR_FEATURE_RELAY=OFF \
+			&& cmake --build c-libnostr/build -j$(shell sysctl -n hw.ncpu 2>/dev/null || echo 4); \
+	fi
+
 # ---------------------------------------------------------------------------
 # Module builds
 # ---------------------------------------------------------------------------
@@ -127,6 +135,9 @@ clean-boringssl:
 
 clean-lsquic:
 	rm -rf lsquic/build-c-ipfs
+
+clean-c-libnostr:
+	rm -rf c-libnostr/build
 
 scripts:
 	cd scripts && $(MAKE) all
@@ -168,6 +179,8 @@ test-run:
 		echo "           Running tests without timeout protection."; \
 		$(TEST_BIN) $(TESTS); \
 	fi
+	@echo "--- c-libnostr standalone smoke test ---"
+	@cd test && $(MAKE) test_c_libnostr_standalone && ./test_c_libnostr_standalone
 
 test: test-build test-run
 

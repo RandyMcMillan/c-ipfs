@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -O0 -I../include -I../c-libp2p/include -I../c-libp2p/c-multihash/include -I../c-libp2p/c-multiaddr/include -I../c-libp2p/c-protobuf -I../lmdb/libraries/liblmdb -I../nostril -I../nostril/deps/secp256k1/include -g3 -Wall -std=gnu99
+CFLAGS = -O0 -I../include -I../c-libp2p/include -I../c-libp2p/c-multihash/include -I../c-libp2p/c-multiaddr/include -I../c-libp2p/c-protobuf -I../lmdb/libraries/liblmdb -I../nostril -I../nostril/deps/secp256k1/include -I../c-libnostr/include -I../c-libnostr/build/include -g3 -Wall -std=gnu99
 LWS_LIB = ../libwebsockets/build-c-ipfs/lib/libwebsockets.a
 LFLAGS = -L../c-libp2p -L../c-libp2p/c-multihash -L../c-libp2p/c-multiaddr -lp2p -lm -lmultihash -lmultiaddr -lpthread -lresolv $(LWS_LIB)
 ifeq ($(shell uname -s),Darwin)
@@ -86,6 +86,13 @@ $(V2_OBJS):
 
 test_ipfs: $(OBJS) $(V2_OBJS)
 	$(CC) -o $@ $(OBJS) $(LFLAGS) $(V2_OBJS) ../lmdb/libraries/liblmdb/liblmdb.a
+
+# c-libnostr standalone smoke test (separate binary to avoid symbol collisions
+# with the legacy internal nostr/event.o symbols: nostr_event_sign, etc.)
+NOSTR_LIB = ../c-libnostr/build/libnostr.a
+
+test_c_libnostr_standalone: nostr/test_c_libnostr_standalone.c $(NOSTR_LIB)
+	$(CC) -o $@ $< $(CFLAGS) $(NOSTR_LIB) -L/opt/homebrew/opt/openssl/lib -lssl -lcrypto -L../nostril/deps/secp256k1/.libs -lsecp256k1 -lpthread
 
 all: test_ipfs
 
