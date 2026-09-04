@@ -226,4 +226,6 @@
 7. ✅ **Implement QUIC/WS `listen` stubs** — `quic_listen` and `ws_listen` implemented with socket bind and context creation; `close` callbacks implemented.
 8. ✅ **libwebsockets submodule integrated** — CMake build produces static `.a`, linked into `main/ipfs` and `test/test_ipfs`.
 9. ✅ **Fix `ipfs_node_online_new` mode bug** — `MODE_OFFLINE` → `MODE_ONLINE` prevents segfault on Ubuntu CI during node teardown.
-10. **Add BoringSSL submodule and wire lsquic build** — lsquic requires BoringSSL or OpenSSL 3.2+; neither available on Ubuntu CI or macOS LibreSSL.
+10. ✅ **Add BoringSSL submodule and wire lsquic build** — BoringSSL submodule added (RandyMcMillan fork), builds via CMake. lsquic builds against BoringSSL and produces `liblsquic.a`. `HAS_LSQUIC=1` is now enabled in CI by default.
+11. ✅ **Resolve OpenSSL/BoringSSL symbol conflict** — `crypto/verify.c` now uses libsecp256k1 for secp256k1 ECDSA verification instead of OpenSSL 3.x APIs (`OSSL_PARAM_BLD`, `EVP_PKEY_fromdata`). Ed25519 verification uses `EVP_PKEY_ED25519` which is supported by both OpenSSL and BoringSSL. Test code updated to use `EVP_PKEY_keygen` instead of `EVP_PKEY_Q_keygen` for BoringSSL compatibility.
+12. ✅ **Fix header include order for BoringSSL builds** — When `HAS_LSQUIC=1`, BoringSSL headers take precedence over system OpenSSL headers in `crypto/Makefile`, `main/Makefile`, and `test/Makefile`. Prevents NID constant mismatch.

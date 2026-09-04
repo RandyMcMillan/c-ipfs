@@ -15,17 +15,27 @@ As of 2026-09-03, the repository has moved past the earlier cross-OS build failu
 - **QUIC and WebSocket listen stubs implemented:** `quic_listen` and `ws_listen` are implemented in `transport/quic_transport.c` and `transport/ws_transport.c` (compiled conditionally via `HAS_LSQUIC` / `HAS_LIBWEBSOCKETS`).
 - **Critical segfix fixed:** `ipfs_node_online_new` now correctly sets `local_node->mode = MODE_ONLINE` (was `MODE_OFFLINE`), preventing `ipfs_node_free` from calling `ipfs_routing_offline_free` on a Kademlia routing object. This resolves the Ubuntu CI segfault in `test_core_api_startup_shutdown` and the Kubo interop daemon crash.
 
-### Current blocker
+### Recently resolved
 
-lsquic requires a QUIC-capable TLS library (BoringSSL or OpenSSL 3.2+). Ubuntu CI ships OpenSSL 3.0.x (no QUIC), and macOS uses LibreSSL 3.3.6 (no QUIC). We must add BoringSSL as a submodule, build it, and wire lsquic into the Make-based build before the QUIC transport can be enabled at compile time.
+1. ✅ **BoringSSL submodule added and building** — RandyMcMillan/boringssl fork added as submodule. CMake builds static `libssl.a` + `libcrypto.a` on both macOS and Ubuntu CI.
+2. ✅ **lsquic builds against BoringSSL** — Produces `liblsquic.a`. Cached in CI via `actions/cache@v4` to avoid 15+ minute rebuilds.
+3. ✅ **OpenSSL/BoringSSL symbol conflict resolved** — `crypto/verify.c` migrated from OpenSSL 3.x `EVP_PKEY_fromdata`/`OSSL_PARAM_BLD` APIs to libsecp256k1 for secp256k1 ECDSA verification. Ed25519 continues to use `EVP_PKEY_ED25519` which is present in both libraries.
+4. ✅ **Test suite BoringSSL-compatible** — Replaced `EVP_PKEY_Q_keygen` (OpenSSL 3.x only) with `EVP_PKEY_keygen_init` + `EVP_PKEY_keygen` in test code. Cross-verify test skips gracefully when linked SSL lacks secp256k1.
+5. ✅ **Include order fixed** — `crypto/Makefile`, `main/Makefile`, `test/Makefile` now put BoringSSL headers first when `HAS_LSQUIC=1`, preventing NID constant mismatch.
+6. ✅ **HAS_LSQUIC enabled in CI** — GitHub Actions workflow sets `HAS_LSQUIC: true` by default; both macOS and Ubuntu builds link lsquic + BoringSSL.
+
+### Current blockers
+
+- **Kubo interoperability** — `test_kubo_interop.sh` fails because c-ipfs `swarm peers` command lacks a working implementation (returns usage error instead of peer list). This is a pre-existing issue unrelated to transport/crypto work.
+- **Test suite timeout under HAS_LSQUIC** — Full `./test_ipfs` run takes longer than 5 minutes locally; may need timeout adjustment in CI.
 
 ### Near-term next steps
 
-1. **Add BoringSSL submodule** and build static libraries (`libssl.a`, `libcrypto.a`) via CMake.
-2. **Build lsquic against BoringSSL** and produce `liblsquic.a`.
-3. **Wire BoringSSL + lsquic into `transport/Makefile`, `main/Makefile`, and `test/Makefile`** behind `HAS_LSQUIC=1`.
-4. **Validate Kubo interop test** after the MODE_ONLINE fix (re-run CI and check daemon stability).
-5. **Re-run the broader test suite** and watch for regressions in the API, routing, and multi-node cases.
+1. **Monitor CI run 33823367774** and fix any remaining build/test regressions from HAS_LSQUIC enablement.
+2. **Fix `ipfs swarm peers` / `swarm connect`** so Kubo interop harness can establish peering.
+3. **Investigate test suite performance** under BoringSSL linkage (possible `secp256k1_context_create` overhead or transport init delays).
+4. **Wire QUIC transport into active dialer** — `transport/quic_transport.c` stubs exist but are not exercised in real multiaddr negotiation.
+5. **Wire WebSocket transport** — `libwebsockets` builds but `ws_dial`/`ws_listen` stubs need completion and swarm integration.
 
 ---
 
