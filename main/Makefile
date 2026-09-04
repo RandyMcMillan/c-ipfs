@@ -11,8 +11,7 @@ LSQUIC_LIB = ../lsquic/build-c-ipfs/src/liblsquic/liblsquic.a
 BORINGSSL_LIB = ../boringssl/build-c-ipfs/libssl.a ../boringssl/build-c-ipfs/libcrypto.a
 
 ifeq ($(shell uname -s),Darwin)
-CFLAGS += -I/opt/homebrew/opt/openssl/include
-LFLAGS += -Wl,-rpath,@loader_path/../c-libp2p -L/opt/homebrew/opt/openssl/lib -framework SystemConfiguration -framework CoreFoundation
+LFLAGS += -Wl,-rpath,@loader_path/../c-libp2p -framework SystemConfiguration -framework CoreFoundation
 else
 LFLAGS += -Wl,-rpath,'$$ORIGIN/../c-libp2p'
 endif
@@ -26,6 +25,10 @@ else
 LFLAGS += -lstdc++
 endif
 else
+ifeq ($(shell uname -s),Darwin)
+CFLAGS += -I/opt/homebrew/opt/openssl/include
+LFLAGS += -L/opt/homebrew/opt/openssl/lib
+endif
 LFLAGS += -lssl -lcrypto
 endif
 DEPS = cmd/ipfs/test_init.h repo/test_repo_bootstrap_peers.h repo/test_repo_config.h repo/test_repo_identity.h cid/test_cid.h

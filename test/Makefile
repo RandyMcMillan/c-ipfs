@@ -3,8 +3,7 @@ CFLAGS = -O0 -I../include -I../c-libp2p/include -I../c-libp2p/c-multihash/includ
 LWS_LIB = ../libwebsockets/build-c-ipfs/lib/libwebsockets.a
 LFLAGS = -L../c-libp2p -L../c-libp2p/c-multihash -L../c-libp2p/c-multiaddr -lp2p -lm -lmultihash -lmultiaddr -lpthread -lresolv -lcurl -lz $(LWS_LIB)
 ifeq ($(shell uname -s),Darwin)
-CFLAGS += -I/opt/homebrew/opt/openssl/include
-LFLAGS += -Wl,-rpath,@loader_path/../c-libp2p -L/opt/homebrew/opt/openssl/lib -framework SystemConfiguration -framework CoreFoundation
+LFLAGS += -Wl,-rpath,@loader_path/../c-libp2p -framework SystemConfiguration -framework CoreFoundation
 else
 LFLAGS += -Wl,-rpath,'$$ORIGIN/../c-libp2p'
 endif
@@ -22,6 +21,10 @@ else
 LFLAGS += -lstdc++
 endif
 else
+ifeq ($(shell uname -s),Darwin)
+CFLAGS += -I/opt/homebrew/opt/openssl/include
+LFLAGS += -L/opt/homebrew/opt/openssl/lib
+endif
 LFLAGS += -lssl -lcrypto ../nostril/libsecp256k1.a
 endif
 DEPS = cmd/ipfs/test_init.h repo/test_repo_bootstrap_peers.h repo/test_repo_config.h repo/test_repo_identity.h cid/test_cid.h transport/test_transport.h

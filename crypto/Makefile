@@ -5,12 +5,21 @@ ifdef DEBUG
 CFLAGS += -g3
 endif
 
+ifdef HAS_LSQUIC
+CFLAGS += -DHAS_LSQUIC -I../lsquic/include -I../boringssl/include
+LFLAGS += ../boringssl/build-c-ipfs/libssl.a ../boringssl/build-c-ipfs/libcrypto.a -lz
+ifeq ($(shell uname -s),Darwin)
+LFLAGS += -lc++
+else
+LFLAGS += -lstdc++
+endif
+else
 ifeq ($(shell uname -s),Darwin)
 CFLAGS += -I/opt/homebrew/opt/openssl/include
 LFLAGS += -L/opt/homebrew/opt/openssl/lib
 endif
-
 LFLAGS += -lssl -lcrypto
+endif
 DEPS = 
 OBJS = verify.o verify_impl.o
 
