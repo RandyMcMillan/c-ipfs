@@ -1,7 +1,7 @@
 CC = gcc
 CFLAGS = -O0 -I../include -I../c-libp2p/include -I../c-libp2p/v2/include -I../c-libp2p/c-multihash/include -I../c-libp2p/c-multiaddr/include -I../c-libp2p/c-protobuf -I../lmdb/libraries/liblmdb -I../nostril -I../nostril/deps/secp256k1/include -g3 -Wall -std=gnu99
 LWS_LIB = ../libwebsockets/build-c-ipfs/lib/libwebsockets.a
-LFLAGS = -L../c-libp2p -L../c-libp2p/c-multihash -L../c-libp2p/c-multiaddr -lp2p -lm -lmultihash -lmultiaddr -lpthread -lresolv -lcurl -lz $(LWS_LIB)
+LFLAGS = -L../c-libp2p -L../c-libp2p/c-multihash -L../c-libp2p/c-multiaddr -lp2p -lm -lmultihash -lmultiaddr -lpthread -lresolv $(LWS_LIB)
 SECP256K1_AR = ../nostril/libsecp256k1.a
 $(SECP256K1_AR):
 	$(MAKE) -C ../nostril libsecp256k1.a
@@ -18,7 +18,7 @@ endif
 
 ifdef HAS_LSQUIC
 CFLAGS += -DHAS_LSQUIC -I../lsquic/include -I../boringssl/include
-LFLAGS += $(LSQUIC_LIB) $(BORINGSSL_LIB) -lz
+LFLAGS += $(LSQUIC_LIB) $(BORINGSSL_LIB) -lz -lcurl -lz
 ifeq ($(shell uname -s),Darwin)
 LFLAGS += -lc++
 else
@@ -29,7 +29,7 @@ ifeq ($(shell uname -s),Darwin)
 CFLAGS += -I/opt/homebrew/opt/openssl/include
 LFLAGS += -L/opt/homebrew/opt/openssl/lib
 endif
-LFLAGS += -lssl -lcrypto
+LFLAGS += -lcurl -lz -lssl -lcrypto
 endif
 DEPS = cmd/ipfs/test_init.h repo/test_repo_bootstrap_peers.h repo/test_repo_config.h repo/test_repo_identity.h cid/test_cid.h
 OBJS = main.o \

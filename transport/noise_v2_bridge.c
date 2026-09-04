@@ -5,10 +5,96 @@
 #include "libp2p/net/tcp.h"
 #include "libp2p/conn/noise.h"
 #include "libp2p/utils/logger.h"
+#include "libp2p/crypto/rsa.h"
+#include "libp2p/crypto/key.h"
 #include "ipfs/transport/stream.h"
 #include "ipfs/transport/stream_bridge.h"
 #include "ipfs/transport/v2_stream_wrapper.h"
 #include "ipfs/transport/noise_v2_bridge.h"
+
+/* ============================================================================
+ * RSA Identity Callbacks for Noise Handshake Payload
+ * ============================================================================ */
+
+static int noise_rsa_get_identity_key(void *private_key, uint8_t **out_key, size_t *out_len) {
+    struct RsaPrivateKey *rsa = (struct RsaPrivateKey *)private_key;
+    if (!rsa || !rsa->public_key_der || rsa->public_key_length == 0)
+        return 0;
+
+    struct PublicKey pubkey;
+    memset(&pubkey, 0, sizeof(pubkey));
+    pubkey.type = KEYTYPE_RSA;
+    pubkey.data = (unsigned char *)rsa->public_key_der;
+    pubkey.data_size = rsa->public_key_length;
+
+    size_t needed = libp2p_crypto_public_key_protobuf_encode_size(&pubkey);
+    unsigned char *buf = malloc(needed);
+    if (!buf)
+        return 0;
+
+    size_t written = 0;
+    if (!libp2p_crypto_public_key_protobuf_encode(&pubkey, buf, needed, &written)) {
+        free(buf);
+        return 0;
+    }
+
+    *out_key = buf;
+    *out_len = written;
+    return 1;
+}
+
+static int noise_rsa_sign(void *private_key, const uint8_t *data, size_t data_len,
+                          uint8_t **out_sig, size_t *out_len) {
+    struct RsaPrivateKey *rsa = (struct RsaPrivateKey *)private_key;
+    if (!rsa)
+        return 0;
+
+    unsigned char *sig = NULL;
+    size_t sig_len = 0;
+    if (!libp2p_crypto_rsa_sign(rsa, (const char *)data, data_len, &sig, &sig_len))
+        return 0;
+
+    *out_sig = sig;
+    *out_len = sig_len;
+    return 1;
+}
+
+static int noise_rsa_verify(const uint8_t *identity_key, size_t identity_key_len,
+                            const uint8_t *data, size_t data_len,
+                            const uint8_t *sig, size_t sig_len) {
+    struct PublicKey *pubkey = NULL;
+    if (!libp2p_crypto_public_key_protobuf_decode((unsigned char *)identity_key, identity_key_len, &pubkey))
+        return 0;
+
+    if (!pubkey || pubkey->type != KEYTYPE_RSA || !pubkey->data) {
+        if (pubkey) libp2p_crypto_public_key_free(pubkey);
+        return 0;
+    }
+
+    struct RsaPublicKey rsa_pub;
+    memset(&rsa_pub, 0, sizeof(rsa_pub));
+    rsa_pub.der = pubkey->data;
+    rsa_pub.der_length = pubkey->data_size;
+
+    int ret = libp2p_crypto_rsa_verify(&rsa_pub, data, data_len, sig);
+    libp2p_crypto_public_key_free(pubkey);
+    return ret;
+}
+
+static void noise_rsa_free_buffer(uint8_t *buf) {
+    free(buf);
+}
+
+static const noise_identity_callbacks_t noise_rsa_callbacks = {
+    .get_identity_key = noise_rsa_get_identity_key,
+    .sign = noise_rsa_sign,
+    .verify = noise_rsa_verify,
+    .free_buffer = noise_rsa_free_buffer,
+};
+
+/* ============================================================================
+ * Bridge Functions
+ * ============================================================================ */
 
 struct Stream *ipfs_noise_handshake_legacy(struct Stream *legacy_raw_stream,
                                             void *private_key,
@@ -64,5 +150,5 @@ struct Stream *ipfs_noise_handshake_legacy(struct Stream *legacy_raw_stream,
 
 struct Stream *ipfs_noise_handshake_legacy_2arg(struct Stream *legacy_raw_stream,
                                                  void *private_key) {
-    return ipfs_noise_handshake_legacy(legacy_raw_stream, private_key, NULL);
+    return ipfs_noise_handshake_legacy(legacy_raw_stream, private_key, &noise_rsa_callbacks);
 }
