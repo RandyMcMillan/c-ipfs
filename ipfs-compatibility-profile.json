@@ -60,7 +60,12 @@
         "multistream-select and identify",
         "connection and resource management",
         "NAT traversal, relay, AutoNAT, hole punching, and mDNS"
-      ]
+      ],
+      "implementation_notes": {
+        "tcp": "Operational via c-libp2p",
+        "quic": "BoringSSL and lsquic submodules added; builds in CI. Blocked from default linkage by OpenSSL/BoringSSL symbol conflict. BoringSSL lacks secp256k1 and OpenSSL 3.x EVP_PKEY_fromdata APIs.",
+        "websocket": "libwebsockets stub present; not yet integrated into swarm dialer"
+      }
     },
     "routing": {
       "protocol": "Kademlia DHT",

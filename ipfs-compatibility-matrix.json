@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0",
   "profile": "ipfs-compatibility-profile.json",
-  "last_audited_commit": "2231f37",
+  "last_audited_commit": "9a10d34",
   "evidence_policy": "Source evidence shows only that an implementation exists. Interoperability evidence is required before a feature becomes conformant.",
   "features": [
     {
@@ -36,9 +36,15 @@
       "phase": 4,
       "status": "partial",
       "specifications": ["https://github.com/libp2p/specs"],
-      "source_evidence": ["c-libp2p", "core/swarm.c", "core/net.c"],
-      "test_evidence": ["test/core/test_node.h", "test/core/test_ping.h"],
-      "gaps": ["modern security and multiplexing negotiation", "QUIC and WebSocket", "resource management", "NAT and discovery features"]
+      "source_evidence": ["c-libp2p", "core/swarm.c", "core/net.c", "boringssl/", "lsquic/"],
+      "test_evidence": ["test/core/test_node.h", "test/core/test_ping.h", "test/crypto/test_secp256k1_cross.c"],
+      "gaps": [
+        "modern security and multiplexing negotiation",
+        "QUIC transport: BoringSSL+lsquic builds but is NOT linked by default due to OpenSSL/BoringSSL symbol conflicts (crypto/verify.c uses OpenSSL 3.x APIs missing in BoringSSL)",
+        "WebSocket transport: libwebsockets stubbed but not wired into swarm",
+        "resource management",
+        "NAT and discovery features"
+      ]
     },
     {
       "id": "dht-bitswap",
