@@ -98,6 +98,7 @@ c-libnostr:
 	@if [ ! -f c-libnostr/build/libnostr.a ]; then \
 		cmake -B c-libnostr/build -S c-libnostr -DCMAKE_BUILD_TYPE=Release \
 			-DSECP256K1_LIB_DIR=$(PWD)/nostril/deps/secp256k1/.libs \
+			-DSECP256K1_INCLUDE_DIRS=$(PWD)/nostril/deps/secp256k1/include \
 			-DNOSTR_FEATURE_RELAY=OFF -DBUILD_SHARED_LIBS=OFF \
 			&& cmake --build c-libnostr/build --target nostr_static -j$(shell sysctl -n hw.ncpu 2>/dev/null || echo 4); \
 	fi
