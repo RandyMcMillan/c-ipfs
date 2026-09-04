@@ -4,13 +4,16 @@
 #include <string.h>
 
 #include <openssl/evp.h>
-#include <openssl/ec.h>
-#include <openssl/param_build.h>
+#include <openssl/sha.h>
+#include <secp256k1.h>
 
 #include "ipfs/crypto/verify.h"
 
 /**
- * Verify an Ed25519 signature via OpenSSL EVP.
+ * Verify an Ed25519 signature via OpenSSL/BoringSSL EVP.
+ *
+ * This works with both OpenSSL 3.x and BoringSSL because Ed25519
+ * raw-public-key support is present in both.
  */
 int ipfs_crypto_verify_ed25519(const uint8_t *pubkey, size_t pubkey_len,
                                 const uint8_t *msg, size_t msg_len,
@@ -40,7 +43,16 @@ int ipfs_crypto_verify_ed25519(const uint8_t *pubkey, size_t pubkey_len,
 }
 
 /**
- * Verify a secp256k1 ECDSA signature via OpenSSL EVP.
+ * Verify a secp256k1 ECDSA signature via libsecp256k1.
+ *
+ * Expects a SEC1 compressed public key (33 bytes) and a DER-encoded
+ * signature.  The message is hashed with SHA-256 internally before
+ * verification, matching the behaviour of the previous OpenSSL 3.x
+ * EVP implementation.
+ *
+ * Using libsecp256k1 removes the dependency on OpenSSL 3.x-specific
+ * APIs (OSSL_PARAM_BLD, EVP_PKEY_fromdata) and allows the binary to
+ * link against BoringSSL for QUIC/lsquic without symbol conflicts.
  */
 int ipfs_crypto_verify_secp256k1(const uint8_t *pubkey, size_t pubkey_len,
                                   const uint8_t *msg, size_t msg_len,
@@ -48,40 +60,25 @@ int ipfs_crypto_verify_secp256k1(const uint8_t *pubkey, size_t pubkey_len,
     if (!pubkey || !msg || !sig) return 0;
     if (pubkey_len != 33) return 0;
 
-    EVP_PKEY_CTX *pctx = EVP_PKEY_CTX_new_id(EVP_PKEY_EC, NULL);
-    if (!pctx) return 0;
+    secp256k1_context *ctx = secp256k1_context_create(SECP256K1_CONTEXT_VERIFY);
+    if (!ctx) return 0;
 
-    EVP_PKEY *pkey = NULL;
-    int status = 0;
-
-    OSSL_PARAM_BLD *bld = OSSL_PARAM_BLD_new();
-    if (bld) {
-        OSSL_PARAM_BLD_push_utf8_string(bld, "group", "secp256k1", 0);
-        OSSL_PARAM_BLD_push_octet_string(bld, "pub", pubkey, pubkey_len);
-        OSSL_PARAM *params = OSSL_PARAM_BLD_to_param(bld);
-
-        if (EVP_PKEY_fromdata_init(pctx) == 1) {
-            EVP_PKEY_fromdata(pctx, &pkey, EVP_PKEY_PUBLIC_KEY, params);
-        }
-        OSSL_PARAM_free(params);
-        OSSL_PARAM_BLD_free(bld);
+    secp256k1_pubkey pk;
+    if (!secp256k1_ec_pubkey_parse(ctx, &pk, pubkey, pubkey_len)) {
+        secp256k1_context_destroy(ctx);
+        return 0;
     }
 
-    if (pkey) {
-        EVP_MD_CTX *md_ctx = EVP_MD_CTX_new();
-        if (md_ctx) {
-            if (EVP_DigestVerifyInit(md_ctx, NULL, EVP_sha256(), NULL, pkey) == 1) {
-                if (EVP_DigestVerifyUpdate(md_ctx, msg, msg_len) == 1) {
-                    if (EVP_DigestVerifyFinal(md_ctx, sig, sig_len) == 1) {
-                        status = 1;
-                    }
-                }
-            }
-            EVP_MD_CTX_free(md_ctx);
-        }
-        EVP_PKEY_free(pkey);
+    secp256k1_ecdsa_signature signature;
+    if (!secp256k1_ecdsa_signature_parse_der(ctx, &signature, sig, sig_len)) {
+        secp256k1_context_destroy(ctx);
+        return 0;
     }
 
-    EVP_PKEY_CTX_free(pctx);
-    return status;
+    uint8_t hash[SHA256_DIGEST_LENGTH];
+    SHA256(msg, msg_len, hash);
+
+    int ret = secp256k1_ecdsa_verify(ctx, &signature, hash, &pk);
+    secp256k1_context_destroy(ctx);
+    return ret == 1;
 }

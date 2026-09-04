@@ -2,8 +2,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
+#include <stdint.h>
+
 #include <openssl/evp.h>
-#include <openssl/ec.h>
+#include <openssl/sha.h>
+#include <secp256k1.h>
 
 #include "ipfs/crypto/verify.h"
 
@@ -19,30 +22,10 @@ int libp2p_crypto_verify(key_type_t key_type, const uint8_t *pubkey, size_t pubk
     if (!pubkey || !data || !sig) return 0;
 
     if (key_type == KEY_TYPE_ED25519) {
-        EVP_PKEY *pkey = EVP_PKEY_new_raw_public_key(EVP_PKEY_ED25519, NULL, pubkey, pubkey_len);
-        if (!pkey) return 0;
-
-        EVP_MD_CTX *ctx = EVP_MD_CTX_new();
-        int res = 0;
-        if (ctx) {
-            if (EVP_DigestVerifyInit(ctx, NULL, NULL, NULL, pkey) == 1) {
-                res = EVP_DigestVerify(ctx, sig, sig_len, data, data_len);
-            }
-            EVP_MD_CTX_free(ctx);
-        }
-        EVP_PKEY_free(pkey);
-        return (res == 1) ? 1 : 0;
+        return ipfs_crypto_verify_ed25519(pubkey, pubkey_len, data, data_len, sig, sig_len);
     }
     else if (key_type == KEY_TYPE_SECP256K1) {
-        EVP_PKEY_CTX *pctx = EVP_PKEY_CTX_new_id(EVP_PKEY_EC, NULL);
-        if (!pctx) return 0;
-
-        int status = 0;
-        if (EVP_PKEY_paramgen_init(pctx) > 0) {
-            status = 1;
-        }
-        EVP_PKEY_CTX_free(pctx);
-        return status;
+        return ipfs_crypto_verify_secp256k1(pubkey, pubkey_len, data, data_len, sig, sig_len);
     }
 
     return 0;
