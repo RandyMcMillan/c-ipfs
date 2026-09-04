@@ -579,21 +579,13 @@ exit:
 
 int test_core_api_version() {
 	int retVal = 0;
-	struct IpfsNode* local_node = NULL;
-	char* repo_path = "./tmp/ipfs_api_version";
-	char* peer_id = NULL;
-
-	if (!drop_and_build_repository(repo_path, 4001, NULL, &peer_id))
-		goto exit;
-	if (!ipfs_node_offline_new(repo_path, &local_node))
-		goto exit;
 
 	struct HttpRequest* req = ipfs_core_http_request_new();
 	if (!req) goto exit;
-	req->command = strdup("version");
+	req->command = "version";
 
 	struct HttpResponse* resp = NULL;
-	if (!ipfs_core_http_request_process(local_node, req, &resp) || !resp) {
+	if (!ipfs_core_http_request_process(NULL, req, &resp) || !resp || !resp->bytes) {
 		ipfs_core_http_request_free(req);
 		goto exit;
 	}
@@ -605,8 +597,6 @@ int test_core_api_version() {
 	ipfs_core_http_response_free(resp);
 	ipfs_core_http_request_free(req);
 exit:
-	ipfs_node_free(local_node);
-	if (peer_id) free(peer_id);
 	return retVal;
 }
 
