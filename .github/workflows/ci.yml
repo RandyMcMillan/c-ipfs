@@ -25,6 +25,7 @@ jobs:
     timeout-minutes: 25
     env:
       CLANG_BUILD: ${{ inputs.clang_build || false }}
+      HAS_LSQUIC: true
     strategy:
       fail-fast: false
       matrix:
