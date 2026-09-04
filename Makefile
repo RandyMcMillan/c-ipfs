@@ -60,6 +60,8 @@ nostril:
 		(if [ ! -x ./configure ]; then ./autogen.sh; fi) && \
 		CFLAGS="-std=c99 -O2" ./configure --disable-shared --enable-module-ecdh --enable-module-schnorrsig --enable-module-extrakeys; \
 	fi
+	@# Remove stale config.h so ./configurator regenerates it for the current platform
+	rm -f nostril/config.h
 	cd nostril && $(MAKE) config.h libsecp256k1.a
 
 libwebsockets:
