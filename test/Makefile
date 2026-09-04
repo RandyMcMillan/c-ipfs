@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -O0 -I../include -I../c-libp2p/include -I../c-libp2p/c-multihash/include -I../c-libp2p/c-multiaddr/include -I../c-libp2p/c-protobuf -I../lmdb/libraries/liblmdb -I../nostril -I../nostril/deps/secp256k1/include -I../c-libnostr/include -I../c-libnostr/build/include -g3 -Wall -std=gnu99
+CFLAGS = -O0 -I../include -I../c-libp2p/include -I../c-libp2p/v2/include -I../c-libp2p/c-multihash/include -I../c-libp2p/c-multiaddr/include -I../c-libp2p/c-protobuf -I../lmdb/libraries/liblmdb -I../nostril -I../nostril/deps/secp256k1/include -I../c-libnostr/include -I../c-libnostr/build/include -g3 -Wall -std=gnu99
 LWS_LIB = ../libwebsockets/build-c-ipfs/lib/libwebsockets.a
 LFLAGS = -L../c-libp2p -L../c-libp2p/c-multihash -L../c-libp2p/c-multiaddr -lp2p -lm -lmultihash -lmultiaddr -lpthread -lresolv $(LWS_LIB)
 ifeq ($(shell uname -s),Darwin)
@@ -69,14 +69,17 @@ OBJS = testit.o test_helper.o \
 	../thirdparty/ipfsaddr/ipfs_addr.o \
 	../transport/quic_transport.o ../transport/ws_transport.o ../transport/registry.o ../transport/stream_bridge.o \
 	../transport/v2_stream_wrapper.o ../transport/noise_v2_bridge.o \
+	../transport/dnsaddr_resolver.o ../transport/swarm_dialer_v2_bridge.o \
+	../security/secio_noise_fallback.o \
+	../routing/nostr_hybrid_routing.o ../routing/dht_server_api.o \
 	../unixfs/unixfs.o ../unixfs/hamt.o \
 	../util/thread_pool.o ../util/time.o ../util/errs.o ../util/errs_impl.o \
-	../nostr/event.o ../nostr/git.o ../nostr/kind.o ../nostr/pip.o ../nostr/tag.o \
+	../nostr/event.o ../nostr/git.o ../nostr/kind.o ../nostr/pip.o ../nostr/tag.o ../nostr/nostr_client.o \
 	../rbsr/rbsr.o \
 	../nostril/sha256.o \
 	../c-libp2p/c-protobuf/protobuf.o ../c-libp2p/c-protobuf/varint.o
 
-V2_OBJS = ../c-libp2p/v2/src/conn/noise.o ../c-libp2p/v2/src/conn/multistream.o
+V2_OBJS = ../c-libp2p/v2/src/conn/noise.o ../c-libp2p/v2/src/conn/multistream.o ../c-libp2p/v2/src/stub/yamux_stub.o
 
 $(V2_OBJS):
 	$(MAKE) -C ../c-libp2p/v2

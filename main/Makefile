@@ -62,16 +62,18 @@ OBJS = main.o \
 	../routing/*.o \
 	../thirdparty/ipfsaddr/ipfs_addr.o \
 	../transport/quic_transport.o ../transport/ws_transport.o ../transport/registry.o ../transport/stream_bridge.o ../transport/v2_stream_wrapper.o ../transport/noise_v2_bridge.o \
+	../transport/dnsaddr_resolver.o ../transport/swarm_dialer_v2_bridge.o \
+	../security/secio_noise_fallback.o \
 	../unixfs/unixfs.o ../unixfs/hamt.o \
 	../c-libp2p/c-protobuf/protobuf.o ../c-libp2p/c-protobuf/varint.o \
 	../util/errs.o \
 	../util/time.o \
 	../util/thread_pool.o \
-	../nostr/event.o ../nostr/tag.o ../nostr/git.o ../nostr/kind.o ../nostr/pip.o \
+	../nostr/event.o ../nostr/tag.o ../nostr/git.o ../nostr/kind.o ../nostr/pip.o ../nostr/nostr_client.o \
 	../rbsr/rbsr.o \
 	../nostril/sha256.o
 
-V2_OBJS = ../c-libp2p/v2/src/conn/noise.o ../c-libp2p/v2/src/conn/multistream.o
+V2_OBJS = ../c-libp2p/v2/src/conn/noise.o ../c-libp2p/v2/src/conn/multistream.o ../c-libp2p/v2/src/stub/yamux_stub.o
 
 $(V2_OBJS):
 	$(MAKE) -C ../c-libp2p/v2

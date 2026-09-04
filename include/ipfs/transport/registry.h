@@ -51,6 +51,12 @@ int transport_registry_remove(transport_registry_t *reg, const char *name);
 int transport_registry_dial(transport_registry_t *reg, const char *multiaddr, libp2p_stream_t **out_stream);
 
 /**
+ * Convenience: dial using the global registry, returning a raw socket fd.
+ * Returns -1 on failure.
+ */
+int ipfs_transport_registry_dial(const char *multiaddr);
+
+/**
  * Free the registry and all registered transports.
  */
 void transport_registry_free(transport_registry_t *reg);

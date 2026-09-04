@@ -64,6 +64,24 @@ int transport_registry_dial(transport_registry_t *reg, const char *multiaddr, li
     return -1;
 }
 
+static transport_registry_t g_registry;
+static int g_registry_initialized = 0;
+
+int ipfs_transport_registry_dial(const char *multiaddr) {
+    if (!g_registry_initialized) {
+        transport_registry_init(&g_registry);
+        g_registry_initialized = 1;
+    }
+    libp2p_stream_t *stream = NULL;
+    if (transport_registry_dial(&g_registry, multiaddr, &stream) == 0 && stream) {
+        /* TODO: extract fd from stream abstraction */
+        (void)stream;
+        return -1;
+    }
+    fprintf(stderr, "[Registry] No transport available for %s\n", multiaddr);
+    return -1;
+}
+
 void transport_registry_free(transport_registry_t *reg) {
     if (!reg) return;
 
