@@ -63,6 +63,7 @@
       ],
       "implementation_notes": {
         "tcp": "Operational via c-libp2p",
+        "noise": "Outbound v2 Noise XX handshake with libp2p identity payload works against Kubo v0.43.0. Inbound listener still uses legacy SECIO. Swarm connect blocked by bridge stream type mismatch in libp2p_stream_get_latest_stream.",
         "quic": "BoringSSL and lsquic submodules added; builds in CI. Blocked from default linkage by OpenSSL/BoringSSL symbol conflict. BoringSSL lacks secp256k1 and OpenSSL 3.x EVP_PKEY_fromdata APIs.",
         "websocket": "libwebsockets stub present; not yet integrated into swarm dialer"
       }

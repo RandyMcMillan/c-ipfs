@@ -92,17 +92,22 @@ CID, multihash, and multibase correctness are prerequisites for IPLD, UnixFS, Bi
 - ✅ **lsquic builds against BoringSSL** — produces `liblsquic.a`. Cached in CI to avoid 15+ minute rebuilds.
 - ✅ **OpenSSL/BoringSSL symbol conflict resolved** — `crypto/verify.c` uses libsecp256k1 for secp256k1 ECDSA verification. Ed25519 uses `EVP_PKEY_ED25519` (supported by both libraries).
 - ✅ **HAS_LSQUIC enabled in CI** — GitHub Actions workflow sets `HAS_LSQUIC: true` by default.
+- ✅ **Noise XX outbound handshake** — v2 Noise with libp2p identity payload matches Kubo v0.43.0 exactly. Wired into dialer via `transport/noise_v2_bridge.c`.
+- ✅ **Bridge stream buffering** — `transport/stream_bridge.c` `bridge_read_raw` buffers excess frame plaintext so byte-by-byte multistream reads work over Noise frames.
+- ✅ **Daemon robustness** — `SIGPIPE` ignored in `core/daemon.c`; `usleep(50000)` backoff added to swarm listen loop to prevent 98% CPU spin.
 
 ### Current blockers
 
-- **Kubo interoperability** — `test_kubo_interop.sh` fails because c-ipfs `swarm peers` command lacks a working implementation (returns usage error instead of peer list). Pre-existing, unrelated to transport/crypto work.
+- **swarm connect Kubo interop** — Noise handshake completes, but `libp2p_stream_get_latest_stream` in `c-libp2p/net/stream.c` does not handle bridge streams (`STREAM_TYPE_RAW` with `bridge_context_t`). It casts the context to `ConnectionContext*` and reads garbage/NULL for `session_context`, so the swarm thread never updates the multistream ack status. The dialer times out waiting for multistream-over-noise ready.
+- **Inbound listener still uses SECIO** — v2 Noise inbound not wired into `core/null.c`.
 - **Test suite timeout under HAS_LSQUIC** — Full `./test_ipfs` run takes longer than 5 minutes locally; may need timeout adjustment in CI.
 
 ### Next steps
 
-1. Fix `ipfs swarm peers` / `swarm connect` so Kubo interop harness can establish peering.
-2. Investigate test suite performance under BoringSSL linkage.
-3. Validate Kubo interoperability test after enabling transports.
+1. Fix `libp2p_stream_get_latest_stream` to fall back to `parent_stream` when a RAW stream's `session_context` is NULL/invalid (or introduce `STREAM_TYPE_BRIDGE`).
+2. Rebuild, restart daemon, and verify `swarm connect` to Kubo succeeds.
+3. Wire v2 Noise into the inbound listener path (`core/null.c`) so accepted connections run multistream → Noise → Yamux → Identify.
+4. Validate Kubo interoperability test after enabling transports.
 
 ### Exit criteria
 

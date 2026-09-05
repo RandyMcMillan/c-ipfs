@@ -34,21 +34,24 @@ Generated: 2026-09-04
   `transport/dnsaddr_resolver.c`, and `transport/swarm_dialer_v2_bridge.c`
   compile and link. The registry iterates transports, but bitswap engine
   still uses the legacy TCP-only path for the actual block exchange.
-- [~] **Swarm dialer protocol upgrade** — `security/secio_noise_fallback.c`
-  provides Noise-first with SECIO fallback. Yamux wrapper is linked via
-  `transport/v2_stream_wrapper.c`. Full end-to-end verify against Kubo
-  pending.
+- [~] **Swarm dialer protocol upgrade** — Outbound dialer runs TCP →
+  multistream → `/noise` → Noise handshake → multistream over noise → yamux.
+  Full end-to-end `swarm connect` verify against Kubo blocked by
+  `libp2p_stream_get_latest_stream` bridge stream bug.
 
 ## libp2p Security & Multiplexing
-- [~] **Noise handshake completion** — `libp2p_noise_handshake_raw()` is linked
-  and called from `security/secio_noise_fallback.c`. Needs live peer test.
-- [~] **SECIO deprecation** — `security/secio_noise_fallback.c` implements
+- [~] **Noise handshake completion** — Outbound v2 Noise XX handshake with
+  libp2p identity payload works against Kubo v0.43.0. Inbound listener still
+  uses legacy SECIO. `swarm connect` is blocked by a bridge stream bug in
+  `libp2p_stream_get_latest_stream` (see PROTOCOL_GAPS.md P0 #2).
+- [x] **SECIO deprecation** — `security/secio_noise_fallback.c` implements
   Noise-first with SECIO fallback. Legacy SECIO code remains for old peers.
 - [~] **Yamux integration** — `transport/v2_stream_wrapper.c` and
-  `transport/swarm_dialer_v2_bridge.c` wrap v2 yamux stubs into the legacy
-  stream lifecycle. Needs integration test.
-- [ ] **Identify protocol v2** — `identify_v2.o` exists but is not linked into
-  the main binary. Need to send/recv identify over yamux streams post-handshake.
+  `transport/swarm_dialer_v2_bridge.c` wrap v2 yamux into the legacy stream
+  lifecycle. Basic DATA frames work; WINDOW_UPDATE, PING, GO_AWAY ignored.
+- [~] **Identify protocol v2** — `c-libp2p/v2/src/identify/identify_v2.c`
+  encodes all six Identify fields. Linked into main binary. Not yet wired into
+  the live daemon inbound path.
 
 ## Nostr / Hybrid Protocol
 - [x] **c-libnostr symbol collision resolution** — All internal `nostr/*.o`

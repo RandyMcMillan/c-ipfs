@@ -17,23 +17,24 @@
 ## P0 — Kubo Interop Blockers
 
 ### 1. Security Protocol: Noise XX (or TLS 1.3)
-- **Status:** `partial` — v2 Noise XX compiles cleanly in `c-libp2p/v2/src/conn/noise.c` (ChaCha20-Poly1305 + X25519 DH + HKDF). **Identity payload callbacks are now implemented and match Kubo.** Wired into outbound dialer via `transport/noise_v2_bridge.c`; **inbound listener still uses legacy SECIO.**
+- **Status:** `partial` — Outbound v2 Noise XX handshake works against Kubo v0.43.0. Inbound listener still uses legacy SECIO.
 - **Root cause:** The legacy c-libp2p stack only speaks SECIO. Kubo v0.43.0 removed SECIO entirely.
-- **What Kubo does:** Offers `/noise` as the only security protocol on incoming connections. Expects initiators to perform a Noise_XX_25519_ChaChaPoly_SHA256 handshake with libp2p-specific payloads (protobuf-encoded RSA public key + signature over `noise-libp2p-static-key:` + static X25519 key).
+- **What Kubo does:** Offers `/noise` as the only security protocol on incoming connections. Expects initiators to perform a Noise_XX_25519_ChaChaPoly_SHA256 handshake with libp2p-specific payloads.
 - **What we need:**
-  1. ✅ Add libp2p-specific payload extensions — Done in `transport/noise_v2_bridge.c` and `c-libp2p/v2/src/conn/noise_callbacks.c`. RSA identity key protobuf encoding + signature with `noise-libp2p-static-key:` prefix matches Kubo/go-libp2p exactly.
+  1. ✅ Add libp2p-specific payload extensions — Done in `transport/noise_v2_bridge.c` and `c-libp2p/v2/src/conn/noise_callbacks.c`. Matches Kubo/go-libp2p exactly.
   2. Wire v2 Noise into the **inbound listener** path (`core/null.c` `ipfs_null_listen`) so accepted connections run multistream → Noise → Yamux → Identify instead of raw SECIO.
   3. Replace or augment the legacy `libp2p_conn_dialer_join_swarm` path in the main daemon so it uses the v2 stack consistently.
 - **Files:** `c-libp2p/v2/src/conn/noise.c`, `c-libp2p/v2/src/conn/noise_callbacks.c`, `transport/noise_v2_bridge.c`, `core/null.c`, `core/daemon.c`, `core/bootstrap_impl.c`
 - **Complexity:** High
 
 ### 2. Multistream Select 2.0 / Early Muxer Negotiation
-- **Status:** `partial` — v2 multistream handshake works (`c-libp2p/v2/src/conn/multistream.c`), but there is no negotiation of Yamux vs mplex before the security handshake.
-- **Root cause:** The v2 stack currently hardcodes Yamux after Noise/SECIO. Kubo expects the security handshake to happen *inside* a multistream-negotiated stream, and then the muxer to be negotiated next.
-- **What Kubo does:** `/multistream/1.0.0` → `/noise` → `/yamux/1.0.0` (or `/mplex/6.7.0`).
-- **What we need:** Chain the negotiations correctly in `swarm_connect`: TCP → multistream header → security protocol → multistream again → muxer protocol.
-- **Files:** `c-libp2p/v2/src/swarm/swarm.c`, `c-libp2p/v2/src/conn/multistream.c`
-- **Complexity:** Medium
+- **Status:** `partial` — Outbound dialer chains multistream correctly:
+  TCP → `/multistream/1.0.0` → `/noise` → Noise handshake → `/multistream/1.0.0` → `/yamux/1.0.0`.
+  **Blocked by bridge stream bug:** `libp2p_stream_get_latest_stream` in `c-libp2p/net/stream.c` assumes `STREAM_TYPE_RAW` means `ConnectionContext*`. The Noise bridge stream (`transport/stream_bridge.c`) also uses `STREAM_TYPE_RAW` but holds `bridge_context_t`. When the swarm thread reads the multistream ack from Kubo, `libp2p_stream_get_latest_stream` reads garbage/NULL for `session_context`, so the multistream handler never updates the ack status and the dialer times out.
+- **Root cause:** `libp2p_stream_get_latest_stream` lacks bridge-stream handling.
+- **What we need:** Fix `libp2p_stream_get_latest_stream` to fall back to `parent_stream` when a RAW stream's `session_context` is NULL/invalid (or introduce `STREAM_TYPE_BRIDGE`).
+- **Files:** `c-libp2p/net/stream.c`, `transport/stream_bridge.c`
+- **Complexity:** Low
 
 ### 3. Identify Protocol (/ipfs/id/1.0.0)
 - **Status:** `partial` — `libp2p_identify_send_response` now encodes fields 1-6 (publicKey, listenAddrs, protocols, observedAddr, protocolVersion, agentVersion) using c-protobuf. `Peerstore` struct extended with `public_key` and `listen_addrs`. **Not wired into the live daemon yet; only used by v2 test swarm.**
@@ -179,14 +180,14 @@
 | `ipfs add/cat/get/id` | Partial | Basic smoke tests pass |
 | Bitswap message encoding | Partial | No session layer |
 | DHT message encoding | Partial | No standard-compliant iterative lookup |
-| Noise XX | Partial | Identity payload callbacks implemented and match Kubo; wired into outbound dialer; inbound listener still uses SECIO |
+| Noise XX | Partial | Outbound handshake works against Kubo; inbound listener still uses SECIO; swarm connect blocked by bridge stream bug |
 
 ---
 
 ## Recommended Next Session Order
 
-1. **Wire v2 Noise into the inbound listener** — replace the SECIO path in `core/null.c` `ipfs_null_listen` so accepted connections run multistream → Noise → Yamux → Identify.
-2. **Fix multistream → security → muxer chaining** — ensure Kubo's negotiation order is matched exactly on both dial and listen paths.
-3. **Wire Identify v2 into the daemon** — populate v2 `Peerstore` with public key and listen addrs from `Identity`/`RepoConfig`, then use `libp2p_identify_send_response` on inbound Yamux streams.
-4. **Run Kubo interop harness again** — verify `swarm connect` succeeds end-to-end with Noise + Identify.
+1. **Fix `libp2p_stream_get_latest_stream` bridge stream bug** — add bridge stream handling so the swarm thread can process multistream acks over Noise (`c-libp2p/net/stream.c`).
+2. **Rebuild, restart daemon, verify `swarm connect`** — confirm end-to-end Kubo peering works with the fix.
+3. **Wire v2 Noise into the inbound listener** — replace the SECIO path in `core/null.c` `ipfs_null_listen` so accepted connections run multistream → Noise → Yamux → Identify.
+4. **Wire Identify v2 into the daemon** — populate v2 `Peerstore` with public key and listen addrs from `Identity`/`RepoConfig`, then use `libp2p_identify_send_response` on inbound Yamux streams.
 5. **Wire FFI progress callbacks** — expose `ipfs_ffi_unixfs_add_bytes_with_progress` and chunk large files in the FFI path.

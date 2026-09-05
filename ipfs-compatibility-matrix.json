@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0",
   "profile": "ipfs-compatibility-profile.json",
-  "last_audited_commit": "9a10d34",
+  "last_audited_commit": "9800773",
   "evidence_policy": "Source evidence shows only that an implementation exists. Interoperability evidence is required before a feature becomes conformant.",
   "features": [
     {
@@ -39,7 +39,8 @@
       "source_evidence": ["c-libp2p", "core/swarm.c", "core/net.c", "boringssl/", "lsquic/", "c-libp2p/v2/"],
       "test_evidence": ["test/core/test_node.h", "test/core/test_ping.h", "test/crypto/test_secp256k1_cross.c", "c-libp2p/v2/test_v2"],
       "gaps": [
-        "Noise or TLS 1.3 security protocol (c-libp2p only has SECIO; Kubo v0.43.0 removed SECIO support)",
+        "Noise handshake completes but multistream-over-noise ack fails due to bridge stream type mismatch in libp2p_stream_get_latest_stream (swarm connect to Kubo blocked)",
+        "Inbound listener still uses legacy SECIO; v2 Noise inbound not wired",
         "QUIC transport: BoringSSL+lsquic builds but is NOT linked by default due to OpenSSL/BoringSSL symbol conflicts (crypto/verify.c uses OpenSSL 3.x APIs missing in BoringSSL)",
         "WebSocket transport: libwebsockets stubbed but not wired into swarm",
         "resource management",
@@ -71,7 +72,7 @@
       "specifications": ["https://specs.ipfs.tech/http-gateways/", "https://docs.ipfs.tech/reference/kubo/rpc/"],
       "source_evidence": ["core/daemon.c", "core/api.c", "core/http_request.c", "core/ping.c", "core/swarm.c", "cmd/cli.c", "cmd/ipfs/main.c", "cmd/ipfs/init.c"],
       "test_evidence": ["test/core/test_api.h", "test/core/test_daemon.h", "test/transport/test_transport.h"],
-      "gaps": ["gateway behavior", "Kubo v0.43.0 interoperability tests for HTTP API", "authentication and origin policy"]
+      "gaps": ["swarm/connect Kubo interop (Noise handshake works; multistream-over-noise ack blocked by bridge stream bug)", "gateway behavior", "Kubo v0.43.0 interoperability tests for HTTP API", "authentication and origin policy"]
     },
     {
       "id": "security-verification",
