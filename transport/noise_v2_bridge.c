@@ -43,15 +43,27 @@ static int noise_rsa_get_identity_key(void *private_key, uint8_t **out_key, size
     return 1;
 }
 
+#define NOISE_SIG_PREFIX "noise-libp2p-static-key:"
+#define NOISE_SIG_PREFIX_LEN 24
+
 static int noise_rsa_sign(void *private_key, const uint8_t *data, size_t data_len,
                           uint8_t **out_sig, size_t *out_len) {
     struct RsaPrivateKey *rsa = (struct RsaPrivateKey *)private_key;
     if (!rsa)
         return 0;
 
+    char *to_sign = (char *)malloc(NOISE_SIG_PREFIX_LEN + data_len);
+    if (!to_sign)
+        return 0;
+
+    memcpy(to_sign, NOISE_SIG_PREFIX, NOISE_SIG_PREFIX_LEN);
+    memcpy(to_sign + NOISE_SIG_PREFIX_LEN, data, data_len);
+
     unsigned char *sig = NULL;
     size_t sig_len = 0;
-    if (!libp2p_crypto_rsa_sign(rsa, (const char *)data, data_len, &sig, &sig_len))
+    int ret = libp2p_crypto_rsa_sign(rsa, to_sign, NOISE_SIG_PREFIX_LEN + data_len, &sig, &sig_len);
+    free(to_sign);
+    if (!ret)
         return 0;
 
     *out_sig = sig;
@@ -62,6 +74,8 @@ static int noise_rsa_sign(void *private_key, const uint8_t *data, size_t data_le
 static int noise_rsa_verify(const uint8_t *identity_key, size_t identity_key_len,
                             const uint8_t *data, size_t data_len,
                             const uint8_t *sig, size_t sig_len) {
+    (void)sig_len;
+
     struct PublicKey *pubkey = NULL;
     if (!libp2p_crypto_public_key_protobuf_decode((unsigned char *)identity_key, identity_key_len, &pubkey))
         return 0;
@@ -76,7 +90,17 @@ static int noise_rsa_verify(const uint8_t *identity_key, size_t identity_key_len
     rsa_pub.der = pubkey->data;
     rsa_pub.der_length = pubkey->data_size;
 
-    int ret = libp2p_crypto_rsa_verify(&rsa_pub, data, data_len, sig);
+    unsigned char *to_verify = (unsigned char *)malloc(NOISE_SIG_PREFIX_LEN + data_len);
+    if (!to_verify) {
+        libp2p_crypto_public_key_free(pubkey);
+        return 0;
+    }
+
+    memcpy(to_verify, NOISE_SIG_PREFIX, NOISE_SIG_PREFIX_LEN);
+    memcpy(to_verify + NOISE_SIG_PREFIX_LEN, data, data_len);
+
+    int ret = libp2p_crypto_rsa_verify(&rsa_pub, to_verify, NOISE_SIG_PREFIX_LEN + data_len, sig);
+    free(to_verify);
     libp2p_crypto_public_key_free(pubkey);
     return ret;
 }

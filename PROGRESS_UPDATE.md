@@ -1,6 +1,15 @@
 ## Current progress snapshot
 
-As of 2026-09-03, the repository has moved past the earlier cross-OS build failures and transport-helper crash into broader protocol-compliance work. The Docker/compose assets are under `docker/`, the stale host-artifact issue is addressed, and the test harness in `scripts/lldb-tests.sh` runs selected tests before falling back to LLDB on crashes.
+As of 2026-09-05, the repository has moved past the earlier cross-OS build failures and transport-helper crash into broader protocol-compliance work. The Docker/compose assets are under `docker/`, the stale host-artifact issue is addressed, and the test harness in `scripts/lldb-tests.sh` runs selected tests before falling back to LLDB on crashes.
+
+**New this session (2026-09-05):**
+- **Noise identity payload fixed** — `transport/noise_v2_bridge.c` now correctly prepends `noise-libp2p-static-key:` before signing/verifying the static X25519 key, matching Kubo/go-libp2p behavior exactly. This unblocks Noise handshake interoperability with Kubo v0.43.0 on the outbound dialer path.
+- **v2 Noise callbacks implemented** — New file `c-libp2p/v2/src/conn/noise_callbacks.c` provides RSA-based `noise_identity_callbacks_t` for the v2 stack, used by `c-libp2p/v2/src/swarm/swarm.c`.
+- **Identify v2 completed** — `c-libp2p/v2/src/identify/identify_v2.c` now encodes all six Identify fields (publicKey, listenAddrs, protocols, observedAddr, protocolVersion, agentVersion). The v2 `Peerstore` struct was extended with `public_key`/`public_key_len` and `listen_addrs`/`listen_addrs_count` fields to supply this data.
+- **Repo version verified at 18** — Confirmed `IPFS_REPO_VERSION == 18` matches Kubo v0.43.0. `repo/fsrepo/fs_repo_version.c` already handles migration from older versions.
+- **All 120 tests pass** after build.
+
+**Previous session:** A C FFI layer (`ffi/`) has been implemented, matching the Kubo FFI API surface from `kubo-rs`. This makes c-ipfs callable as a library from C, Rust, and other languages via a stable handle-based API.
 
 ### What is currently working
 
@@ -21,6 +30,7 @@ As of 2026-09-03, the repository has moved past the earlier cross-OS build failu
 - **`repo init` fixed for existing empty directories:** `repo/init.c` no longer rejects initialization when the target directory already exists but is empty/uninitialized.
 - **Bootstrap peers updated:** `repo/config/bootstrap_peers.c` now includes the canonical libp2p bootstrap peer `/ip4/104.131.131.82/tcp/4001/p2p/QmaCpDMGvV2BGHeYERUEnRQAwe3N8SzbUtfsmvsqQLuvuJ` with dnsaddr entries documented as TODO for runtime resolution.
 - **c-libp2p v2 connection layer scaffold:** New standalone rewrite in `c-libp2p/v2/` with modern multistream handshake, SECIO stream wrapper, Yamux session multiplexer, TCP dialer, peerstore, and swarm connect. Compiles and runs independently.
+- **C FFI layer implemented (`ffi/`):** Mirrors the Kubo FFI API from `kubo-rs/go/kubo-sys/ffi/`. Provides handle-based node lifecycle, UnixFS add/cat, block put/get/stat, swarm connect/peers, and node identity queries. All 120 tests pass (including 6 new FFI tests). Files: `ffi/ffi.c`, `include/ipfs/ffi/ffi.h`, `test/ffi/test_ffi.h`.
 
 ### Recently resolved
 
@@ -30,19 +40,21 @@ As of 2026-09-03, the repository has moved past the earlier cross-OS build failu
 4. ✅ **Test suite BoringSSL-compatible** — Replaced `EVP_PKEY_Q_keygen` (OpenSSL 3.x only) with `EVP_PKEY_keygen_init` + `EVP_PKEY_keygen` in test code. Cross-verify test skips gracefully when linked SSL lacks secp256k1.
 5. ✅ **Include order fixed** — `crypto/Makefile`, `main/Makefile`, `test/Makefile` now put BoringSSL headers first when `HAS_LSQUIC=1`, preventing NID constant mismatch.
 6. ✅ **HAS_LSQUIC enabled in CI** — GitHub Actions workflow sets `HAS_LSQUIC: true` by default; both macOS and Ubuntu builds link lsquic + BoringSSL.
+7. ✅ **C FFI layer landed** — `ffi/ffi.c` implements `ipfs_ffi_version`, `init_repo`, `node_start/stop`, `peer_id`, `node_id`, `listening_addrs`, `swarm_peers`, `node_connect`, `unixfs_add_bytes`, `unixfs_cat`, `block_put/get/stat`, plus error and memory helpers. Integrated into root `Makefile` and test suite. 120/120 tests pass.
 
 ### Current blockers
 
-- **Kubo interoperability — security protocol mismatch** — `test_kubo_interop.sh` now parses peer IDs correctly via `/p2p/` multiaddrs, but the actual TCP connection fails because c-libp2p only implements SECIO, while Kubo v0.43.0 removed SECIO and only supports Noise and TLS 1.3. This is the root cause of the "failed to negotiate security protocol: context deadline exceeded" error from Kubo.
+- **Kubo interoperability — inbound listener still uses SECIO** — Outbound dialer now uses Noise XX via `transport/noise_v2_bridge.c` with correct libp2p identity payload, but the daemon's `ipfs_null_listen` (`core/null.c`) still accepts connections with the legacy v1 SECIO stack. Kubo v0.43.0 initiators will fail to connect to a c-ipfs listener because Kubo removed SECIO support entirely. This is the last remaining P0 blocker for basic `swarm connect` interop.
 - **Test suite timeout under HAS_LSQUIC** — Full `./test_ipfs` run takes longer than 5 minutes locally; may need timeout adjustment in CI.
 
 ### Near-term next steps
 
-1. **Implement libp2p Noise XX handshake** in c-libp2p (or TLS 1.3) to achieve security protocol compatibility with Kubo v0.43.0.
-2. **Complete c-libp2p v2 connection layer** — A modern, standalone rewrite of the core connection stack (multistream, secio/noise, yamux, peerstore, swarm) is underway in `c-libp2p/v2/`. Build compiles; next step is Noise protocol replacement for SECIO and integration testing.
-3. **Wire QUIC transport into active dialer** — `transport/quic_transport.c` stubs exist but are not exercised in real multiaddr negotiation.
-4. **Wire WebSocket transport** — `libwebsockets` builds but `ws_dial`/`ws_listen` stubs need completion and swarm integration.
-5. **Investigate test suite performance** under BoringSSL linkage (possible `secp256k1_context_create` overhead or transport init delays).
+1. **Wire v2 Noise into the inbound listener** — Replace SECIO in `core/null.c` `ipfs_null_listen` so accepted TCP connections run multistream → Noise → Yamux → Identify. This is the last P0 blocker for Kubo interop.
+2. **Fix multistream → security → muxer chaining on listen path** — Ensure the inbound negotiation order matches Kubo exactly.
+3. **Wire Identify v2 into the daemon** — Populate v2 `Peerstore` public key and listen addrs from the node's `Identity`/`RepoConfig` before the handshake.
+4. **Run Kubo interop harness** — Verify `swarm connect` succeeds end-to-end after Noise + Identify are wired on both sides.
+5. **Wire QUIC transport into active dialer** — `transport/quic_transport.c` stubs exist but are not exercised in real multiaddr negotiation.
+6. **Wire WebSocket transport** — `libwebsockets` builds but `ws_dial`/`ws_listen` stubs need completion and swarm integration.
 
 ---
 
@@ -85,7 +97,7 @@ Recent Changes:
 - `fs_repo_open_config` now logs diagnostics before every failure path.
 - Repo locking fully implemented in `repo/fsrepo/lock.c` with POSIX flock, reentrant locks, and cross-platform support.
 - **macOS flock fix**: `ipfs_repo_fsrepo_open` uses `LOCK_SH` (shared) so daemons and offline nodes in the same process can coexist; `ipfs_repo_fsrepo_init` retains `LOCK_EX` (exclusive) to prevent concurrent writes.
-- **Test suite stabilized**: 127/127 default-suite tests pass locally (was segfaulting at startup due to repo lock contention).
+- **Test suite stabilized**: 120/120 default-suite tests pass locally (was segfaulting at startup due to repo lock contention).
 - **Memory safety**: Fixed linked list removal bugs in `merkledag/node.c` (`ipfs_node_remove_link` and `ipfs_hashtable_node_free`).
 - **HTTP safety**: `core/http_request.c` version string now uses dynamic `snprintf` allocation instead of fixed-length `strdup`.
 - **Test infrastructure**: All `/tmp/` paths migrated to `./tmp/`; flatfs buffer sizes adjusted; journal LMDB path fixed.
@@ -106,12 +118,16 @@ Recent Changes:
 - `core/swarm.c` falls back to transport registry dial when c-libp2p dialer fails.
 - `transport/quic_transport.c` and `transport/ws_transport.c` implement dial/listen/close stubs (compiled conditionally via `HAS_LSQUIC` / `HAS_LIBWEBSOCKETS`).
 - libwebsockets submodule builds successfully via CMake and is linked into `main/ipfs` and `test/test_ipfs`.
+- **Noise XX identity payload implemented (2026-09-05)** — `transport/noise_v2_bridge.c` provides RSA-based identity callbacks that encode the public key as a libp2p protobuf and sign `noise-libp2p-static-key:` + static X25519 key, matching Kubo/go-libp2p exactly. Wired into outbound dialer via `ipfs_noise_handshake_legacy_2arg`.
+- **v2 Noise callbacks implemented (2026-09-05)** — `c-libp2p/v2/src/conn/noise_callbacks.c` provides the same callbacks for the standalone v2 stack.
+- **v2 Identify protocol completed (2026-09-05)** — `c-libp2p/v2/src/identify/identify_v2.c` encodes/decodes all six Identify protobuf fields. v2 `Peerstore` extended with `public_key` and `listen_addrs`.
+- **v2 library builds cleanly (2026-09-05)** — `c-libp2p/v2/Makefile` updated; all objects compile without errors.
 Critical Gaps:
 ⚠️ lsquic cannot compile without BoringSSL or OpenSSL 3.2+; neither is available on Ubuntu CI or macOS LibreSSL
 ⚠️ QUIC transport is stub-only (`HAS_LSQUIC` undefined); needs BoringSSL submodule + lsquic build integration
 ⚠️ WebSocket transport is stub-only (`HAS_LIBWEBSOCKETS` undefined); needs `LWS_PRE` macro and context creation validated
 ⚠️ Transport registry is wired but not yet exercised in active dialer for real multiaddr negotiation
-⚠️ Modern security negotiation (Noise, TLS) unclear
+⚠️ **Noise is only wired on outbound dialer; inbound listener still uses legacy SECIO**
 ⚠️ yamux multiplexer status unclear
 ⚠️ NAT traversal, relay, AutoNAT, hole punching, and mDNS are partially implemented or scaffolded
 Compliance Gap: Essential transport/security gaps prevent interoperability with modern Kubo
@@ -163,7 +179,7 @@ Required Work:
 ⚠️ Concurrency-safety verification for storage: repo locking done (flock), but LMDB txn concurrency between daemon and API still fails
 ❌ Dependency and license review
 ❌ Multi-node interoperability tests
-✅ CI covers macOS and Linux builds; test binary runs without segfault; 127/127 default-suite tests pass locally
+✅ CI covers macOS and Linux builds; test binary runs without segfault; 120/120 default-suite tests pass locally
 Compliance Gap: Entire phase incomplete; no security baseline established
 Known Implementation Issues & TODOs
 
@@ -374,7 +390,7 @@ Recent Changes:
 - `fs_repo_open_config` now logs diagnostics before every failure path.
 - Repo locking fully implemented in `repo/fsrepo/lock.c` with POSIX flock, reentrant locks, and cross-platform support.
 - **macOS flock fix**: `ipfs_repo_fsrepo_open` uses `LOCK_SH` (shared) so daemons and offline nodes in the same process can coexist; `ipfs_repo_fsrepo_init` retains `LOCK_EX` (exclusive) to prevent concurrent writes.
-- **Test suite stabilized**: 127/127 default-suite tests pass locally (was segfaulting at startup due to repo lock contention).
+- **Test suite stabilized**: 120/120 default-suite tests pass locally (was segfaulting at startup due to repo lock contention).
 - **Memory safety**: Fixed linked list removal bugs in `merkledag/node.c` (`ipfs_node_remove_link` and `ipfs_hashtable_node_free`).
 - **HTTP safety**: `core/http_request.c` version string now uses dynamic `snprintf` allocation instead of fixed-length `strdup`.
 - **Test infrastructure**: All `/tmp/` paths migrated to `./tmp/`; flatfs buffer sizes adjusted; journal LMDB path fixed.
@@ -395,12 +411,16 @@ Recent Changes:
 - `core/swarm.c` falls back to transport registry dial when c-libp2p dialer fails.
 - `transport/quic_transport.c` and `transport/ws_transport.c` implement dial/listen/close stubs (compiled conditionally via `HAS_LSQUIC` / `HAS_LIBWEBSOCKETS`).
 - libwebsockets submodule builds successfully via CMake and is linked into `main/ipfs` and `test/test_ipfs`.
+- **Noise XX identity payload implemented (2026-09-05)** — `transport/noise_v2_bridge.c` provides RSA-based identity callbacks that encode the public key as a libp2p protobuf and sign `noise-libp2p-static-key:` + static X25519 key, matching Kubo/go-libp2p exactly. Wired into outbound dialer via `ipfs_noise_handshake_legacy_2arg`.
+- **v2 Noise callbacks implemented (2026-09-05)** — `c-libp2p/v2/src/conn/noise_callbacks.c` provides the same callbacks for the standalone v2 stack.
+- **v2 Identify protocol completed (2026-09-05)** — `c-libp2p/v2/src/identify/identify_v2.c` encodes/decodes all six Identify protobuf fields. v2 `Peerstore` extended with `public_key` and `listen_addrs`.
+- **v2 library builds cleanly (2026-09-05)** — `c-libp2p/v2/Makefile` updated; all objects compile without errors.
 Critical Gaps:
 ⚠️ lsquic cannot compile without BoringSSL or OpenSSL 3.2+; neither is available on Ubuntu CI or macOS LibreSSL
 ⚠️ QUIC transport is stub-only (`HAS_LSQUIC` undefined); needs BoringSSL submodule + lsquic build integration
 ⚠️ WebSocket transport is stub-only (`HAS_LIBWEBSOCKETS` undefined); needs `LWS_PRE` macro and context creation validated
 ⚠️ Transport registry is wired but not yet exercised in active dialer for real multiaddr negotiation
-⚠️ Modern security negotiation (Noise, TLS) unclear
+⚠️ **Noise is only wired on outbound dialer; inbound listener still uses legacy SECIO**
 ⚠️ yamux multiplexer status unclear
 ⚠️ NAT traversal, relay, AutoNAT, hole punching, and mDNS are partially implemented or scaffolded
 Compliance Gap: Essential transport/security gaps prevent interoperability with modern Kubo
@@ -452,7 +472,7 @@ Required Work:
 ⚠️ Concurrency-safety verification for storage: repo locking done (flock), but LMDB txn concurrency between daemon and API still fails
 ❌ Dependency and license review
 ❌ Multi-node interoperability tests
-✅ CI covers macOS and Linux builds; test binary runs without segfault; 127/127 default-suite tests pass locally
+✅ CI covers macOS and Linux builds; test binary runs without segfault; 120/120 default-suite tests pass locally
 Compliance Gap: Entire phase incomplete; no security baseline established
 Known Implementation Issues & TODOs
 

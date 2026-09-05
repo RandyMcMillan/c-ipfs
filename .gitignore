@@ -29,7 +29,8 @@ test/test_secp256k1_cross_boringssl.dSYM/
 test/test_secp256k1_cross_openssl.dSYM/
 test/test_secp256k1_cross_boringssl
 test/test_secp256k1_cross_openssl
-
+test/test_c_libnostr_standalone.dSYM/
+test/test_c_libnostr_standalone
 
 # Module source files
 !crypto/verify.c

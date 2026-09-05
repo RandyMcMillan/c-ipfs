@@ -44,6 +44,7 @@
 #include "nostr/test_nostr_ipfs_kinds.h"
 #include "blocks/test_blockstore_shard.h"
 #include "dnslink/test_dns_cache.h"
+#include "ffi/test_ffi.h"
 
 struct test {
 	int index;
@@ -249,6 +250,12 @@ int build_test_collection() {
 	add_test("test_blockstore_shard_put_get", test_blockstore_shard_put_get, 1);
 	add_test("test_dns_cache_put_get", test_dns_cache_put_get, 1);
 	add_test("test_dns_cache_miss", test_dns_cache_miss, 1);
+	add_test("test_ffi_version", test_ffi_version, 1);
+	add_test("test_ffi_init_repo_and_node_lifecycle", test_ffi_init_repo_and_node_lifecycle, 1);
+	add_test("test_ffi_unixfs_add_and_cat", test_ffi_unixfs_add_and_cat, 1);
+	add_test("test_ffi_block_put_get_stat", test_ffi_block_put_get_stat, 1);
+	add_test("test_ffi_node_id", test_ffi_node_id, 1);
+	add_test("test_ffi_empty_add_cat", test_ffi_empty_add_cat, 1);
 	return 1;
 }
 

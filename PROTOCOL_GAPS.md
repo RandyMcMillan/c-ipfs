@@ -17,14 +17,14 @@
 ## P0 — Kubo Interop Blockers
 
 ### 1. Security Protocol: Noise XX (or TLS 1.3)
-- **Status:** `partial` — v2 Noise XX compiles cleanly in `c-libp2p/v2/src/conn/noise.c` (ChaCha20-Poly1305 + X25519 DH + HKDF). **Not wired into the live daemon yet.**
+- **Status:** `partial` — v2 Noise XX compiles cleanly in `c-libp2p/v2/src/conn/noise.c` (ChaCha20-Poly1305 + X25519 DH + HKDF). **Identity payload callbacks are now implemented and match Kubo.** Wired into outbound dialer via `transport/noise_v2_bridge.c`; **inbound listener still uses legacy SECIO.**
 - **Root cause:** The legacy c-libp2p stack only speaks SECIO. Kubo v0.43.0 removed SECIO entirely.
-- **What Kubo does:** Offers `/noise` as the only security protocol on incoming connections. Expects initiators to perform a Noise_XX_25519_ChaChaPoly_SHA256 handshake with libp2p-specific payloads (Ed25519 identity key + signature over static X25519 key).
+- **What Kubo does:** Offers `/noise` as the only security protocol on incoming connections. Expects initiators to perform a Noise_XX_25519_ChaChaPoly_SHA256 handshake with libp2p-specific payloads (protobuf-encoded RSA public key + signature over `noise-libp2p-static-key:` + static X25519 key).
 - **What we need:**
-  1. Add libp2p-specific payload extensions in `noise.c` (sign static X25519 key with Ed25519 identity key, verify remote signature).
-  2. Wire `libp2p_noise_handshake` into the live daemon path (currently only called from v2 `swarm.c`).
-  3. Replace or augment the legacy `libp2p_conn_dialer_join_swarm` path in the main daemon so it uses the v2 stack.
-- **Files:** `c-libp2p/v2/src/conn/noise.c`, `c-libp2p/v2/src/swarm/swarm.c`, `core/daemon.c`, `core/bootstrap_impl.c`
+  1. ✅ Add libp2p-specific payload extensions — Done in `transport/noise_v2_bridge.c` and `c-libp2p/v2/src/conn/noise_callbacks.c`. RSA identity key protobuf encoding + signature with `noise-libp2p-static-key:` prefix matches Kubo/go-libp2p exactly.
+  2. Wire v2 Noise into the **inbound listener** path (`core/null.c` `ipfs_null_listen`) so accepted connections run multistream → Noise → Yamux → Identify instead of raw SECIO.
+  3. Replace or augment the legacy `libp2p_conn_dialer_join_swarm` path in the main daemon so it uses the v2 stack consistently.
+- **Files:** `c-libp2p/v2/src/conn/noise.c`, `c-libp2p/v2/src/conn/noise_callbacks.c`, `transport/noise_v2_bridge.c`, `core/null.c`, `core/daemon.c`, `core/bootstrap_impl.c`
 - **Complexity:** High
 
 ### 2. Multistream Select 2.0 / Early Muxer Negotiation
@@ -36,26 +36,24 @@
 - **Complexity:** Medium
 
 ### 3. Identify Protocol (/ipfs/id/1.0.0)
-- **Status:** `scaffold` — `libp2p_identify_send_response` is referenced in v2 but not implemented.
-- **Root cause:** No identify encoder/decoder exists in the v2 layer.
+- **Status:** `partial` — `libp2p_identify_send_response` now encodes fields 1-6 (publicKey, listenAddrs, protocols, observedAddr, protocolVersion, agentVersion) using c-protobuf. `Peerstore` struct extended with `public_key` and `listen_addrs`. **Not wired into the live daemon yet; only used by v2 test swarm.**
+- **Root cause:** v2 identify encoder exists but daemon listener still uses v1 identify.
 - **What Kubo does:** After Yamux is established, opens a new stream and sends an Identify protobuf message containing: listen addrs, protocols, observed addr, agent version, public key.
 - **What we need:**
-  1. Implement Identify protobuf encode/decode using c-protobuf.
-  2. Send the local node's peer ID, multiaddrs, and supported protocols.
-  3. Parse the remote identify response and populate the peerstore.
-- **Files:** `c-libp2p/v2/src/identify/` (new directory), `c-libp2p/v2/src/swarm/swarm.c`
+  1. ✅ Implement Identify protobuf encode/decode — Done in `c-libp2p/v2/src/identify/identify_v2.c`.
+  2. Populate local node's public key and listen addrs into the v2 `Peerstore` before handshake.
+  3. Parse the remote identify response and populate the peerstore (receive side is scaffolded).
+  4. Wire v2 Identify into the live daemon path (currently v1 identify is used via `libp2p_identify_build_protocol_handler`).
+- **Files:** `c-libp2p/v2/src/identify/identify_v2.c`, `c-libp2p/v2/include/libp2p/peer/peerstore.h`, `c-libp2p/v2/src/peer/peerstore.c`, `core/null.c`
 - **Complexity:** Medium
 
 ### 4. Repo Version Migration (12 → 18)
-- **Status:** `not started`
-- **Root cause:** c-ipfs hardcodes repo version 12. Kubo v0.43.0 uses repo version 18.
+- **Status:** `done` — `IPFS_REPO_VERSION` is already 18 in `include/ipfs/repo/fsrepo/fs_repo.h`, matching Kubo v0.43.0. `repo/fsrepo/fs_repo_version.c` implements best-effort migration (writes v18 if missing, upgrades older versions). `fs_repo.c` accepts versions 12-18 with a compatibility warning.
+- **Root cause:** Previously thought to be 12; actually already at 18.
 - **What Kubo does:** Refuses to open repos with version < 18. Has migration tools (`ipfs repo fsck`, `ipfs daemon --migrate`).
-- **What we need:**
-  1. Audit what changed between repo version 12 and 18 (datastore spec, config keys, keystore format, etc.).
-  2. Bump `repo/version` to 18.
-  3. Implement a migration path or at minimum accept version 18 in `fs_repo_is_initialized`.
-- **Files:** `repo/fsrepo/fs_repo.c`, `repo/init.c`, `cmd/ipfs/init.c`
-- **Complexity:** Medium
+- **What we need:** ✅ Already compatible. No further work required.
+- **Files:** `include/ipfs/repo/fsrepo/fs_repo.h`, `repo/fsrepo/fs_repo_version.c`, `repo/fsrepo/fs_repo.c`
+- **Complexity:** N/A
 
 ---
 
@@ -156,12 +154,19 @@
 - **Files:** New `fuzz/` directory
 - **Complexity:** Medium
 
+### 17. FFI Progress Callbacks
+- **Status:** `partial` — `importer/progress.c` defines `import_progress_cb` and `importer_report_progress`, but the FFI `unixfs_add_bytes` does not yet expose progress reporting. Chunking for large files (> 256 KB) is also not yet implemented in the FFI path.
+- **What we need:** Add `ipfs_ffi_unixfs_add_bytes_with_progress` to the FFI header; chunk large inputs and fire the callback after each chunk.
+- **Files:** `ffi/ffi.c`, `include/ipfs/ffi/ffi.h`, `importer/importer.c`
+- **Complexity:** Low-Medium
+
 ---
 
 ## Quick Reference: What Works Right Now
 
 | Feature | Status | Evidence |
 |---------|--------|----------|
+| C FFI library interface | Done | 6 FFI tests pass; API mirrors Kubo FFI |
 | CIDv0/v1, multihash, multibase | Partial | Unit tests pass |
 | DAG-PB blocks | Partial | Unit tests pass |
 | UnixFS import/export | Partial | Unit tests pass |
@@ -174,14 +179,14 @@
 | `ipfs add/cat/get/id` | Partial | Basic smoke tests pass |
 | Bitswap message encoding | Partial | No session layer |
 | DHT message encoding | Partial | No standard-compliant iterative lookup |
-| Noise XX | Partial | v2 compiles cleanly; identity payload + wiring remaining |
+| Noise XX | Partial | Identity payload callbacks implemented and match Kubo; wired into outbound dialer; inbound listener still uses SECIO |
 
 ---
 
 ## Recommended Next Session Order
 
-1. **Wire v2 Noise into the daemon** — replace the SECIO path in `core/daemon.c` or `c-libp2p/conn/dialer.c` with the v2 stack.
-2. **Fix multistream → security → muxer chaining** — ensure Kubo's negotiation order is matched exactly.
-3. **Implement Identify send/parse** — populate peerstore after handshake.
-4. **Bump repo version to 18** — unblock running c-ipfs against existing Kubo repos.
-5. **Run Kubo interop harness again** — verify `swarm connect` succeeds end-to-end.
+1. **Wire v2 Noise into the inbound listener** — replace the SECIO path in `core/null.c` `ipfs_null_listen` so accepted connections run multistream → Noise → Yamux → Identify.
+2. **Fix multistream → security → muxer chaining** — ensure Kubo's negotiation order is matched exactly on both dial and listen paths.
+3. **Wire Identify v2 into the daemon** — populate v2 `Peerstore` with public key and listen addrs from `Identity`/`RepoConfig`, then use `libp2p_identify_send_response` on inbound Yamux streams.
+4. **Run Kubo interop harness again** — verify `swarm connect` succeeds end-to-end with Noise + Identify.
+5. **Wire FFI progress callbacks** — expose `ipfs_ffi_unixfs_add_bytes_with_progress` and chunk large files in the FFI path.
