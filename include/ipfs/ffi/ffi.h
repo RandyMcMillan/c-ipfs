@@ -65,6 +65,35 @@ int64_t ipfs_ffi_block_get(uint64_t handle, const char* cid_str, uint8_t** out, 
 int64_t ipfs_ffi_block_stat(uint64_t handle, const char* cid_str);
 
 /* ---------------------------------------------------------------------------
+ * Nostr FFI
+ * --------------------------------------------------------------------------- */
+
+char* ipfs_ffi_nostr_generate_key(void);
+char* ipfs_ffi_nostr_get_public_key(const char* sk);
+char* ipfs_ffi_nostr_event_sign(const char* sk, const char* content, int kind);
+int64_t ipfs_ffi_nostr_event_verify(const char* json_str);
+
+/* ---------------------------------------------------------------------------
+ * Git FFI
+ * --------------------------------------------------------------------------- */
+
+int64_t ipfs_ffi_git_clone(const char* url, const char* path, uint8_t bare);
+uint64_t ipfs_ffi_git_open(const char* path);
+char* ipfs_ffi_git_repo_head(uint64_t handle);
+int64_t ipfs_ffi_git_repo_free(uint64_t handle);
+int64_t ipfs_ffi_git_init(const char* path, uint8_t bare);
+
+/* ---------------------------------------------------------------------------
+ * libp2p standalone host FFI
+ * --------------------------------------------------------------------------- */
+
+uint64_t ipfs_ffi_libp2p_host_new(void);
+int64_t ipfs_ffi_libp2p_host_close(uint64_t handle);
+char* ipfs_ffi_libp2p_host_peer_id(uint64_t handle);
+char* ipfs_ffi_libp2p_host_listening_addrs(uint64_t handle);
+int64_t ipfs_ffi_libp2p_host_connect(uint64_t handle, const char* addr);
+
+/* ---------------------------------------------------------------------------
  * Memory
  * --------------------------------------------------------------------------- */
 

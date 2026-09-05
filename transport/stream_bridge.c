@@ -13,6 +13,9 @@
 typedef struct {
     libp2p_stream_t *lstream;
     unsigned long long last_comm_epoch;
+    uint8_t *read_buffer;
+    size_t read_buffer_len;
+    size_t read_buffer_pos;
 } bridge_context_t;
 
 static int bridge_close(struct Stream *stream) {
@@ -22,6 +25,8 @@ static int bridge_close(struct Stream *stream) {
     if (ctx->lstream && ctx->lstream->close) {
         ctx->lstream->close(ctx->lstream);
     }
+    if (ctx->read_buffer)
+        free(ctx->read_buffer);
     free(ctx);
     stream->stream_context = NULL;
     libp2p_stream_free(stream);
@@ -68,8 +73,45 @@ static int bridge_read_raw(void *stream_context, uint8_t *buffer, int buffer_siz
     if (!ctx || !ctx->lstream || !ctx->lstream->read)
         return -1;
 
-    ssize_t bytes = ctx->lstream->read(ctx->lstream, buffer, (size_t)buffer_size);
-    return (int)bytes;
+    /* Serve from existing buffer first */
+    if (ctx->read_buffer && ctx->read_buffer_pos < ctx->read_buffer_len) {
+        size_t available = ctx->read_buffer_len - ctx->read_buffer_pos;
+        size_t to_copy = (buffer_size < (int)available) ? (size_t)buffer_size : available;
+        memcpy(buffer, ctx->read_buffer + ctx->read_buffer_pos, to_copy);
+        ctx->read_buffer_pos += to_copy;
+        return (int)to_copy;
+    }
+
+    /* No buffered data: read a chunk from the v2 stream into a temp buffer.
+     * Frame-based transports (e.g. Noise) may return more plaintext than
+     * requested in a single frame; we buffer the excess. */
+    size_t temp_size = 65536;
+    uint8_t *temp = (uint8_t *)malloc(temp_size);
+    if (!temp)
+        return -1;
+
+    ssize_t bytes = ctx->lstream->read(ctx->lstream, temp, temp_size);
+    if (bytes <= 0) {
+        free(temp);
+        return -1;
+    }
+
+    size_t to_copy = (buffer_size < bytes) ? (size_t)buffer_size : (size_t)bytes;
+    memcpy(buffer, temp, to_copy);
+
+    if ((size_t)bytes > to_copy) {
+        size_t excess = bytes - to_copy;
+        uint8_t *new_buf = (uint8_t *)realloc(ctx->read_buffer, excess);
+        if (new_buf) {
+            ctx->read_buffer = new_buf;
+            memcpy(ctx->read_buffer, temp + to_copy, excess);
+            ctx->read_buffer_len = excess;
+            ctx->read_buffer_pos = 0;
+        }
+    }
+
+    free(temp);
+    return (int)to_copy;
 }
 
 static int bridge_write(void *stream_context, struct StreamMessage *msg) {

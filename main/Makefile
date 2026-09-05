@@ -78,7 +78,7 @@ OBJS = main.o \
 	../rbsr/rbsr.o \
 	../nostril/sha256.o
 
-V2_OBJS = ../c-libp2p/v2/src/conn/noise.o ../c-libp2p/v2/src/conn/multistream.o ../c-libp2p/v2/src/stub/yamux_stub.o
+V2_OBJS = ../c-libp2p/v2/src/conn/noise.o ../c-libp2p/v2/src/conn/noise_callbacks.o ../c-libp2p/v2/src/conn/multistream.o ../c-libp2p/v2/src/conn/yamux.o ../c-libp2p/v2/src/conn/connection.o ../c-libp2p/v2/src/net/tcp_dial.o ../c-libp2p/v2/src/identify/identify_v2.o ../c-libp2p/v2/src/identify/identify_v2_ipfs.o ../c-libp2p/v2/src/peer/peerstore.o ../c-libp2p/v2/src/swarm/swarm.o ../c-libp2p/v2/src/net/multiaddr.o ../c-libp2p/v2/src/utils/logger.o
 
 $(V2_OBJS):
 	$(MAKE) -C ../c-libp2p/v2

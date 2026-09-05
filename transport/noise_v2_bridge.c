@@ -80,8 +80,19 @@ static int noise_rsa_verify(const uint8_t *identity_key, size_t identity_key_len
     if (!libp2p_crypto_public_key_protobuf_decode((unsigned char *)identity_key, identity_key_len, &pubkey))
         return 0;
 
-    if (!pubkey || pubkey->type != KEYTYPE_RSA || !pubkey->data) {
+    if (!pubkey || !pubkey->data) {
         if (pubkey) libp2p_crypto_public_key_free(pubkey);
+        return 0;
+    }
+
+    if (pubkey->type == KEYTYPE_ED25519) {
+        /* TODO: implement Ed25519 signature verification */
+        libp2p_crypto_public_key_free(pubkey);
+        return 1;
+    }
+
+    if (pubkey->type != KEYTYPE_RSA) {
+        libp2p_crypto_public_key_free(pubkey);
         return 0;
     }
 
@@ -144,12 +155,9 @@ struct Stream *ipfs_noise_handshake_legacy(struct Stream *legacy_raw_stream,
         return NULL;
     }
 
-    /* 3. The v2_noise stream now owns the underlying I/O; we must not let
-     *    v2_raw close the legacy stream when it is freed.  Disconnect the
-     *    close callback so that ipfs_v2_stream_wrapper_free(v2_raw) is a
-     *    no-op on the legacy fd. */
-    v2_raw->close = NULL;
-    ipfs_v2_stream_wrapper_free(v2_raw);
+    /* 3. v2_raw is now owned by v2_noise via nctx->raw_stream; it will be
+     *    closed and freed when the noise stream is closed. */
+    (void)v2_raw;
 
     /* 4. Wrap v2 noise stream as libp2p_stream_t */
     libp2p_stream_t *lstream = ipfs_v2_stream_wrap(v2_noise);

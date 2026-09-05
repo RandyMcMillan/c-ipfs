@@ -256,6 +256,15 @@ int build_test_collection() {
 	add_test("test_ffi_block_put_get_stat", test_ffi_block_put_get_stat, 1);
 	add_test("test_ffi_node_id", test_ffi_node_id, 1);
 	add_test("test_ffi_empty_add_cat", test_ffi_empty_add_cat, 1);
+	add_test("test_ffi_nostr_generate_key", test_ffi_nostr_generate_key, 1);
+	add_test("test_ffi_nostr_get_public_key", test_ffi_nostr_get_public_key, 1);
+	add_test("test_ffi_nostr_event_sign_and_verify", test_ffi_nostr_event_sign_and_verify, 1);
+	add_test("test_ffi_git_init_and_head", test_ffi_git_init_and_head, 1);
+	add_test("test_ffi_git_clone", test_ffi_git_clone, 1);
+	add_test("test_ffi_libp2p_host_new_close", test_ffi_libp2p_host_new_close, 1);
+	add_test("test_ffi_libp2p_host_peer_id", test_ffi_libp2p_host_peer_id, 1);
+	add_test("test_ffi_libp2p_host_listening_addrs", test_ffi_libp2p_host_listening_addrs, 1);
+	add_test("test_ffi_libp2p_host_connect_self", test_ffi_libp2p_host_connect_self, 1);
 	return 1;
 }
 

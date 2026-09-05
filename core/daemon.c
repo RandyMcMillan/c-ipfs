@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <unistd.h>
+#include <signal.h>
 #include <pthread.h>
 #include "libp2p/net/p2pnet.h"
 #include "libp2p/peer/peerstore.h"
@@ -26,6 +27,7 @@ int ipfs_daemon_start(char* repo_path) {
     struct IpfsNodeListenParams listen_param;
     struct MultiAddress* ma = NULL;
 
+    signal(SIGPIPE, SIG_IGN);
     libp2p_logger_info("daemon", "Initializing daemon for %s...\n", repo_path);
 
     struct IpfsNode* local_node = NULL;
@@ -44,8 +46,16 @@ int ipfs_daemon_start(char* repo_path) {
     		goto exit;
     }
 
-    // Create pthread for Kubo-compatible HTTP RPC server on port 5011.
-    if (pthread_create(&work_pths[count_pths++], NULL, http_rpc_thread_wrapper, (void*)(uintptr_t)5011) != 0) {
+    // Create pthread for Kubo-compatible HTTP RPC server on configured API port.
+    uint16_t api_port = 5002;
+    if (local_node->repo && local_node->repo->config && local_node->repo->config->addresses && local_node->repo->config->addresses->api) {
+        struct MultiAddress* api_ma = multiaddress_new_from_string(local_node->repo->config->addresses->api);
+        if (api_ma) {
+            api_port = multiaddress_get_ip_port(api_ma);
+            multiaddress_free(api_ma);
+        }
+    }
+    if (pthread_create(&work_pths[count_pths++], NULL, http_rpc_thread_wrapper, (void*)(uintptr_t)api_port) != 0) {
         libp2p_logger_error("daemon", "Error creating thread for HTTP RPC server\n");
         goto exit;
     }

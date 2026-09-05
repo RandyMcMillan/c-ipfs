@@ -21,6 +21,7 @@
 #include "libp2p/swarm/swarm.h"
 #include "ipfs/core/daemon.h"
 #include "ipfs/core/ipfs_node.h"
+#include "ipfs/core/v2_listen.h"
 #include "ipfs/exchange/bitswap/network.h"
 #include "ipfs/journal/journal.h"
 #include "ipfs/merkledag/merkledag.h"
@@ -187,8 +188,8 @@ void* ipfs_null_listen (void *ptr)
 				continue;
 			}
 
-			// add the new connection to the swarm
-			libp2p_swarm_add_connection(listen_param->local_node->swarm, s, listen_param->ipv4, listen_param->port);
+			// Handle connection with v2 stack (Noise + Yamux + Identify)
+			ipfs_v2_listen_handler(s, listen_param->local_node);
 
 			/*
 			count++;
