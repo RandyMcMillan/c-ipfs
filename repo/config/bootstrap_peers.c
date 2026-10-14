@@ -3,6 +3,7 @@
 
 #include "ipfs/repo/config/bootstrap_peers.h"
 #include "multiaddr/multiaddr.h"
+#include "ipfs/transport/dnsaddr_resolver.h"
 
 int repo_config_bootstrap_peers_retrieve(struct Libp2pVector** list) {
 	*list = libp2p_utils_vector_new(1);
@@ -27,6 +28,20 @@ int repo_config_bootstrap_peers_retrieve(struct Libp2pVector** list) {
 		if (currAddr != NULL) {
 			libp2p_utils_vector_add(*list, currAddr);
 		}
+	}
+
+	/* Resolve canonical /dnsaddr/bootstrap.libp2p.io records at runtime.
+	 * Failures are non-fatal: direct IPv4 bootstrap peers remain available. */
+	char **resolved = NULL;
+	size_t resolved_count = 0;
+	if (ipfs_resolve_dnsaddr("/dnsaddr/bootstrap.libp2p.io", &resolved, &resolved_count) == 0) {
+		for(size_t i = 0; i < resolved_count; i++) {
+			struct MultiAddress* currAddr = multiaddress_new_from_string(resolved[i]);
+			if (currAddr != NULL) {
+				libp2p_utils_vector_add(*list, currAddr);
+			}
+		}
+		ipfs_free_resolved_multiaddrs(resolved, resolved_count);
 	}
 	return 1;
 }

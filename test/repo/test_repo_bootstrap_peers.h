@@ -16,8 +16,8 @@ int test_repo_bootstrap_peers_init() {
 	int retVal = 1;
 	repo_config_bootstrap_peers_retrieve(&list);
 
-	if (list->total != expected_count) {
-		printf("Bootstrap peer count mismatch: expected %d, got %d\n", expected_count, list->total);
+	if (list->total < expected_count) {
+		printf("Bootstrap peer count too small: expected at least %d, got %d\n", expected_count, list->total);
 		retVal = 0;
 	}
 
