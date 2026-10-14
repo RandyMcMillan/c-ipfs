@@ -63,12 +63,12 @@ static int ipfs_cid_from_bytes(const unsigned char* incoming, size_t incoming_si
 	size_t pos = 0;
 	size_t num_bytes = 0;
 	unsigned long long version = varint_decode(&incoming[pos], incoming_size - pos, &num_bytes);
-	if (num_bytes == 0 || version > 1)
+	if (num_bytes == 0 || version > 1 || num_bytes != (size_t)varint_encoding_length(version))
 		return 0;
 	pos += num_bytes;
 
 	unsigned long long codec = varint_decode(&incoming[pos], incoming_size - pos, &num_bytes);
-	if (num_bytes == 0 || codec > 255)
+	if (num_bytes == 0 || codec > 255 || num_bytes != (size_t)varint_encoding_length(codec))
 		return 0;
 	pos += num_bytes;
 	if (pos >= incoming_size)
