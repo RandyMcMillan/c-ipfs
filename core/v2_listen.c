@@ -1,4 +1,5 @@
 #include <stdlib.h>
+#include <stdio.h>
 #include <string.h>
 #include <unistd.h>
 
@@ -26,8 +27,10 @@ int ipfs_v2_listen_handler(int fd, struct IpfsNode* local_node) {
     }
 
     libp2p_logger_info("v2_listen", "New connection on fd %d\n", fd);
+    fprintf(stderr, "V2_LISTEN fd=%d new\n", fd); fflush(stderr);
 
     /* 1. Multistream: accept /noise */
+    fprintf(stderr, "V2_LISTEN fd=%d multistream-accept /noise\n", fd); fflush(stderr);
     if (!libp2p_net_multistream_accept(tcp_stream, "/noise")) {
         libp2p_logger_error("v2_listen", "Multistream accept failed on fd %d\n", fd);
         tcp_stream->close(tcp_stream);
@@ -42,14 +45,17 @@ int ipfs_v2_listen_handler(int fd, struct IpfsNode* local_node) {
     struct Libp2pPeer remote_peer;
     memset(&remote_peer, 0, sizeof(remote_peer));
 
+    fprintf(stderr, "V2_LISTEN fd=%d noise-responder start\n", fd); fflush(stderr);
     struct Libp2pV2Stream* noise_stream = libp2p_noise_handshake_responder_raw(
         tcp_stream, &local_node->identity->private_key, &remote_peer, &noise_cbs);
+    fprintf(stderr, "V2_LISTEN fd=%d noise-responder result %p\n", fd, (void*)noise_stream); fflush(stderr);
     if (!noise_stream) {
         libp2p_logger_error("v2_listen", "Noise responder handshake failed on fd %d\n", fd);
         tcp_stream->close(tcp_stream);
         return 0;
     }
     libp2p_logger_info("v2_listen", "Noise handshake completed on fd %d\n", fd);
+    fprintf(stderr, "V2_LISTEN fd=%d noise handshake done\n", fd); fflush(stderr);
 
     /* 3. Yamux server session */
     struct YamuxSession* yamux_sess = libp2p_yamux_session_new(noise_stream, 1);
