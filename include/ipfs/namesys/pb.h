@@ -8,6 +8,8 @@ struct ipns_entry {
     char *value;
     char *signature;
     size_t signature_size;
+    char *data;          /* optional V2 data payload (field 7) */
+    size_t data_size;
     int32_t *validityType;
     char *validity;
     uint64_t *sequence;

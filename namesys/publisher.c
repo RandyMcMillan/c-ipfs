@@ -246,6 +246,13 @@ int ipfs_namesys_publisher_publish(struct IpfsNode* local_node, char* path) {
 
 	// Sign the entry
 	sig_data = ipns_entry_data_for_sig(entry);
+
+    if (sig_data) {
+        entry->data = strdup(sig_data);
+        if (entry->data) {
+            entry->data_size = strlen(sig_data);
+        }
+    }
 	if (!sig_data) {
 		goto exit;
 	}

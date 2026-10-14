@@ -56,6 +56,11 @@ void ipfs_namesys_ipnsentry_reset (struct ipns_entry *m)
             free(m->ttl);
             m->ttl = NULL;
         }
+        if (m->data) {
+            free(m->data);
+            m->data = NULL;
+            m->data_size = 0;
+        }
         if (m->eol) {
             free(m->eol);
             m->eol = NULL;
@@ -138,6 +143,12 @@ int ipfs_namesys_pb_ipns_entry_encode(struct ipns_entry* entry, unsigned char* b
     }
     if (entry->ttl) {
         if (!protobuf_encode_varint(6, WIRETYPE_VARINT, (unsigned long long)*entry->ttl,
+                buffer + *bytes_written, max_buffer_size - *bytes_written, &bytes_used))
+            return 0;
+        *bytes_written += bytes_used;
+    }
+    if (entry->data && entry->data_size > 0) {
+        if (!protobuf_encode_length_delimited(7, WIRETYPE_LENGTH_DELIMITED, entry->data, entry->data_size,
                 buffer + *bytes_written, max_buffer_size - *bytes_written, &bytes_used))
             return 0;
         *bytes_written += bytes_used;
@@ -227,6 +238,19 @@ int ipfs_namesys_pb_ipns_entry_decode(const unsigned char* buffer, size_t buffer
                     goto error;
                 }
                 *(*entry)->ttl = (uint64_t)ttl;
+                pos += bytes_read;
+                break;
+            }
+            case 7: { // data
+                char* data = NULL;
+                size_t data_len = 0;
+                if (!protobuf_decode_length_delimited(&buffer[pos], buffer_size - pos, &data, &data_len, &bytes_read)) {
+                    goto error;
+                }
+                if (data) {
+                    (*entry)->data = data;
+                    (*entry)->data_size = data_len;
+                }
                 pos += bytes_read;
                 break;
             }
