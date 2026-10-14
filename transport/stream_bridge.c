@@ -139,7 +139,7 @@ struct Stream *ipfs_transport_stream_bridge_new(libp2p_stream_t *lstream, const 
     if (!out)
         return NULL;
 
-    out->stream_type = STREAM_TYPE_RAW;
+    out->stream_type = STREAM_TYPE_BRIDGE;
     out->close = bridge_close;
     out->peek = bridge_peek;
     out->read = bridge_read;
