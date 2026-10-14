@@ -1,0 +1,50 @@
+name: Act Submodules CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  act:
+    name: Act - ${{ matrix.module }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        module:
+          - c-libp2p
+          - c-libp2p/c-multiaddr
+          - c-libp2p/c-multihash
+          - c-libp2p/c-protobuf
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Sync and update submodules
+        run: |
+          git submodule sync --recursive
+          git submodule update --init --recursive
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential libtool autoconf automake pkg-config
+
+      - name: Install act
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/nektos/act/master/install.sh | sudo bash
+          act --version
+
+      - name: Run local CI with act
+        working-directory: ${{ matrix.module }}
+        run: make act-build ACT_QUIET=true
