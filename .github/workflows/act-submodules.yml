@@ -42,7 +42,12 @@ jobs:
 
       - name: Install act
         run: |
-          curl -fsSL https://raw.githubusercontent.com/nektos/act/master/install.sh | sudo bash
+          curl -fsSL https://raw.githubusercontent.com/nektos/act/master/install.sh | bash
+          if [ ! -x ./bin/act ]; then
+            echo "act was not installed"
+            exit 1
+          fi
+          sudo install -m 0755 ./bin/act /usr/local/bin/act
           act --version
 
       - name: Run local CI with act
