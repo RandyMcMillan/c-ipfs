@@ -16,6 +16,7 @@
 #endif
 
 static int translate_dnsaddr(const char *input, int depth, char ***results, size_t *count, size_t *capacity);
+static int materialize_dns_multiaddr(const char *value, char ***results, size_t *count, size_t *capacity);
 
 static int append_multiaddr(char*** all, size_t* count, size_t* capacity, const char* value) {
     if (!all || !count || !capacity || !value || value[0] == '\0') return 0;
@@ -135,7 +136,7 @@ static int resolve_one_query(const char *domain, int depth, char ***results, siz
                                 /* Keep returning success as long as ordinary records decode. */
                             }
                         } else {
-                            if (append_multiaddr(results, count, capacity, value) != 0) {
+                            if (materialize_dns_multiaddr(value, results, count, capacity) != 0) {
                                 status = -1;
                             }
                         }
@@ -151,6 +152,44 @@ static int resolve_one_query(const char *domain, int depth, char ***results, siz
 
     free(answer);
     return status;
+}
+
+static int materialize_dns_multiaddr(const char *value, char ***results, size_t *count, size_t *capacity) {
+    if (strncmp(value, "/dns4/", 6) == 0) {
+        const char *host_start = value + 6;
+        const char *host_end = strchr(host_start, '/');
+        char host[256];
+        size_t host_len = (host_end) ? (size_t)(host_end - host_start) : strlen(host_start);
+        if (host_len < sizeof(host)) {
+            memcpy(host, host_start, host_len);
+            host[host_len] = '\0';
+
+            struct addrinfo hints, *res, *p;
+            memset(&hints, 0, sizeof(hints));
+            hints.ai_family = AF_INET;
+            hints.ai_socktype = SOCK_STREAM;
+
+            if (getaddrinfo(host, NULL, &hints, &res) == 0) {
+                const char *suffix = host_end ? host_end : "";
+                int found = 0;
+                for (p = res; p != NULL; p = p->ai_next) {
+                    struct sockaddr_in *ipv4 = (struct sockaddr_in *)p->ai_addr;
+                    char ip_str[INET_ADDRSTRLEN];
+                    inet_ntop(AF_INET, &(ipv4->sin_addr), ip_str, INET_ADDRSTRLEN);
+                    char buf[512];
+                    snprintf(buf, sizeof(buf), "/ip4/%s%s", ip_str, suffix);
+                    if (append_multiaddr(results, count, capacity, buf) != 0) break;
+                    found = 1;
+                }
+                freeaddrinfo(res);
+                if (found) {
+                    return 0;
+                }
+            }
+        }
+    }
+
+    return append_multiaddr(results, count, capacity, value);
 }
 
 static int translate_dnsaddr(const char *input, int depth, char ***results, size_t *count, size_t *capacity) {
