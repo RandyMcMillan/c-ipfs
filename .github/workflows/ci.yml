@@ -147,7 +147,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential libcurl4-openssl-dev autoconf automake libtool
+          sudo apt-get install -y build-essential cmake libcurl4-openssl-dev autoconf automake libtool
 
       - name: Build c-ipfs
         run: |
