@@ -310,6 +310,12 @@ struct ApiConnectionParam {
  * @param local_node the IPFS node context
  * @returns 1 on success, 0 on failure
  */
+
+static int api_serve_gateway(int fd, const char* path, struct IpfsNode* local_node);
+int ipfs_core_api_serve_gateway(int fd, const char* path, struct IpfsNode* local_node) {
+    return api_serve_gateway(fd, path, local_node);
+}
+
 static int api_serve_gateway(int fd, const char* path, struct IpfsNode* local_node) {
 	if (strncmp(path, "/ipfs/", 6) != 0)
 		return 0;

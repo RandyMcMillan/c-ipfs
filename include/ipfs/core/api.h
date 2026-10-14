@@ -92,4 +92,5 @@ void *api_connection_thread (void *ptr);
 void api_connections_cleanup (struct IpfsNode* node);
 void *api_listen_thread (void *ptr);
 int api_start (struct IpfsNode* local_node, int max_conns, int timeout);
+int ipfs_core_api_serve_gateway(int fd, const char* path, struct IpfsNode* local_node);
 int api_stop (struct IpfsNode* local_node);
