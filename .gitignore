@@ -99,3 +99,5 @@ test/scripts/hello2.bin
 test/scripts/testlog.txt
 test/scripts/generate_file
 scripts/dag_cbor_encode
+
+**.DS_Store
