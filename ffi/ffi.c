@@ -510,6 +510,25 @@ char* ipfs_ffi_unixfs_add_bytes(uint64_t handle, const uint8_t* data, size_t len
     return cid_str;
 }
 
+char* ipfs_ffi_unixfs_add_bytes_with_progress(uint64_t handle,
+                                             const uint8_t* data,
+                                             size_t length,
+                                             ipfs_ffi_progress_cb progress_cb,
+                                             void* user_data) {
+    if (progress_cb) {
+        progress_cb(0, length, user_data);
+    }
+
+    char* result = ipfs_ffi_unixfs_add_bytes(handle, data, length);
+
+    if (result && progress_cb) {
+        progress_cb(length, length, user_data);
+    }
+
+    return result;
+}
+
+
 typedef struct cat_buffer {
     uint8_t* data;
     size_t len;

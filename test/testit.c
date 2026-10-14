@@ -253,6 +253,7 @@ int build_test_collection() {
 	add_test("test_ffi_version", test_ffi_version, 1);
 	add_test("test_ffi_init_repo_and_node_lifecycle", test_ffi_init_repo_and_node_lifecycle, 1);
 	add_test("test_ffi_unixfs_add_and_cat", test_ffi_unixfs_add_and_cat, 1);
+	add_test("test_ffi_unixfs_add_bytes_with_progress", test_ffi_unixfs_add_bytes_with_progress, 1);
 	add_test("test_ffi_block_put_get_stat", test_ffi_block_put_get_stat, 1);
 	add_test("test_ffi_node_id", test_ffi_node_id, 1);
 	add_test("test_ffi_empty_add_cat", test_ffi_empty_add_cat, 1);

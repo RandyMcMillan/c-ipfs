@@ -50,6 +50,16 @@ int test_ffi_init_repo_and_node_lifecycle(void) {
     return 1;
 }
 
+static int ffi_unixfs_progress_calls = 0;
+static size_t ffi_unixfs_progress_last_total = 0;
+
+static void ffi_unixfs_progress_cb(size_t imported, size_t total, void* user_data) {
+    (void)imported;
+    (void)user_data;
+    ffi_unixfs_progress_calls++;
+    ffi_unixfs_progress_last_total = total;
+}
+
 int test_ffi_unixfs_add_and_cat(void) {
     const char* tmp = "./tmp/test-ffi-unixfs";
     rmrf(tmp);
@@ -226,6 +236,41 @@ int test_ffi_nostr_event_sign_and_verify(void) {
     ipfs_ffi_free_string(sk);
     ipfs_ffi_free_string(json);
     return ok == 1;
+}
+
+int test_ffi_unixfs_add_bytes_with_progress(void) {
+    const char* tmp = "./tmp/test-ffi-unixfs-progress";
+    rmrf(tmp);
+
+    ffi_unixfs_progress_calls = 0;
+    ffi_unixfs_progress_last_total = 0;
+
+    if (ipfs_ffi_init_repo(tmp) != 0)
+        return 0;
+
+    uint64_t handle = ipfs_ffi_node_start(tmp, 0);
+    if (handle == 0)
+        return 0;
+
+    const char* data = "progress from ffi test";
+    size_t len = strlen(data);
+    char* cid = ipfs_ffi_unixfs_add_bytes_with_progress(handle,
+                                                        (const uint8_t*)data,
+                                                        len,
+                                                        ffi_unixfs_progress_cb,
+                                                        NULL);
+    if (!cid || strlen(cid) == 0) {
+        if (cid) ipfs_ffi_free_string(cid);
+        ipfs_ffi_node_stop(handle);
+        return 0;
+    }
+
+    int ok = (ffi_unixfs_progress_calls == 2 &&
+              ffi_unixfs_progress_last_total == len);
+
+    ipfs_ffi_free_string(cid);
+    ipfs_ffi_node_stop(handle);
+    return ok;
 }
 
 int test_ffi_git_init_and_head(void) {

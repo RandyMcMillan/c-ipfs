@@ -53,6 +53,18 @@ char* ipfs_ffi_swarm_peers(uint64_t handle);
  * UnixFS
  * --------------------------------------------------------------------------- */
 
+typedef void (*ipfs_ffi_progress_cb)(size_t imported, size_t total, void* user_data);
+
+/**
+ * Add bytes to the repo, invoking an optional progress callback before and
+ * after the payload is stored.
+ */
+char* ipfs_ffi_unixfs_add_bytes_with_progress(uint64_t handle,
+                                             const uint8_t* data,
+                                             size_t length,
+                                             ipfs_ffi_progress_cb progress_cb,
+                                             void* user_data);
+
 char* ipfs_ffi_unixfs_add_bytes(uint64_t handle, const uint8_t* data, size_t length);
 int64_t ipfs_ffi_unixfs_cat(uint64_t handle, const char* cid_str, uint8_t** out, size_t* out_len);
 
