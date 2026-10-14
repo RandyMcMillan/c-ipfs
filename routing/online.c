@@ -42,6 +42,30 @@ struct KademliaMessage* ipfs_routing_online_send_receive_message(struct SessionC
 /***
  * Helper: check if a peer id is already in a vector of Libp2pPeer*
  */
+
+static const unsigned char* dht_alpha_target = NULL;
+static size_t dht_alpha_target_size = 0;
+
+static int dht_alpha_compare_peers(const void *a, const void *b) {
+    const struct Libp2pPeer **pa = (const struct Libp2pPeer **)a;
+    const struct Libp2pPeer **pb = (const struct Libp2pPeer **)b;
+    if (*pa == NULL) return (*pb == NULL) ? 0 : 1;
+    if (*pb == NULL) return -1;
+    if (dht_alpha_target == NULL) return 0;
+
+    unsigned char da[20] = {0};
+    unsigned char db[20] = {0};
+    size_t limit = dht_alpha_target_size > 20 ? 20 : dht_alpha_target_size;
+    if (limit > (*pa)->id_size) limit = (*pa)->id_size;
+    if (limit > (*pb)->id_size) limit = (*pb)->id_size;
+    if (limit == 0) return 0;
+
+    for (size_t i = 0; i < limit; i++) {
+        da[i] = (unsigned char)((*pa)->id[i] ^ (dht_alpha_target[i % dht_alpha_target_size]));
+        db[i] = (unsigned char)((*pb)->id[i] ^ (dht_alpha_target[i % dht_alpha_target_size]));
+    }
+    return memcmp(da, db, 20);
+}
 static int peer_id_in_vector(struct Libp2pVector* vec, const unsigned char* peer_id, size_t peer_id_size) {
 	if (vec == NULL) return 0;
 	for (int i = 0; i < vec->total; i++) {
@@ -63,6 +87,8 @@ static int peer_id_in_vector(struct Libp2pVector* vec, const unsigned char* peer
  * @returns true(1) on success, otherwise false(0)
  */
 int ipfs_routing_online_find_remote_providers(struct IpfsRouting* routing, const unsigned char* key, size_t key_size, struct Libp2pVector** peers) {
+	dht_alpha_target = key;
+	dht_alpha_target_size = key_size;
 	int found = 0;
 	struct Libp2pVector* result_peers = libp2p_utils_vector_new(1);
 	struct Libp2pVector* queried = libp2p_utils_vector_new(1);
@@ -137,6 +163,22 @@ int ipfs_routing_online_find_remote_providers(struct IpfsRouting* routing, const
 				closer = closer->next;
 			}
 			libp2p_message_free(return_message);
+		}
+		/* Keep only the alpha=3 closest candidates for the next round. */
+		{
+			int total = next_candidates->total;
+			struct Libp2pPeer **ranked = (total > 0) ? calloc((size_t)total, sizeof(*ranked)) : NULL;
+			if (ranked) {
+				for (int ci = 0; ci < total; ci++)
+					ranked[ci] = (struct Libp2pPeer *)libp2p_utils_vector_get(next_candidates, ci);
+				qsort(ranked, (size_t)total, sizeof(*ranked), dht_alpha_compare_peers);
+				libp2p_utils_vector_free(next_candidates);
+				next_candidates = libp2p_utils_vector_new(1);
+				for (int ci = 0; ci < total && ci < 3; ci++)
+					if (ranked[ci] != NULL)
+						libp2p_utils_vector_add(next_candidates, ranked[ci]);
+				free(ranked);
+			}
 		}
 		libp2p_utils_vector_free(candidates);
 		candidates = next_candidates;
@@ -249,6 +291,8 @@ int ipfs_routing_online_ask_peer_for_peer(struct Libp2pPeer* whoToAsk, const uns
  * @returns true(1) on success, otherwise false(0)
  */
 int ipfs_routing_online_find_peer(struct IpfsRouting* routing, const unsigned char* peer_id, size_t peer_id_size, struct Libp2pPeer **result) {
+	dht_alpha_target = peer_id;
+	dht_alpha_target_size = peer_id_size;
 	// first look to see if we have it in the local peerstore
 	struct Peerstore* peerstore = routing->local_node->peerstore;
 	*result = libp2p_peerstore_get_peer(peerstore, (unsigned char*)peer_id, peer_id_size);
@@ -324,6 +368,22 @@ int ipfs_routing_online_find_peer(struct IpfsRouting* routing, const unsigned ch
 				closer = closer->next;
 			}
 			libp2p_message_free(ret);
+		}
+		/* Keep only the alpha=3 closest candidates for the next round. */
+		{
+			int total = next_candidates->total;
+			struct Libp2pPeer **ranked = (total > 0) ? calloc((size_t)total, sizeof(*ranked)) : NULL;
+			if (ranked) {
+				for (int ci = 0; ci < total; ci++)
+					ranked[ci] = (struct Libp2pPeer *)libp2p_utils_vector_get(next_candidates, ci);
+				qsort(ranked, (size_t)total, sizeof(*ranked), dht_alpha_compare_peers);
+				libp2p_utils_vector_free(next_candidates);
+				next_candidates = libp2p_utils_vector_new(1);
+				for (int ci = 0; ci < total && ci < 3; ci++)
+					if (ranked[ci] != NULL)
+						libp2p_utils_vector_add(next_candidates, ranked[ci]);
+				free(ranked);
+			}
 		}
 		libp2p_utils_vector_free(candidates);
 		candidates = next_candidates;
