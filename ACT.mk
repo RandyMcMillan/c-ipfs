@@ -2,6 +2,7 @@ ACT ?= act
 ACT_CI_WORKFLOW ?= .github/workflows/ci.yml
 ACT_KUBO_WORKFLOW ?= .github/workflows/kubo-interop.yml
 ACT_WORKFLOW ?= $(ACT_CI_WORKFLOW)
+ACT_SUBMODULE_TARGET ?= act-build
 ACT_IMAGE ?= ghcr.io/catthehacker/ubuntu:act-latest
 ACT_CONTAINER_ARCH ?= linux/amd64
 ACT_JOB ?= build
@@ -111,3 +112,21 @@ act-shell:
 # Convenience aliases for the current workflow jobs.
 act-build-ubuntu: act-build
 act-build-macos: act-build
+
+.PHONY: act-c-libp2p act-c-libp2p/c-multiaddr act-c-libp2p/c-multihash act-c-libp2p/c-protobuf act-all-submodules act-submodules
+
+# Recursively invoke the local act targets for every c-libp2p repository.
+act-c-libp2p:
+	$(MAKE) -C c-libp2p $(ACT_SUBMODULE_TARGET)
+
+act-c-libp2p/c-multiaddr:
+	$(MAKE) -C c-libp2p/c-multiaddr $(ACT_SUBMODULE_TARGET)
+
+act-c-libp2p/c-multihash:
+	$(MAKE) -C c-libp2p/c-multihash $(ACT_SUBMODULE_TARGET)
+
+act-c-libp2p/c-protobuf:
+	$(MAKE) -C c-libp2p/c-protobuf $(ACT_SUBMODULE_TARGET)
+
+act-submodules: act-all-submodules
+act-all-submodules: act-c-libp2p act-c-libp2p/c-multiaddr act-c-libp2p/c-multihash act-c-libp2p/c-protobuf
