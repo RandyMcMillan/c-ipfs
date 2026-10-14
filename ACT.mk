@@ -1,5 +1,5 @@
 ACT ?= act
-ACT_CI_WORKFLOW ?= .github/workflows/ci.yml
+ACT_CI_WORKFLOW ?= .github/workflows/ci-act.yml
 ACT_KUBO_WORKFLOW ?= .github/workflows/kubo-interop.yml
 ACT_WORKFLOW ?= $(ACT_CI_WORKFLOW)
 ACT_SUBMODULE_TARGET ?= act-build

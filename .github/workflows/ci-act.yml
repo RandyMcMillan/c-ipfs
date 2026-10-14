@@ -1,0 +1,43 @@
+name: CI (Act - local cache-less build)
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Sync submodules
+        run: |
+          git submodule sync --recursive
+          git submodule update --init --recursive
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake libcurl4-openssl-dev autoconf automake libtool
+
+      - name: Build c-ipfs
+        run: make clean all
+
+      - name: Build tests
+        run: cd test && make all
+
+      - name: Smoke test
+        run: |
+          cd main
+          IPFS_PATH=/tmp/ipfs_test ./ipfs init
+          IPFS_PATH=/tmp/ipfs_test ./ipfs id
