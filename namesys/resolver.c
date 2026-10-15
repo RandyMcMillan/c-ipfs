@@ -89,6 +89,9 @@ int ipfs_namesys_resolver_resolve_once(struct IpfsNode* local_node, const char* 
 					}
 					free(signed_data);
 				}
+			} else {
+				libp2p_logger_error("resolver", "IPNS record signature is present but has no verifiable public key.\n");
+				goto local_cleanup;
 			}
 		}
 
@@ -145,7 +148,17 @@ int ipfs_namesys_resolver_resolve_once(struct IpfsNode* local_node, const char* 
 		if (local_node->routing->GetValue(local_node->routing, cid->hash, cid->hash_length, &net_record, &net_record_size)) {
 			struct ipns_entry* net_entry = NULL;
 			if (ipfs_namesys_pb_ipns_entry_decode(net_record, net_record_size, &net_entry)) {
-				if (net_entry->value) {
+				int record_ok = 1;
+				struct IpnsVerifyEntry net_verify_entry;
+				memset(&net_verify_entry, 0, sizeof(net_verify_entry));
+				if (ipfs_namesys_verify_entry_parse(net_record, net_record_size, &net_verify_entry) &&
+				    net_verify_entry.sig_len && net_verify_entry.pubkey_bytes_len) {
+					record_ok = ipfs_namesys_verify_entry_signature(&net_verify_entry);
+					if (!record_ok) {
+						libp2p_logger_error("resolver", "Remote IPNS signature verification failed.\n");
+					}
+				}
+				if (record_ok && net_entry->value) {
 					*results = (char*)malloc(strlen(net_entry->value) + 1);
 					if (*results != NULL) {
 						strcpy(*results, net_entry->value);
