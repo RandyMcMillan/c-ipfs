@@ -19,6 +19,7 @@
 #include "libp2p/utils/urlencode.h"
 #include "ipfs/core/api.h"
 #include "ipfs/cid/cid.h"
+#include "ipfs/namesys/resolver.h"
 #include "ipfs/importer/exporter.h"
 #include "ipfs/core/http_request.h"
 
@@ -317,15 +318,35 @@ int ipfs_core_api_serve_gateway(int fd, const char* path, struct IpfsNode* local
 }
 
 static int api_serve_gateway(int fd, const char* path, struct IpfsNode* local_node) {
-	if (strncmp(path, "/ipfs/", 6) != 0)
+	const char* resolved_path = path;
+	char* resolved = NULL;
+
+	if (strncmp(path, "/ipfs/", 6) != 0 && strncmp(path, "/ipns/", 6) != 0)
 		return 0;
 
-	const char* hash = path + 6;
-	if (!hash || strlen(hash) == 0)
+	if (strncmp(path, "/ipns/", 6) == 0 && local_node) {
+		const char* name = path + 6;
+		if (!name || strlen(name) == 0)
+			return 0;
+		char ipns_path[512];
+		if (snprintf(ipns_path, sizeof(ipns_path), "/ipns/%s", name) >= (int)sizeof(ipns_path))
+			return 0;
+		if (!ipfs_namesys_resolver_resolve(local_node, ipns_path, 1, &resolved))
+			return 0;
+		if (!resolved || strncmp(resolved, "/ipfs/", 6) != 0)
+			return 0;
+		resolved_path = resolved;
+	}
+
+	const char* hash = resolved_path + 6;
+	if (!hash || strlen(hash) == 0) {
+		if (resolved) free(resolved);
 		return 0;
+	}
 
 	struct Cid* cid = NULL;
 	if (!ipfs_cid_decode_hash_from_base58((unsigned char*)hash, strlen(hash), &cid)) {
+		if (resolved) free(resolved);
 		return 0;
 	}
 
@@ -338,6 +359,7 @@ static int api_serve_gateway(int fd, const char* path, struct IpfsNode* local_no
 
 	if (!ret) {
 		if (content) free(content);
+		if (resolved) free(resolved);
 		return 0;
 	}
 
@@ -351,6 +373,7 @@ static int api_serve_gateway(int fd, const char* path, struct IpfsNode* local_no
 	write_str(fd, header);
 	write(fd, content, content_size);
 	free(content);
+	if (resolved) free(resolved);
 	return 1;
 }
 
