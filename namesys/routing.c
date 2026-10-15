@@ -305,12 +305,11 @@ int ipfs_namesys_routing_resolve_once (char **path, char *name, int depth, char 
      * until public key retrieval is wired to the routing layer. */
     err = libp2p_crypto_rsa_verify_from_pubkey(
             pubkey, pubkey_len,
-            (const unsigned char*)sig_data_tmp,
-            sig_data_tmp ? strlen(sig_data_tmp) : 0,
+            (const unsigned char*)ipns_entry_data_for_sig(pb->IpnsEntry),
+            strlen(ipns_entry_data_for_sig (pb->IpnsEntry)),
             (const unsigned char*)pb->IpnsEntry->signature,
             pb->IpnsEntry->signature_size,
             &ok);
-    fprintf(stderr, "[dbg] rsa err=%d ok=%d\n", err, ok);
     if (err || !ok) {
         char buf[500];
         snprintf(buf, sizeof(buf), Err[ErrInvalidSignatureFmt], "<pubkey>");
