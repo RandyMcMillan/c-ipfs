@@ -101,3 +101,5 @@ test/scripts/generate_file
 scripts/dag_cbor_encode
 
 **.DS_Store
+
+test.config
