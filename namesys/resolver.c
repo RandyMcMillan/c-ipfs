@@ -9,6 +9,8 @@
 #include "ipfs/namesys/resolver.h"
 #include "ipfs/namesys/pb.h"
 #include "ipfs/namesys/verify.h"
+#include "libp2p/crypto/sha256.h"
+#include "libp2p/crypto/key.h"
 
 /**
  * The opposite of publisher.c
@@ -60,11 +62,32 @@ int ipfs_namesys_resolver_resolve_once(struct IpfsNode* local_node, const char* 
 			goto local_cleanup;
 		}
 
+		// IPNS requires a signed record. */
+		if (!entry->signature || entry->signature_size <= 0) {
+			libp2p_logger_error("resolver", "IPNS record has no signature for %s.\n", path);
+			goto local_cleanup;
+		}
+
 		// Prefer the publisher-provided public key when present (IPNS V2). */
-		if (entry->signature && entry->signature_size > 0) {
+		{
 			struct IpnsVerifyEntry verify_entry;
 			memset(&verify_entry, 0, sizeof(verify_entry));
 			if (ipfs_namesys_verify_entry_parse(record->value, record->value_size, &verify_entry) && verify_entry.pubkey_bytes_len && verify_entry.sig_len) {
+				struct PublicKey embedded_public_key;
+				memset(&embedded_public_key, 0, sizeof(embedded_public_key));
+				embedded_public_key.type = KEYTYPE_RSA;
+				embedded_public_key.data = (unsigned char *)verify_entry.pubkey_bytes;
+				embedded_public_key.data_size = verify_entry.pubkey_bytes_len;
+				unsigned char embedded_envelope[512];
+				size_t embedded_envelope_size = 0;
+				unsigned char computed_peer_hash[32];
+				if (!libp2p_crypto_public_key_protobuf_encode(&embedded_public_key, embedded_envelope, sizeof(embedded_envelope), &embedded_envelope_size) ||
+				    !libp2p_crypto_hashing_sha256(embedded_envelope, embedded_envelope_size, computed_peer_hash) ||
+				    cid->hash_length != 32 || memcmp(cid->hash, computed_peer_hash, 32) != 0) {
+
+					libp2p_logger_error("resolver", "IPNS public key does not match record name for %s.\n", path);
+					goto local_cleanup;
+				}
 				if (!ipfs_namesys_verify_entry_signature(&verify_entry)) {
 					libp2p_logger_error("resolver", "IPNS V2 signature verification failed for %s.\n", path);
 					goto local_cleanup;
