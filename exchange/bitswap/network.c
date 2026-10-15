@@ -60,7 +60,7 @@ int ipfs_bitswap_network_adjust_cid_queue(struct Libp2pVector* collection, struc
 	if (collection == NULL || cid == NULL)
 		return 0;
 
-	for(int i = 0; i < collection->total; collection++) {
+	for(int i = 0; i < collection->total; i++) {
 		const struct CidEntry* current = (const struct CidEntry*)libp2p_utils_vector_get(collection, i);
 		if (ipfs_cid_compare(current->cid, cid) == 0) {
 			if (cancel)
