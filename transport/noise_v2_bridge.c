@@ -7,6 +7,7 @@
 #include "libp2p/utils/logger.h"
 #include "libp2p/crypto/rsa.h"
 #include "libp2p/crypto/key.h"
+#include "ipfs/crypto/verify.h"
 #include "ipfs/transport/stream.h"
 #include "ipfs/transport/stream_bridge.h"
 #include "ipfs/transport/v2_stream_wrapper.h"
@@ -86,9 +87,10 @@ static int noise_rsa_verify(const uint8_t *identity_key, size_t identity_key_len
     }
 
     if (pubkey->type == KEYTYPE_ED25519) {
-        /* TODO: implement Ed25519 signature verification */
+        int ret = ipfs_crypto_verify_ed25519(pubkey->data, pubkey->data_size,
+                                              data, data_len, sig, sig_len);
         libp2p_crypto_public_key_free(pubkey);
-        return 1;
+        return ret;
     }
 
     if (pubkey->type != KEYTYPE_RSA) {
