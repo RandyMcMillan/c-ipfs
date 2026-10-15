@@ -90,14 +90,14 @@ int ipfs_namesys_verify_entry_parse(const uint8_t *buffer, size_t size, struct I
                     }
                     break;
                 case 2: // signature
-                    if (field_len < sizeof(out_entry->signature)) {
+                    if (field_len <= sizeof(out_entry->signature)) {
                         memcpy(out_entry->signature, ptr, field_len);
                         out_entry->sig_len = field_len;
                     }
                     break;
                 case 5: // pubKey (Libp2p PublicKey Protobuf envelope)
                 case 8: // optional public key (V2 extension)
-                    if (field_len < sizeof(out_entry->pubkey_raw)) {
+                    if (field_len <= sizeof(out_entry->pubkey_raw)) {
                         memcpy(out_entry->pubkey_raw, ptr, field_len);
                         out_entry->pubkey_raw_len = field_len;
                         parse_libp2p_pubkey(ptr, field_len, out_entry);

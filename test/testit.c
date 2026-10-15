@@ -128,6 +128,7 @@ int build_test_collection() {
 	add_test("test_namesys_verify_entry_signature_invalid", test_namesys_verify_entry_signature_invalid, 1);
 	add_test("test_namesys_verify_entry_signature_null", test_namesys_verify_entry_signature_null, 1);
 	add_test("test_namesys_verify_entry_signature_valid_ed25519", test_namesys_verify_entry_signature_valid_ed25519, 1);
+	add_test("test_namesys_verify_entry_signature_valid_rsa", test_namesys_verify_entry_signature_valid_rsa, 1);
 	add_test("test_namesys_verify_ipns_record_rsa", test_namesys_verify_ipns_record_rsa, 1);
 	add_test("test_secp256k1_nostril_ecdsa_roundtrip", test_secp256k1_nostril_ecdsa_roundtrip, 1);
 	add_test("test_secp256k1_nostril_schnorr_roundtrip", test_secp256k1_nostril_schnorr_roundtrip, 1);

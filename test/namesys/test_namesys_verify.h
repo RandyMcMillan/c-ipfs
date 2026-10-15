@@ -241,7 +241,14 @@ int test_namesys_verify_entry_signature_valid_ed25519(void) {
 
     // Field 2: signature = real 64-byte Ed25519 sig
     buf[offset++] = (2 << 3) | 2;
-    buf[offset++] = (uint8_t)sig_len;
+    {
+        size_t v = sig_len;
+        while (v > 127) {
+            buf[offset++] = (uint8_t)(v & 0x7F) | 0x80;
+            v >>= 7;
+        }
+        buf[offset++] = (uint8_t)v;
+    }
     memcpy(&buf[offset], sig, sig_len);
     offset += sig_len;
 
@@ -272,6 +279,8 @@ int test_namesys_verify_entry_signature_valid_ed25519(void) {
 
     /* 5. Parse and verify */
     struct IpnsVerifyEntry entry;
+    FILE* dbg_entry_file = fopen("/tmp/ipns-entry.bin", "wb");
+    if (dbg_entry_file) { fwrite(buf, 1, offset, dbg_entry_file); fclose(dbg_entry_file); }
     if (!ipfs_namesys_verify_entry_parse(buf, offset, &entry)) {
         fprintf(stderr, "parse failed\n");
         goto cleanup_ctx;
@@ -358,5 +367,111 @@ cleanup_key:
 exit:
     if (private_key.der) free(private_key.der);
     if (private_key.public_key_der) free(private_key.public_key_der);
+    return retVal;
+}
+
+
+int test_namesys_verify_entry_signature_valid_rsa(void) {
+    int retVal = 0;
+
+    struct RsaPrivateKey private_key;
+    memset(&private_key, 0, sizeof(private_key));
+    if (!libp2p_crypto_rsa_generate_keypair(&private_key, 2048))
+        goto exit;
+
+    const char *data_payload = "rsa-ipns-v2-payload";
+    size_t data_len = strlen(data_payload);
+    size_t signed_msg_len = IPNS_SIG_PREFIX_LEN + data_len;
+    uint8_t *signed_msg = (uint8_t*)malloc(signed_msg_len);
+    if (!signed_msg) goto cleanup_key;
+    memcpy(signed_msg, "ipns-signature:", IPNS_SIG_PREFIX_LEN);
+    memcpy(signed_msg + IPNS_SIG_PREFIX_LEN, data_payload, data_len);
+
+    unsigned char *sig = NULL;
+    size_t sig_len = 0;
+    if (!libp2p_crypto_rsa_sign(&private_key, signed_msg, signed_msg_len, &sig, &sig_len)) {
+        goto cleanup_msg;
+    }
+
+    uint8_t buf[1024];
+    size_t offset = 0;
+    const char *value = "/ipfs/QmTest";
+    buf[offset++] = (1 << 3) | 2;
+    buf[offset++] = (uint8_t)strlen(value);
+    memcpy(&buf[offset], value, strlen(value));
+    offset += strlen(value);
+
+    buf[offset++] = (2 << 3) | 2;
+    {
+        size_t v = sig_len;
+        while (v > 127) {
+            buf[offset++] = (uint8_t)(v & 0x7F) | 0x80;
+            v >>= 7;
+        }
+        buf[offset++] = (uint8_t)v;
+    }
+    memcpy(&buf[offset], sig, sig_len);
+    offset += sig_len;
+
+    buf[offset++] = (4 << 3) | 0;
+    buf[offset++] = 1;
+
+    struct PublicKey public_key;
+    memset(&public_key, 0, sizeof(public_key));
+    public_key.type = KEYTYPE_RSA;
+    public_key.data = (unsigned char*)private_key.public_key_der;
+    public_key.data_size = private_key.public_key_length;
+
+    uint8_t pubkey_pb[1024];
+    size_t pb_off = 0;
+    if (!libp2p_crypto_public_key_protobuf_encode(&public_key, pubkey_pb, sizeof(pubkey_pb), &pb_off))
+        goto cleanup_sig;
+    size_t pubkey_pb_len = pb_off;
+
+    buf[offset++] = (5 << 3) | 2;
+    {
+        size_t v = pubkey_pb_len;
+        while (v > 127) {
+            buf[offset++] = (uint8_t)(v & 0x7F) | 0x80;
+            v >>= 7;
+        }
+        buf[offset++] = (uint8_t)v;
+    }
+    memcpy(&buf[offset], pubkey_pb, pubkey_pb_len);
+    offset += pubkey_pb_len;
+
+    buf[offset++] = (7 << 3) | 2;
+    buf[offset++] = (uint8_t)data_len;
+    memcpy(&buf[offset], data_payload, data_len);
+    offset += data_len;
+
+    struct IpnsVerifyEntry entry;
+    FILE* dbg_entry_file = fopen("/tmp/ipns-entry.bin", "wb");
+    if (dbg_entry_file) { fwrite(buf, 1, offset, dbg_entry_file); fclose(dbg_entry_file); }
+    if (!ipfs_namesys_verify_entry_parse(buf, offset, &entry)) {
+        fprintf(stderr, "parse failed: offset=%zu sig_len=%zu publen=%zu\n", offset, sig_len, pubkey_pb_len);
+        goto cleanup_sig;
+    }
+    fprintf(stderr, "entry: keytype=%d siglen=%zu publen=%zu datalen=%zu\n", entry.key_type, entry.sig_len, entry.pubkey_bytes_len, entry.data_payload_len);
+    if (entry.pubkey_bytes_len == private_key.public_key_length) {
+        int same = memcmp(entry.pubkey_bytes, private_key.public_key_der, private_key.public_key_length) == 0;
+        fprintf(stderr, "same public key: %d\n", same);
+    }
+
+    if (!ipfs_namesys_verify_entry_signature(&entry)) {
+        fprintf(stderr, "signature verification failed for RSA entry\n");
+        goto cleanup_sig;
+    }
+
+    retVal = 1;
+
+cleanup_sig:
+    if (sig) free(sig);
+cleanup_msg:
+    free(signed_msg);
+cleanup_key:
+    if (private_key.der) free(private_key.der);
+    if (private_key.public_key_der) free(private_key.public_key_der);
+exit:
     return retVal;
 }

@@ -36,11 +36,11 @@ struct IpnsVerifyEntry {
     size_t   sig_len;
 
     // Embedded PublicKey protobuf (field 5)
-    uint8_t  pubkey_raw[256];
+    uint8_t  pubkey_raw[512];
     size_t   pubkey_raw_len;
 
     enum IpfsKeyType key_type;
-    uint8_t          pubkey_bytes[128];
+    uint8_t          pubkey_bytes[512];
     size_t           pubkey_bytes_len;
 };
 
