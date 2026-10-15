@@ -312,13 +312,13 @@ struct ApiConnectionParam {
  * @returns 1 on success, 0 on failure
  */
 
-static int api_serve_gateway(int fd, const char* path, struct IpfsNode* local_node);
+static int api_serve_gateway_internal(int fd, const char* path, const char* range, struct IpfsNode* local_node);
 
 int ipfs_core_api_serve_gateway(int fd, const char* path, struct IpfsNode* local_node) {
-	return api_serve_gateway(fd, path, local_node);
+	return api_serve_gateway_internal(fd, path, NULL, local_node);
 }
 
-static int api_serve_gateway(int fd, const char* path, struct IpfsNode* local_node) {
+static int api_serve_gateway_internal(int fd, const char* path, const char* range, struct IpfsNode* local_node) {
 	const char* request_path = path ? path : "";
 	char* resolved = NULL;
 
@@ -483,15 +483,84 @@ static int api_serve_gateway(int fd, const char* path, struct IpfsNode* local_no
 			content_type = "image/svg+xml";
 	}
 
+	size_t range_start = 0;
+	size_t range_end = 0;
+	int has_range = 0;
+	if (range) {
+		const char* p = range;
+		if (strncasecmp(p, "bytes=", 6) == 0)
+			p += 6;
+		while (*p == ' ')
+			p++;
+		if (*p == '-' && p[1] != '\0') {
+			unsigned long long suffix = strtoull(p + 1, (char**)&p, 10);
+			if ((*p == '\0' || *p == '\r' || *p == '\n' || *p == ' ' || *p == '\t') && suffix > 0) {
+				if (suffix >= content_size) {
+					range_start = 0;
+				} else {
+					range_start = content_size - (size_t)suffix;
+				}
+				range_end = content_size == 0 ? 0 : (content_size - 1);
+				has_range = 1;
+			}
+		} else {
+			char *endptr = NULL;
+			unsigned long long start = strtoull(p, &endptr, 10);
+			if (endptr != p && *endptr == '-') {
+				const char *q = endptr + 1;
+				unsigned long long end = 0;
+				int valid = 0;
+
+				range_start = (size_t)start;
+				if (*q == '\0' || *q == '\r' || *q == '\n' || *q == ' ' || *q == '\t') {
+					range_end = (content_size > 0) ? (content_size - 1) : 0;
+					valid = 1;
+				} else {
+					char *range_end_ptr = NULL;
+					end = strtoull(q, &range_end_ptr, 10);
+					if (range_end_ptr != q && (*range_end_ptr == '\0' || *range_end_ptr == '\r' || *range_end_ptr == '\n' || *range_end_ptr == ' ' || *range_end_ptr == '\t')) {
+						range_end = (size_t)end;
+						valid = 1;
+					}
+				}
+				if (valid)
+					has_range = 1;
+			}
+		}
+	}
+
+	if (has_range && content_size > 0) {
+		if (range_start >= content_size || range_end >= content_size || range_start > range_end) {
+			free(content);
+			if (resolved)
+				free(resolved);
+			write_cstr(fd, HTTP_416);
+			return 1;
+		}
+	}
+
+	size_t response_size = content_size;
+	const char* status = "200 OK";
+	char range_header[128] = "";
+	if (has_range) {
+		response_size = range_end - range_start + 1;
+		status = "206 Partial Content";
+		snprintf(range_header, sizeof(range_header),
+		         "Content-Range: bytes %zu-%zu/%zu\r\n", range_start, range_end, content_size);
+	}
+
 	char header[512];
 	snprintf(header, sizeof(header),
-	  "HTTP/1.1 200 OK\r\n"
+	  "HTTP/1.1 %s\r\n"
 	  "Content-Type: %s\r\n"
 	  "Content-Length: %zu\r\n"
+	  "%s"
+	  "Access-Control-Allow-Origin: *\r\n"
 	  "Connection: close\r\n"
-	  "\r\n", content_type, content_size);
+	  "\r\n", status, content_type, response_size, range_header);
 	write_str(fd, header);
-	write(fd, content, content_size);
+	if (response_size > 0)
+		write(fd, content + range_start, response_size);
 	free(content);
 	if (resolved)
 		free(resolved);
@@ -714,7 +783,10 @@ void *api_connection_thread (void *ptr)
 					write_cstr (s, HTTP_500);
 				}
 			} else if (cstrstart(req.buf + req.path, "/ipfs/")) {
-				if (!api_serve_gateway(s, req.buf + req.path, params->this_node)) {
+				char* range = header_value_cmp(&req, "Range:", "bytes=");
+				if (range && !strstart(range, "bytes="))
+					range = NULL;
+				if (!api_serve_gateway_internal(s, req.buf + req.path, range, params->this_node)) {
 					write_cstr(s, HTTP_404);
 				}
 			} else if (!cstrstart(req.buf + req.path, API_V0_START)) {

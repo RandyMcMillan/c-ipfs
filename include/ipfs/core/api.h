@@ -71,6 +71,11 @@ struct s_request {
 			"Connection: close\r\n\r\n" \
 			"404 page not found"
 
+#define HTTP_416	"HTTP/1.1 416 Range Not Satisfiable\r\n" \
+			"Content-Type: text/plain\r\n" \
+			"Connection: close\r\n\r\n" \
+			"Range Not Satisfiable"
+
 #define HTTP_500	"HTTP/1.1 500 Internal server error\r\n" \
 			"Content-Type: text/plain\r\n" \
 			"Connection: close\r\n\r\n" \
