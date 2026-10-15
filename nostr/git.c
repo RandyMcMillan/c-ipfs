@@ -88,13 +88,24 @@ int ipfs_nostr_git_state_publish(void *ctx, struct NostrKey *key,
                              const char *repo_pubkey,
                              const char *repo_id,
                              const char *rbsr_json,
+                             const char *raw_refs_json,
                              struct NostrEvent *ev)
 {
     unsigned char buf[65536];
     char a_tag[512];
+    char content[65536];
     ipfs_nostr_event_init(ev);
     ev->kind = NOSTR_KIND_GIT_STATE;
-    ipfs_nostr_event_set_content(ev, rbsr_json ? rbsr_json : "{}");
+
+    /* Hybrid store: keep the compact RBSR fingerprint when present and
+       include raw refs for spec-compatible consumers.  When raw refs alone
+       are supplied, publish them as NIP-34 raw ref documents. */
+    if (raw_refs_json && raw_refs_json[0] != '\0') {
+        snprintf(content, sizeof(content), "%s", raw_refs_json);
+    } else {
+        snprintf(content, sizeof(content), "%s", rbsr_json ? rbsr_json : "{}");
+    }
+    ipfs_nostr_event_set_content(ev, content);
 
     snprintf(a_tag, sizeof(a_tag), "30617:%s:%s", repo_pubkey, repo_id);
     if (!ipfs_nostr_tags_add(&ev->tags, "a", a_tag)) return 0;

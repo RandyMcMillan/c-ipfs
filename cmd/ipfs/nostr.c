@@ -46,7 +46,7 @@ static void print_nostr_help(FILE *out) {
     fprintf(out, "       [--gateway <url>] [--output <path>]\n");
     fprintf(out, "  repo --id <id> --name <name> --cid <cid>  Announce git repo over IPFS (kind 30617)\n");
     fprintf(out, "       [--maintainer <pubkey>] [--topic <t>]\n");
-    fprintf(out, "  state --repo <pubkey:id> [--refs <file>]  Publish repo state with RBSR (kind 30618)\n");
+    fprintf(out, "  state --repo <pubkey:id> [--refs <file>] [--raw-refs]  Publish repo state (RBSR, optionally hybrid raw refs)\n");
     fprintf(out, "  grasp --relay <url> [--relay <url>...]    Publish grasp relay list (kind 10317)\n");
     fprintf(out, "  verify --event <json>                     Weak-verify event signature\n");
     fprintf(out, "  status --event <id> --status <s>          Set status: open/merged/closed/draft\n");
@@ -285,8 +285,15 @@ int ipfs_nostr(int argc, char** argv) {
         ret = 1;
     }
     else if (strcmp(subcmd, "state") == 0) {
+        int raw_refs_requested = 0;
         const char *repo = get_arg(argc, argv, "--repo");
         const char *refs_file = get_arg(argc, argv, "--refs");
+        for (int i = 2; i < argc; i++) {
+            if (strcmp(argv[i], "--raw-refs") == 0) {
+                raw_refs_requested = 1;
+                break;
+            }
+        }
         if (!repo) {
             fprintf(stderr, "Error: --repo required\n");
             goto cleanup;
@@ -303,6 +310,51 @@ int ipfs_nostr(int argc, char** argv) {
         strncpy(repo_id, colon + 1, sizeof(repo_id) - 1);
 
         char rbsr_json[4096] = "{}";
+        char raw_refs_json[8192] = "{}";
+        int raw_refs_count = 0;
+        if (refs_file && raw_refs_requested) {
+            FILE *rawfp = fopen(refs_file, "r");
+            if (!rawfp) {
+                fprintf(stderr, "Error: cannot open %s\n", refs_file);
+                goto cleanup;
+            }
+            char line[512];
+            raw_refs_json[0] = '{';
+            raw_refs_json[1] = '\0';
+            size_t pos = 1;
+            while (fgets(line, sizeof(line), rawfp)) {
+                char refname[256];
+                char hashhex[128];
+                if (sscanf(line, "%255s %127s", refname, hashhex) != 2) {
+                    continue;
+                }
+                if (raw_refs_count++) {
+                    raw_refs_json[pos++] = ',';
+                    raw_refs_json[pos] = '\0';
+                }
+                raw_refs_json[pos++] = '"';
+                for (char *p = refname; *p && pos + 2 < sizeof(raw_refs_json); p++) {
+                    if (*p == '"' || *p == '\\') {
+                        raw_refs_json[pos++] = '\\';
+                    }
+                    raw_refs_json[pos++] = *p;
+                }
+                raw_refs_json[pos++] = '"';
+                raw_refs_json[pos++] = ':';
+                raw_refs_json[pos++] = '"';
+                for (char *p = hashhex; *p && pos + 2 < sizeof(raw_refs_json); p++) {
+                    if (*p == '"' || *p == '\\') {
+                        raw_refs_json[pos++] = '\\';
+                    }
+                    raw_refs_json[pos++] = *p;
+                }
+                raw_refs_json[pos++] = '"';
+                raw_refs_json[pos] = '\0';
+            }
+            fclose(rawfp);
+            raw_refs_json[pos++] = '}';
+            raw_refs_json[pos] = '\0';
+        }
         if (refs_file) {
             FILE *fp = fopen(refs_file, "r");
             if (!fp) {
@@ -342,7 +394,7 @@ int ipfs_nostr(int argc, char** argv) {
             rbsr_set_free(&set);
         }
 
-        if (!ipfs_nostr_git_state_publish(ctx, &key, repo_pubkey, repo_id, rbsr_json, &ev)) {
+        if (!ipfs_nostr_git_state_publish(ctx, &key, repo_pubkey, repo_id, rbsr_json, raw_refs_requested ? raw_refs_json : NULL, &ev)) {
             fprintf(stderr, "Error: failed to create state event\n");
             goto cleanup;
         }

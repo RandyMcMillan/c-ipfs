@@ -49,11 +49,12 @@ int ipfs_nostr_git_issue_publish(void *ctx, struct NostrKey *key,
                              struct NostrGitPatch *issue,
                              struct NostrEvent *ev);
 
-/* Create a NIP-34 repo state event (kind 30618) with RBSR fingerprint JSON in content */
+/* Create a NIP-34 repo state event (kind 30618). content can be either RBSR JSON or\n   a hybrid JSON document containing raw git refs. */
 int ipfs_nostr_git_state_publish(void *ctx, struct NostrKey *key,
                              const char *repo_pubkey,
                              const char *repo_id,
                              const char *rbsr_json,
+                             const char *raw_refs_json,
                              struct NostrEvent *ev);
 
 /* Create a NIP-34 grasp list event (kind 10317) — relay recommendations for git */
