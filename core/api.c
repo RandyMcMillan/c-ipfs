@@ -22,6 +22,8 @@
 #include "ipfs/namesys/resolver.h"
 #include "ipfs/importer/exporter.h"
 #include "ipfs/merkledag/node.h"
+#include "ipfs/blocks/block.h"
+#include "ipfs/blocks/blockstore.h"
 #include "ipfs/core/http_request.h"
 
 /* Forward declaration from core/api_gzip.c */
@@ -313,13 +315,34 @@ struct ApiConnectionParam {
  * @returns 1 on success, 0 on failure
  */
 
-static int api_serve_gateway_internal(int fd, const char* path, const char* range, struct IpfsNode* local_node);
+static int api_serve_gateway_internal(int fd, const char* path, const char* query, const char* range, int is_head, struct IpfsNode* local_node);
 
 int ipfs_core_api_serve_gateway(int fd, const char* path, struct IpfsNode* local_node) {
-	return api_serve_gateway_internal(fd, path, NULL, local_node);
+	return api_serve_gateway_internal(fd, path, NULL, NULL, 0, local_node);
 }
 
-static int api_serve_gateway_internal(int fd, const char* path, const char* range, struct IpfsNode* local_node) {
+int ipfs_core_api_serve_gateway_ex(int fd, const char* path, const char* query, const char* range, int is_head, struct IpfsNode* local_node) {
+	return api_serve_gateway_internal(fd, path, query, range, is_head, local_node);
+}
+
+static const char* gateway_query_value(const char* query, const char* key)
+{
+	if (!query || !key)
+		return NULL;
+	size_t key_len = strlen(key);
+	const char* p = query;
+	while (*p) {
+		const char* amp = strchr(p, '&');
+		size_t len = amp ? (size_t)(amp - p) : strlen(p);
+		if (len > key_len && strncasecmp(p, key, key_len) == 0 && p[key_len] == '=') {
+			return p + key_len + 1;
+		}
+		p = amp ? amp + 1 : p + len;
+	}
+	return NULL;
+}
+
+static int api_serve_gateway_internal(int fd, const char* path, const char* query, const char* range, int is_head, struct IpfsNode* local_node) {
 	const char* request_path = path ? path : "";
 	char* resolved = NULL;
 
@@ -404,7 +427,7 @@ static int api_serve_gateway_internal(int fd, const char* path, const char* rang
 			ipfs_hashtable_node_free(node);
 			if (resolved)
 				free(resolved);
-				return 0;
+			return 0;
 		}
 		char* segment = strtok(cursor, "/");
 		while (segment && *segment) {
@@ -453,6 +476,85 @@ static int api_serve_gateway_internal(int fd, const char* path, const char* rang
 
 	int is_directory = ipfs_hashtable_node_is_directory(node);
 
+	/* Trustless gateway: ?format=raw serves the raw block. */
+	const char* format = gateway_query_value(query, "format");
+	int want_raw = format && strcasecmp(format, "raw") == 0;
+	if (want_raw && local_node && local_node->blockstore && local_node->blockstore->Get) {
+		struct Block* raw_block = NULL;
+		if (local_node->blockstore->Get(local_node->blockstore->blockstoreContext, final_cid, &raw_block)) {
+			char header[512];
+			snprintf(header, sizeof(header),
+			  "HTTP/1.1 200 OK\r\n"
+			  "Content-Type: application/vnd.ipld.raw\r\n"
+			  "Content-Length: %zu\r\n"
+			  "Accept-Ranges: bytes\r\n"
+			  "Access-Control-Allow-Origin: *\r\n"
+			  "Connection: close\r\n"
+			  "\r\n", raw_block->data_length);
+			write_str(fd, header);
+			if (!is_head && raw_block->data_length > 0)
+				write(fd, raw_block->data, raw_block->data_length);
+			ipfs_block_free(raw_block);
+			ipfs_cid_free(final_cid);
+			ipfs_hashtable_node_free(node);
+			if (resolved)
+				free(resolved);
+			return 1;
+		}
+	}
+
+	/* Directory semantics: trailing-slash redirect and index.html resolution. */
+	if (is_directory) {
+		size_t req_path_len = strlen(request_path);
+		if (req_path_len > 0 && request_path[req_path_len - 1] != '/') {
+			char location[1024];
+			if (snprintf(location, sizeof(location), "%s/", request_path) < (int)sizeof(location)) {
+				char header[1152];
+				snprintf(header, sizeof(header),
+				  "HTTP/1.1 301 Moved Permanently\r\n"
+				  "Location: %s\r\n"
+				  "Content-Type: text/html; charset=utf-8\r\n"
+				  "Content-Length: 0\r\n"
+				  "Access-Control-Allow-Origin: *\r\n"
+				  "Connection: close\r\n"
+				  "\r\n", location);
+				write_str(fd, header);
+				ipfs_cid_free(final_cid);
+				ipfs_hashtable_node_free(node);
+				if (resolved)
+					free(resolved);
+				return 1;
+			}
+		}
+
+		struct NodeLink* link = node->head_link;
+		while (link) {
+			if (link->name && strcmp(link->name, "index.html") == 0) {
+				struct HashtableNode* index_node = NULL;
+				if (ipfs_exporter_get_node(local_node, link->hash, link->hash_size, &index_node)) {
+					ipfs_hashtable_node_free(node);
+					node = index_node;
+					ipfs_cid_free(final_cid);
+					final_cid = NULL;
+					unsigned char index_b58[512];
+					index_b58[0] = '\0';
+					ipfs_cid_hash_to_base58(node->hash, node->hash_size, index_b58, sizeof(index_b58));
+					if (index_b58[0] &&
+					    ipfs_cid_decode_hash_from_base58(index_b58, strlen((const char*)index_b58), &final_cid)) {
+						is_directory = 0;
+					} else {
+						ipfs_hashtable_node_free(node);
+						if (resolved)
+							free(resolved);
+						return 0;
+					}
+				}
+				break;
+			}
+			link = link->next;
+		}
+	}
+
 	char* content = NULL;
 	size_t content_size = 0;
 	int ret = 0;
@@ -475,12 +577,12 @@ static int api_serve_gateway_internal(int fd, const char* path, const char* rang
 			fclose(mem);
 		}
 	}
-	ipfs_cid_free(final_cid);
-	ipfs_hashtable_node_free(node);
 
 	if (!ret) {
 		if (content)
 			free(content);
+		ipfs_cid_free(final_cid);
+		ipfs_hashtable_node_free(node);
 		if (resolved)
 			free(resolved);
 		return 0;
@@ -554,6 +656,8 @@ static int api_serve_gateway_internal(int fd, const char* path, const char* rang
 	if (has_range && content_size > 0) {
 		if (range_start >= content_size || range_end >= content_size || range_start > range_end) {
 			free(content);
+			ipfs_cid_free(final_cid);
+			ipfs_hashtable_node_free(node);
 			if (resolved)
 				free(resolved);
 			write_cstr(fd, HTTP_416);
@@ -571,19 +675,44 @@ static int api_serve_gateway_internal(int fd, const char* path, const char* rang
 		         "Content-Range: bytes %zu-%zu/%zu\r\n", range_start, range_end, content_size);
 	}
 
-	char header[512];
+	char etag[128];
+	snprintf(etag, sizeof(etag), "\"%s\"", final_b58);
+	char x_ipfs_path[512];
+	snprintf(x_ipfs_path, sizeof(x_ipfs_path), "%s", request_path);
+	char content_location[512];
+	if (resolved) {
+		size_t rlen = strlen(resolved);
+		const char* suffix = request_path + 6 + root_hash_len;
+		while (*suffix == '/') suffix++;
+		if (snprintf(content_location, sizeof(content_location), "%s%s%s",
+		             resolved, (rlen > 0 && resolved[rlen-1] == '/' ? "" : "/"), suffix) >= (int)sizeof(content_location))
+			content_location[0] = '\0';
+	} else {
+		snprintf(content_location, sizeof(content_location), "/ipfs/%s%s%s", final_b58,
+		         (*extra_path ? "/" : ""), extra_path);
+	}
+
+	char header[1024];
 	snprintf(header, sizeof(header),
 	  "HTTP/1.1 %s\r\n"
 	  "Content-Type: %s\r\n"
 	  "Content-Length: %zu\r\n"
 	  "%s"
+	  "Accept-Ranges: bytes\r\n"
+	  "Cache-Control: public, max-age=29030400, immutable\r\n"
+	  "ETag: %s\r\n"
+	  "X-Ipfs-Path: %s\r\n"
+	  "X-Ipfs-Roots: %s\r\n"
+	  "X-Content-Type-Options: nosniff\r\n"
 	  "Access-Control-Allow-Origin: *\r\n"
 	  "Connection: close\r\n"
-	  "\r\n", status, content_type, response_size, range_header);
+	  "\r\n", status, content_type, response_size, range_header, etag, x_ipfs_path, final_b58);
 	write_str(fd, header);
-	if (response_size > 0)
+	if (!is_head && response_size > 0)
 		write(fd, content + range_start, response_size);
 	free(content);
+	ipfs_cid_free(final_cid);
+	ipfs_hashtable_node_free(node);
 	if (resolved)
 		free(resolved);
 	return 1;
@@ -808,13 +937,27 @@ void *api_connection_thread (void *ptr)
 				char* range = header_value_cmp(&req, "Range:", "bytes=");
 				if (range && !strstart(range, "bytes="))
 					range = NULL;
-				if (!api_serve_gateway_internal(s, req.buf + req.path, range, params->this_node)) {
+				const char* query = req.query ? req.buf + req.query : NULL;
+				if (!api_serve_gateway_internal(s, req.buf + req.path, query, range, 0, params->this_node)) {
 					write_cstr(s, HTTP_404);
 				}
 			} else if (!cstrstart(req.buf + req.path, API_V0_START)) {
 				write_cstr(s, HTTP_404);
 			}
 			// end of GET
+		} else if (strncmp(req.buf + req.method, "HEAD", 4)==0) {
+			if (cstrstart(req.buf + req.path, "/ipfs/")) {
+				const char* query = req.query ? req.buf + req.query : NULL;
+				if (!api_serve_gateway_internal(s, req.buf + req.path, query, NULL, 1, params->this_node)) {
+					write_cstr(s, HTTP_404);
+				}
+			} else {
+				write_cstr(s, HTTP_404);
+			}
+			// end of HEAD
+		} else if (strncmp(req.buf + req.method, "OPTIONS", 7)==0) {
+			write_cstr(s, HTTP_200_OPTIONS);
+			// end of OPTIONS
 		} else if (strncmp(req.buf + req.method, "POST", 4)==0) {
 			/* Handle gzip-compressed or JSON POST bodies */
 			char *content_encoding = header_value_cmp(&req, "Content-Encoding:", "gzip");

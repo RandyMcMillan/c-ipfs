@@ -76,6 +76,12 @@ struct s_request {
 			"Connection: close\r\n\r\n" \
 			"Range Not Satisfiable"
 
+#define HTTP_200_OPTIONS "HTTP/1.1 200 OK\r\n" \
+			"Access-Control-Allow-Origin: *\r\n" \
+			"Access-Control-Allow-Methods: GET, HEAD, OPTIONS\r\n" \
+			"Access-Control-Allow-Headers: Content-Type, Range, Accept\r\n" \
+			"Connection: close\r\n\r\n"
+
 #define HTTP_500	"HTTP/1.1 500 Internal server error\r\n" \
 			"Content-Type: text/plain\r\n" \
 			"Connection: close\r\n\r\n" \
@@ -98,4 +104,5 @@ void api_connections_cleanup (struct IpfsNode* node);
 void *api_listen_thread (void *ptr);
 int api_start (struct IpfsNode* local_node, int max_conns, int timeout);
 int ipfs_core_api_serve_gateway(int fd, const char* path, struct IpfsNode* local_node);
+int ipfs_core_api_serve_gateway_ex(int fd, const char* path, const char* query, const char* range, int is_head, struct IpfsNode* local_node);
 int api_stop (struct IpfsNode* local_node);

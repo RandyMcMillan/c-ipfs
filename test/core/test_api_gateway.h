@@ -168,3 +168,299 @@ int test_api_gateway_ipns(void) {
     int ok = ret && strstr(buf, "HTTP/1.1 200 OK") && strstr(buf, "gateway-ipns-content");
     return ok;
 }
+
+int test_api_gateway_directory_redirect(void) {
+    const char* ipfs_path = "./tmp/test_api_gateway_dir_redirect";
+    {
+        char cmd[512];
+        snprintf(cmd, sizeof(cmd), "rm -rf %s", ipfs_path);
+        system(cmd);
+    }
+
+    const char* src_dir = "./tmp/test_api_gateway_dir_redirect_src";
+    {
+        char cmd[512];
+        snprintf(cmd, sizeof(cmd), "rm -rf %s && mkdir -p %s", src_dir, src_dir);
+        system(cmd);
+        char file_path[512];
+        snprintf(file_path, sizeof(file_path), "%s/file.txt", src_dir);
+        FILE* f = fopen(file_path, "w");
+        if (!f) return 0;
+        fputs("directory-file-content", f);
+        fclose(f);
+    }
+
+    char* peer_id = NULL;
+    if (!drop_and_build_repository_without_bootstrap(ipfs_path, 0, &peer_id)) {
+        fprintf(stderr, "DROP FAIL\n");
+        return 0;
+    }
+    if (peer_id) free(peer_id);
+
+    struct IpfsNode* local_node = NULL;
+    if (!ipfs_node_offline_new(ipfs_path, &local_node)) {
+        fprintf(stderr, "OFFLINE FAIL\n");
+        return 0;
+    }
+    size_t bytes_written = 0;
+    struct HashtableNode* node = NULL;
+    ipfs_import_file(NULL, src_dir, &node, local_node, &bytes_written, 1);
+    if (!node) {
+        ipfs_node_free(local_node);
+        return 0;
+    }
+
+    char hash[256] = "";
+    ipfs_cid_hash_to_base58(node->hash, node->hash_size, (unsigned char*)hash, 256);
+    ipfs_hashtable_node_free(node);
+
+    char path[320] = "";
+    snprintf(path, sizeof(path), "/ipfs/%s", hash);
+
+    int sv[2];
+    if (socketpair(AF_UNIX, SOCK_STREAM, 0, sv) != 0) {
+        ipfs_node_free(local_node);
+        return 0;
+    }
+
+    int ret = ipfs_core_api_serve_gateway(sv[1], path, local_node);
+    close(sv[1]);
+    shutdown(sv[0], SHUT_WR);
+
+    char buf[4096] = "";
+    size_t total = 0;
+    for (;;) {
+        if (total >= sizeof(buf) - 1) break;
+        ssize_t n = read(sv[0], buf + total, sizeof(buf) - 1 - total);
+        if (n <= 0) break;
+        total += (size_t)n;
+    }
+    close(sv[0]);
+
+    int ok = 0;
+    if (ret && strstr(buf, "HTTP/1.1 301") && strstr(buf, "Moved Permanently")) {
+        char expected[340];
+        snprintf(expected, sizeof(expected), "Location: %s/", path);
+        if (strstr(buf, expected)) {
+            ok = 1;
+        }
+    }
+
+    ipfs_node_free(local_node);
+    return ok;
+}
+
+int test_api_gateway_directory_index(void) {
+    const char* ipfs_path = "./tmp/test_api_gateway_dir_index";
+    {
+        char cmd[512];
+        snprintf(cmd, sizeof(cmd), "rm -rf %s", ipfs_path);
+        system(cmd);
+    }
+
+    const char* src_dir = "./tmp/test_api_gateway_dir_index_src";
+    {
+        char cmd[512];
+        snprintf(cmd, sizeof(cmd), "rm -rf %s && mkdir -p %s", src_dir, src_dir);
+        system(cmd);
+        char index_path[512];
+        snprintf(index_path, sizeof(index_path), "%s/index.html", src_dir);
+        FILE* f = fopen(index_path, "w");
+        if (!f) return 0;
+        fputs("<h1>index-html-content</h1>", f);
+        fclose(f);
+    }
+
+    char* peer_id = NULL;
+    if (!drop_and_build_repository_without_bootstrap(ipfs_path, 0, &peer_id)) {
+        fprintf(stderr, "DROP FAIL\n");
+        return 0;
+    }
+    if (peer_id) free(peer_id);
+
+    struct IpfsNode* local_node = NULL;
+    if (!ipfs_node_offline_new(ipfs_path, &local_node)) {
+        fprintf(stderr, "OFFLINE FAIL\n");
+        return 0;
+    }
+    size_t bytes_written = 0;
+    struct HashtableNode* node = NULL;
+    ipfs_import_file(NULL, src_dir, &node, local_node, &bytes_written, 1);
+    if (!node) {
+        ipfs_node_free(local_node);
+        return 0;
+    }
+
+    char hash[256] = "";
+    ipfs_cid_hash_to_base58(node->hash, node->hash_size, (unsigned char*)hash, 256);
+    ipfs_hashtable_node_free(node);
+
+    char path[340] = "";
+    snprintf(path, sizeof(path), "/ipfs/%s/", hash);
+
+    int sv[2];
+    if (socketpair(AF_UNIX, SOCK_STREAM, 0, sv) != 0) {
+        ipfs_node_free(local_node);
+        return 0;
+    }
+
+    int ret = ipfs_core_api_serve_gateway(sv[1], path, local_node);
+    close(sv[1]);
+    shutdown(sv[0], SHUT_WR);
+
+    char buf[4096] = "";
+    size_t total = 0;
+    for (;;) {
+        if (total >= sizeof(buf) - 1) break;
+        ssize_t n = read(sv[0], buf + total, sizeof(buf) - 1 - total);
+        if (n <= 0) break;
+        total += (size_t)n;
+    }
+    close(sv[0]);
+
+    int ok = ret && strstr(buf, "HTTP/1.1 200 OK") && strstr(buf, "index-html-content");
+
+    ipfs_node_free(local_node);
+    return ok;
+}
+
+int test_api_gateway_format_raw(void) {
+    const char* ipfs_path = "./tmp/test_api_gateway_raw";
+    {
+        char cmd[512];
+        snprintf(cmd, sizeof(cmd), "rm -rf %s", ipfs_path);
+        system(cmd);
+    }
+
+    const char* src = "./tmp/test_api_gateway_raw_src.txt";
+    FILE* f = fopen(src, "w");
+    if (!f) return 0;
+    fputs("raw-block-content", f);
+    fclose(f);
+
+    char* peer_id = NULL;
+    if (!drop_and_build_repository_without_bootstrap(ipfs_path, 0, &peer_id)) {
+        fprintf(stderr, "DROP FAIL\n");
+        return 0;
+    }
+    if (peer_id) free(peer_id);
+
+    struct IpfsNode* local_node = NULL;
+    if (!ipfs_node_offline_new(ipfs_path, &local_node)) {
+        fprintf(stderr, "OFFLINE FAIL\n");
+        return 0;
+    }
+    size_t bytes_written = 0;
+    struct HashtableNode* node = NULL;
+    ipfs_import_file(NULL, src, &node, local_node, &bytes_written, 0);
+    if (!node) {
+        ipfs_node_free(local_node);
+        return 0;
+    }
+
+    char hash[256] = "";
+    ipfs_cid_hash_to_base58(node->hash, node->hash_size, (unsigned char*)hash, 256);
+    ipfs_hashtable_node_free(node);
+
+    char path[320] = "";
+    snprintf(path, sizeof(path), "/ipfs/%s", hash);
+
+    int sv[2];
+    if (socketpair(AF_UNIX, SOCK_STREAM, 0, sv) != 0) {
+        ipfs_node_free(local_node);
+        return 0;
+    }
+
+    int ret = ipfs_core_api_serve_gateway_ex(sv[1], path, "format=raw", NULL, 0, local_node);
+    close(sv[1]);
+    shutdown(sv[0], SHUT_WR);
+
+    char buf[4096] = "";
+    size_t total = 0;
+    for (;;) {
+        if (total >= sizeof(buf) - 1) break;
+        ssize_t n = read(sv[0], buf + total, sizeof(buf) - 1 - total);
+        if (n <= 0) break;
+        total += (size_t)n;
+    }
+    close(sv[0]);
+
+    int ok = ret && strstr(buf, "HTTP/1.1 200 OK") &&
+             strstr(buf, "Content-Type: application/vnd.ipld.raw") &&
+             strstr(buf, "raw-block-content");
+
+    ipfs_node_free(local_node);
+    return ok;
+}
+
+int test_api_gateway_head(void) {
+    const char* ipfs_path = "./tmp/test_api_gateway_head";
+    {
+        char cmd[512];
+        snprintf(cmd, sizeof(cmd), "rm -rf %s", ipfs_path);
+        system(cmd);
+    }
+
+    const char* src = "./tmp/test_api_gateway_head_src.txt";
+    FILE* f = fopen(src, "w");
+    if (!f) return 0;
+    fputs("head-content", f);
+    fclose(f);
+
+    char* peer_id = NULL;
+    if (!drop_and_build_repository_without_bootstrap(ipfs_path, 0, &peer_id)) {
+        fprintf(stderr, "DROP FAIL\n");
+        return 0;
+    }
+    if (peer_id) free(peer_id);
+
+    struct IpfsNode* local_node = NULL;
+    if (!ipfs_node_offline_new(ipfs_path, &local_node)) {
+        fprintf(stderr, "OFFLINE FAIL\n");
+        return 0;
+    }
+    size_t bytes_written = 0;
+    struct HashtableNode* node = NULL;
+    ipfs_import_file(NULL, src, &node, local_node, &bytes_written, 0);
+    if (!node) {
+        ipfs_node_free(local_node);
+        return 0;
+    }
+
+    char hash[256] = "";
+    ipfs_cid_hash_to_base58(node->hash, node->hash_size, (unsigned char*)hash, 256);
+    ipfs_hashtable_node_free(node);
+
+    char path[320] = "";
+    snprintf(path, sizeof(path), "/ipfs/%s", hash);
+
+    int sv[2];
+    if (socketpair(AF_UNIX, SOCK_STREAM, 0, sv) != 0) {
+        ipfs_node_free(local_node);
+        return 0;
+    }
+
+    int ret = ipfs_core_api_serve_gateway_ex(sv[1], path, NULL, NULL, 1, local_node);
+    close(sv[1]);
+    shutdown(sv[0], SHUT_WR);
+
+    char buf[4096] = "";
+    size_t total = 0;
+    for (;;) {
+        if (total >= sizeof(buf) - 1) break;
+        ssize_t n = read(sv[0], buf + total, sizeof(buf) - 1 - total);
+        if (n <= 0) break;
+        total += (size_t)n;
+    }
+    close(sv[0]);
+
+    int ok = ret && strstr(buf, "HTTP/1.1 200 OK") &&
+             strstr(buf, "Accept-Ranges: bytes") &&
+             strstr(buf, "ETag:") &&
+             strstr(buf, "X-Ipfs-Path:") &&
+             strstr(buf, "X-Ipfs-Roots:") &&
+             !strstr(buf, "head-content");
+
+    ipfs_node_free(local_node);
+    return ok;
+}
