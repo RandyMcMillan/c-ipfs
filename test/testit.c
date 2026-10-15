@@ -150,6 +150,7 @@ int build_test_collection() {
 	add_test("test_core_api_name_resolve_2", test_core_api_name_resolve_2, 0);
 	add_test("test_core_api_name_resolve_3", test_core_api_name_resolve_3, 0);
 	add_test("test_api_gateway_cat", test_api_gateway_cat, 1); // in-process HTTP gateway /ipfs/<cid>
+	add_test("test_api_gateway_ipns", test_api_gateway_ipns, 1); // in-process HTTP gateway /ipns/<name>
 	add_test("test_core_api_id", test_core_api_id, 0); // CI heap-corruption crash (segfault / glibc malloc assertion) during repo init + HTTP request
 	add_test("test_core_api_version", test_core_api_version, 0); // CI heap-corruption crash (segfault / glibc malloc assertion) during repo init + HTTP request
 	add_test("test_core_api_block_get", test_core_api_block_get, 0); // CI heap-corruption crash (segfault / glibc malloc assertion) during repo init + HTTP request
