@@ -7,6 +7,7 @@
 #include "libp2p/peer/peer.h"
 #include "ipfs/exchange/bitswap/bitswap.h"
 #include "ipfs/exchange/bitswap/message.h"
+#include "ipfs/exchange/bitswap/peer_request_queue.h"
 
 struct BitswapRouting {
 	/**
@@ -81,3 +82,7 @@ int ipfs_bitswap_network_send_message(const struct BitswapContext* context, stru
  * @returns true(1) on success, false(0) otherwise.
  */
 int ipfs_bitswap_network_handle_message(const struct IpfsNode* node, const struct SessionContext* sessionContext, const uint8_t* bytes, size_t bytes_length);
+/***
+ * Apply a Bitswap 1.2.0 remote block-presence announcement to our peer request state.
+ */
+int ipfs_bitswap_network_handle_block_presence(struct PeerRequest* peer_request, const struct BitswapBlockPresence* presence);

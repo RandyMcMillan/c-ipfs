@@ -76,3 +76,47 @@ int test_bitswap_peer_request_queue_find() {
 	return retVal;
 	*/
 }
+
+#include "ipfs/cid/cid.h"
+#include "ipfs/exchange/bitswap/network.h"
+#include "ipfs/exchange/bitswap/message.h"
+
+int test_bitswap_network_handle_block_presence_cancel(void) {
+	int retVal = 0;
+	struct PeerRequest* request = NULL;
+	struct Cid* cid = NULL;
+	struct BitswapBlockPresence* presence = NULL;
+
+	request = ipfs_bitswap_peer_request_new();
+	if (request == NULL) goto exit;
+
+	request->cids_we_want = libp2p_utils_vector_new(1);
+	if (request->cids_we_want == NULL) goto exit;
+
+	cid = ipfs_cid_new(0, (const unsigned char*)"01234567890123456789012345678901", 32, CID_DAG_PROTOBUF);
+	if (cid == NULL) goto exit;
+
+	struct CidEntry* entry = ipfs_bitswap_peer_request_cid_entry_new();
+	if (entry == NULL) goto exit;
+	entry->cid = cid;
+	cid = NULL;
+	libp2p_utils_vector_add(request->cids_we_want, entry);
+
+	presence = ipfs_bitswap_block_presence_new();
+	if (presence == NULL) goto exit;
+	presence->cid = malloc(32);
+	if (presence->cid == NULL) goto exit;
+	memcpy(presence->cid, "01234567890123456789012345678901", 32);
+	presence->cid_size = 32;
+	presence->type = BLOCK_PRESENCE_HAVE;
+
+	if (!ipfs_bitswap_network_handle_block_presence(request, presence)) goto exit;
+	if (request->cids_we_want->total != 0) goto exit;
+
+	retVal = 1;
+exit:
+	if (cid) ipfs_cid_free(cid);
+	if (request) ipfs_bitswap_peer_request_free(request);
+	if (presence) ipfs_bitswap_block_presence_free(presence);
+	return retVal;
+}

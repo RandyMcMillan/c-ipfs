@@ -10,6 +10,7 @@
 #include "libp2p/utils/logger.h"
 #include "ipfs/exchange/bitswap/network.h"
 #include "ipfs/exchange/bitswap/peer_request_queue.h"
+#include "ipfs/cid/cid.h"
 
 /****
  * send a message to a particular peer
@@ -75,9 +76,39 @@ int ipfs_bitswap_network_adjust_cid_queue(struct Libp2pVector* collection, struc
 		cidEntry->cid = cid;
 		cidEntry->cancel = 0;
 		libp2p_utils_vector_add(collection, cidEntry);
+		return 1;
 	}
 
 	return 0;
+}
+
+/***
+ * React to a remote peer's Bitswap 1.2.0 block presence announcement.
+ * If the peer has a block that we were requesting, mark the request as
+ * complete/canceled so duplicate work is avoided.
+ * @param peer_request the request queue entry for the remote peer
+ * @param presence the received presence announcement
+ * @returns true(1) on success, false(0) otherwise
+ */
+int ipfs_bitswap_network_handle_block_presence(struct PeerRequest* peer_request, const struct BitswapBlockPresence* presence) {
+	if (peer_request == NULL || presence == NULL || presence->cid == NULL || presence->cid_size == 0)
+		return 0;
+
+	struct Cid* cid = ipfs_cid_new(0, presence->cid, presence->cid_size, CID_DAG_PROTOBUF);
+	if (cid == NULL)
+		return 0;
+
+	int retVal = 0;
+	if (presence->type == BLOCK_PRESENCE_HAVE) {
+		/* A HAVE announcement means the peer can satisfy matching pending wants. */
+		ipfs_bitswap_network_adjust_cid_queue(peer_request->cids_we_want, cid, 1);
+		retVal = 1;
+	} else {
+		retVal = 1;
+	}
+
+	ipfs_cid_free(cid);
+	return retVal;
 }
 
 /***
@@ -113,6 +144,18 @@ int ipfs_bitswap_network_handle_message(const struct IpfsNode* node, const struc
 			node->exchange->HasBlock(node->exchange, ipfs_block_copy(blk));
 		}
 	}
+	// block presences - what peers can serve (Bitswap 1.2.0)
+	if (message->block_presences != NULL && message->block_presences->total > 0 && sessionContext->remote_peer_id != NULL) {
+		struct Libp2pPeer* presence_peer = libp2p_peerstore_get_or_add_peer_by_id(node->peerstore, (unsigned char*)sessionContext->remote_peer_id, strlen(sessionContext->remote_peer_id));
+		if (presence_peer != NULL) {
+			struct PeerRequest* presence_request = ipfs_peer_request_queue_find_peer(bitswapContext->peerRequestQueue, presence_peer);
+			for(int i = 0; i < message->block_presences->total; i++) {
+				struct BitswapBlockPresence* presence_entry = (struct BitswapBlockPresence*)libp2p_utils_vector_get(message->block_presences, i);
+				ipfs_bitswap_network_handle_block_presence(presence_request, presence_entry);
+			}
+		}
+	}
+
 	// wantlist - what they want
 	if (message->wantlist != NULL && message->wantlist->entries != NULL && message->wantlist->entries->total > 0) {
 		// get the peer
