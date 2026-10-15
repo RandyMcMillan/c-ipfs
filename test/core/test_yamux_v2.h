@@ -191,10 +191,9 @@ static void* yamux_goaway_server(void* arg)
         char buf[64];
         ssize_t n = stream->read(stream, (unsigned char*)buf, sizeof(buf));
         (void)n;
-        stream->close(stream);
     }
 
-    /* Close the transport after all streams are closed. */
+    /* Send GO_AWAY while the stream is still open; the client read must fail. */
     libp2p_yamux_session_goaway(session, 0);
     libp2p_yamux_session_free(session);
     ctx->ok = 1;

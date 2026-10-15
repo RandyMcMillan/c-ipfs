@@ -9,20 +9,17 @@ Last updated: 2026-10-15
 - [x] P0.12 HTTP API JSON: integrate `core/api_kubo_rpc.c` with real `/api/v0` dispatcher (`id`, `version`), default to dedicated port, add `id`/`version` tests, commit and push.
 - [x] P0.9 Yamux: implement WINDOW_UPDATE handling, automatic receive-window replenishment, SYN-ACK on accept, PING request/response, GO_AWAY handling, and safe stream/session close.
 - [x] P0.9 Yamux tests: `test_yamux_v2_stream_roundtrip`, `test_yamux_v2_ping`, `test_yamux_v2_goaway`, `test_yamux_v2_window_update` all pass; c-libp2p submodule committed and pushed; pointer updated in c-ipfs.
+- [x] P0.2 v2 wire protocol handshake integration:
+  - Implement `ipfs_swarm_connect_v2_bridge()` in `transport/swarm_dialer_v2_bridge.c` with TCP dial, `/noise` multistream negotiation, Noise XX initiator handshake, Yamux client session, and Identify exchange.
+  - Make inbound `core/v2_listen.c` hand the Yamux session off to a background thread so it stays alive to accept multiple streams.
+  - Add `test_swarm_connect_v2_bridge` that starts a local v2 listener and dials it via the bridge.
 
 ## In Progress
 
-- [ ] P0.2 v2 wire protocol handshake integration
-  - Implement `ipfs_swarm_connect_v2_bridge()` in `transport/swarm_dialer_v2_bridge.c`:
-    - Parse `/ip4/<ip>/tcp/<port>` (and `/p2p/<id>` if present).
-    - TCP dial via `libp2p_net_tcp_dial`.
-    - Multistream negotiate `/noise`.
-    - Noise XX initiator handshake using RSA identity callbacks.
-    - Yamux client session.
-    - Identify exchange.
-    - Return a bridge holding the Yamux session and first stream.
-  - Make inbound `core/v2_listen.c` keep the Yamux session alive to accept multiple streams (Identify, Bitswap, etc.).
-  - Add a focused test that starts a local v2 listener and dials it via the v2 bridge.
+- [ ] Final verification and push of the P0.2 changes:
+  - Wait for full `test/test_ipfs` default suite to pass.
+  - Commit c-ipfs side changes and update the `c-libp2p` submodule pointer.
+  - Push c-ipfs master.
 
 ## Next
 
@@ -30,12 +27,6 @@ Last updated: 2026-10-15
    - Review `namesys/verify.c`, `namesys/resolver.c`, `namesys/namesys.c` for V1/V2 record validation gaps.
    - Ensure V2 signature validation and record lifetime checks match Kubo semantics.
    - Add/update tests in `test_namesys_verify.h`.
-
-2. **Final verification and push**
-   - `make all` at repo root.
-   - Full `test/test_ipfs` default suite passes.
-   - Commit each logical change with descriptive messages.
-   - Push c-ipfs master and any c-libp2p submodule changes.
 
 ## Open Questions
 

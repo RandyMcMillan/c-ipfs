@@ -42,6 +42,7 @@
 #include "exchange/test_bitswap_future.h"
 #include "pubsub/test_gossipsub.h"
 #include "transport/test_transport.h"
+#include "transport/test_swarm_dialer_v2_bridge.h"
 #include "core/test_yamux_v2.h"
 #include "repo/test_repo_lock.h"
 #include "nostr/test_nostr_ipfs_kinds.h"
@@ -257,6 +258,7 @@ int build_test_collection() {
 	add_test("test_transport_ws_create_without_libwebsockets", test_transport_ws_create_without_libwebsockets, 1);
 	add_test("test_transport_registry_init_add_free", test_transport_registry_init_add_free, 1);
 	add_test("test_transport_registry_remove", test_transport_registry_remove, 1);
+	add_test("test_swarm_connect_v2_bridge", test_swarm_connect_v2_bridge, 1);
 	add_test("test_transport_registry_dial_no_match", test_transport_registry_dial_no_match, 1);
 	add_test("test_transport_registry_dial_match", test_transport_registry_dial_match, 1);
 	add_test("test_transport_registry_live_tcp_dial", test_transport_registry_live_tcp_dial, 0); // manual live integration; can be flaky under daemon startup timing

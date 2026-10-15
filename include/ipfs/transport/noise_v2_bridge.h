@@ -28,4 +28,11 @@ struct Stream *ipfs_noise_handshake_legacy(struct Stream *legacy_raw_stream,
 struct Stream *ipfs_noise_handshake_legacy_2arg(struct Stream *legacy_raw_stream,
                                                  void *private_key);
 
+/**
+ * Return the default RSA-based Noise identity callbacks used by c-ipfs.
+ * This allows v2 handshake initiators (e.g. swarm_dialer_v2_bridge) to share
+ * the same payload signing/verification logic as the legacy bridge.
+ */
+const noise_identity_callbacks_t *ipfs_noise_rsa_callbacks(void);
+
 #endif

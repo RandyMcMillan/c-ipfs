@@ -129,6 +129,10 @@ static const noise_identity_callbacks_t noise_rsa_callbacks = {
     .free_buffer = noise_rsa_free_buffer,
 };
 
+const noise_identity_callbacks_t *ipfs_noise_rsa_callbacks(void) {
+    return &noise_rsa_callbacks;
+}
+
 /* ============================================================================
  * Bridge Functions
  * ============================================================================ */
