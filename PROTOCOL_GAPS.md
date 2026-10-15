@@ -69,7 +69,8 @@
 - **Complexity:** Medium
 
 ### 6. DNSADDR Bootstrap Resolution
-- **Status:** `scaffold` — `repo/config/bootstrap_peers.c` lists dnsaddr entries in comments but only loads the direct IP4 peer.
+- **Status update (2026-09-04):** c-ipfs now recursively resolves dnsaddr TXT records and materializes /dns4 records into IP4 peers with peer IDs (`transport/dnsaddr_resolver.c`, `repo/config/bootstrap_peers.c`). Remaining: wire the resolver robustly into bootstrap peer construction and tests.
+- **Status:** `partial` — recursive DNSADDR resolver now exists; materializes `/dns4` results into `/ip4` peers (transport/dnsaddr_resolver.c).
 - **Root cause:** c-multiaddr does not have a `dnsaddr` protocol code.
 - **What Kubo does:** Resolves `/dnsaddr/bootstrap.libp2p.io` via DNS TXT records to discover actual peer multiaddrs at runtime.
 - **What we need:**
@@ -80,6 +81,7 @@
 - **Complexity:** Low-Medium
 
 ### 7. Kademlia DHT Standard Compliance
+- **Status update (2026-09-04):** iterative lookup now orders candidates by XOR distance and limits each round to alpha=3 (`routing/online.c`, `routing/k_routing.c`). Bucketing/splitting and provider re-provide remain outstanding.
 - **Status:** `partial` — DHT messages exist but iterative lookup logic is not fully spec-compatible.
 - **Root cause:** `routing/k_routing.c` and `c-libp2p/routing/dht.c` use a simplified lookup that doesn't always return the K closest peers.
 - **What Kubo does:** Strictly follows the libp2p Kademlia spec: alpha=3 parallel queries, K=20 bucket size, proper bucket splitting, XOR distance metric.
@@ -91,6 +93,7 @@
 - **Complexity:** High
 
 ### 8. Bitswap 1.2.0 Session & Presence
+- **Status update (2026-09-04):** c-ipfs fixed the cancel-adjust CID queue traversal bug that skipped missing entries (`exchange/bitswap/network.c`), and protocol serialization already covers Bitswap 1.2.0 want/cancel/presence fields.
 - **Status:** `partial` — WANT/HAVE messages exist but no session deduplication or cancel logic.
 - **Root cause:** `exchange/bitswap/` implements basic message encoding but lacks the Bitswap 1.2.0 want-manager session layer.
 - **What Kubo does:** Sessions deduplicate wants across multiple concurrent `ipfs cat/get` calls. Sends CANCEL when wants are satisfied. Uses HAVE/DONT_HAVE for block presence.
@@ -107,6 +110,7 @@
 - **Complexity:** Medium
 
 ### 10. Signed IPNS Records (v2)
+- **Status update (2026-09-04):** V2 protobuf now carries the optional data field; publisher/resolver sign and verify `ipns-signature:` + canonical record data (`namesys/pb.c`, `namesys/publisher.c`, `namesys/resolver.c`, `namesys/verify.c`).
 - **Status:** `partial` — `namesys/publisher.c` and `namesys/resolver.c` handle basic IPNS but not the modern v2 record format.
 - **Root cause:** The codebase uses an older IPNS protobuf format.
 - **What Kubo does:** Publishes and resolves IPNS records with v2 signatures (extra validation fields, EOL/validity).
@@ -137,8 +141,9 @@
 - **Complexity:** High
 
 ### 14. HTTP Gateway
-- **Status:** `not started`
-- **What we need:** Implement a Kubo-compatible HTTP gateway at `/ipfs/<cid>` and `/ipns/<name>` with proper content-type detection, range requests, and CORS.
+- **Status:** `partial` — in-process HTTP `/ipfs/<cid>` serving exists.
+- **Status update (2026-09-04):** c-ipfs exposes an in-process `/ipfs/<cid>` serving path via `ipfs_core_api_serve_gateway` with regression coverage (`core/api.c`, `test/core/test_api_gateway.h`). Full Kubo-style gateway features remain incomplete.
+- **What we need:** Implement the remaining Kubo-compatible gateway features (range requests, content-type, COS, `ipns/name` resolution) beyond in-process serving.
 - **Files:** `core/api.c`, `core/http_request.c` (new gateway handlers)
 - **Complexity:** Medium
 
