@@ -110,6 +110,7 @@
 - **Complexity:** Medium
 
 ### 10. Signed IPNS Records (v2)
+- **Status update (2026-09-04):** IPNS V2 verification now parses RSA and Ed25519 public-key envelopes and verifies the `ipns-signature:` record payload; 2048-bit RSA records have passing encode/parse/verify tests.
 - **Status update (2026-09-04):** V2 protobuf now carries the optional data field; publisher/resolver sign and verify `ipns-signature:` + canonical record data (`namesys/pb.c`, `namesys/publisher.c`, `namesys/resolver.c`, `namesys/verify.c`).
 - **Status:** `partial` — `namesys/publisher.c` and `namesys/resolver.c` handle basic IPNS but not the modern v2 record format.
 - **Root cause:** The codebase uses an older IPNS protobuf format.
