@@ -382,7 +382,7 @@ int repo_fsrepro_lmdb_open(int argc, char** argv, struct Datastore* datastore) {
 		db_context->db_environment = NULL;
 		return 0;
 	}
-	if (mdb_dbi_open(db_context->current_transaction, "DATASTORE", MDB_DUPSORT | MDB_CREATE, db_context->datastore_db ) != 0) {
+	if (mdb_dbi_open(db_context->current_transaction, "DATASTORE", MDB_CREATE, db_context->datastore_db ) != 0) {
 		mdb_txn_abort(db_context->current_transaction);
 		mdb_env_close(mdb_env);
 		db_context->db_environment = NULL;

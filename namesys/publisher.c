@@ -5,6 +5,7 @@
 #include <pthread.h>
 #include "libp2p/routing/dht_protocol.h"
 #include "libp2p/crypto/rsa.h"
+#include "libp2p/crypto/key.h"
 #include "ipfs/util/errs.h"
 #include "ipfs/util/time.h"
 #include "ipfs/namesys/pb.h"
@@ -277,6 +278,26 @@ int ipfs_namesys_publisher_publish(struct IpfsNode* local_node, char* path) {
 	entry->signature = (char*)signature;
 	entry->signature_size = signature_size;
 	signature = NULL; // ownership transferred to entry
+
+	/* Embed the publisher's public key for IPNS V2 verification. */
+	struct PublicKey publisher_public_key;
+	memset(&publisher_public_key, 0, sizeof(publisher_public_key));
+	publisher_public_key.type = KEYTYPE_RSA;
+	publisher_public_key.data = (unsigned char *)local_node->identity->private_key.public_key_der;
+	publisher_public_key.data_size = local_node->identity->private_key.public_key_length;
+	size_t publisher_pubkey_size = libp2p_crypto_public_key_protobuf_encode_size(&publisher_public_key);
+	if (publisher_pubkey_size > 0) {
+		entry->pubkey = malloc(publisher_pubkey_size);
+		if (!entry->pubkey) {
+			goto exit;
+		}
+		if (!libp2p_crypto_public_key_protobuf_encode(&publisher_public_key, (unsigned char *)entry->pubkey, publisher_pubkey_size, &entry->pubkey_size)) {
+			free(entry->pubkey);
+			entry->pubkey = NULL;
+			entry->pubkey_size = 0;
+			goto exit;
+		}
+	}
 
 	// Encode to protobuf
 	pb_buffer_size = 4096;
