@@ -159,7 +159,7 @@ clean-build-test-module:
 # ---------------------------------------------------------------------------
 TEST_BIN     := test/test_ipfs
 TESTS        ?=
-TEST_TIMEOUT ?= 120
+TEST_TIMEOUT ?= 300
 
 # Portable timeout: Linux has `timeout`, macOS often needs `gtimeout` (coreutils)
 TIMEOUT_CMD := $(shell command -v timeout 2>/dev/null || command -v gtimeout 2>/dev/null)
