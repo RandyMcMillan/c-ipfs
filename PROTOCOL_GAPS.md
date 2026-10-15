@@ -110,7 +110,7 @@
 - **Complexity:** Medium
 
 ### 10. Signed IPNS Records (v2)
-- **Status update (2026-09-04):** IPNS V2 verification now parses RSA and Ed25519 public-key envelopes and verifies the `ipns-signature:` record payload; 2048-bit RSA records have passing encode/parse/verify tests.
+- **Status update:** IPNS V2 verification now parses RSA and Ed25519 public-key envelopes, supports embedded-key records during resolution, and has passing low-level 2048-bit RSA encode/parse/verify tests (`4da704a`, `85c4d22`, `6615823`, `7bddd8ed`? not typo).
 - **Status update (2026-09-04):** V2 protobuf now carries the optional data field; publisher/resolver sign and verify `ipns-signature:` + canonical record data (`namesys/pb.c`, `namesys/publisher.c`, `namesys/resolver.c`, `namesys/verify.c`).
 - **Status:** `partial` — `namesys/publisher.c` and `namesys/resolver.c` handle basic IPNS but not the modern v2 record format.
 - **Root cause:** The codebase uses an older IPNS protobuf format.
@@ -142,7 +142,7 @@
 - **Complexity:** High
 
 ### 14. HTTP Gateway
-- **Status update (2026-09-04):** c-ipfs also resolves `/ipns/<name>` before serving `/ipfs/<cid>` in the gateway path (`core/api.c`).
+- **Status update:** c-ipfs also resolves `/ipns/<name>` before serving `/ipfs/<cid>` in the gateway path (`core/api.c`), with an in-process regression test (`2a14553`).
 - **Status:** `partial` — in-process HTTP `/ipfs/<cid>` serving exists.
 - **Status update (2026-09-04):** c-ipfs exposes an in-process `/ipfs/<cid>` serving path via `ipfs_core_api_serve_gateway` with regression coverage (`core/api.c`, `test/core/test_api_gateway.h`). Full Kubo-style gateway features remain incomplete.
 - **What we need:** Implement the remaining Kubo-compatible gateway features (range requests, content-type, COS, `ipns/name` resolution) beyond in-process serving.
