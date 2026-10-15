@@ -11,7 +11,29 @@
 #include "ipfs/importer/importer.h"
 #include "ipfs/merkledag/merkledag.h"
 #include "ipfs/namesys/publisher.h"
+#include "ipfs/dnslink/dnslink.h"
 #include "ipfs/cid/cid.h"
+
+static char* test_dnslink_expected_path = NULL;
+
+static int test_dnslink_mock_lookup(char*** txt, char* name)
+{
+    (void)name;
+    if (!test_dnslink_expected_path)
+        return 1;
+    char* record = malloc(strlen(test_dnslink_expected_path) + 10);
+    if (!record)
+        return 1;
+    sprintf(record, "dnslink=%s", test_dnslink_expected_path);
+    *txt = calloc(2, sizeof(char*));
+    if (!*txt) {
+        free(record);
+        return 1;
+    }
+    (*txt)[0] = record;
+    (*txt)[1] = NULL;
+    return 0;
+}
 
 int test_api_gateway_cat(void) {
     const char* ipfs_path = "./tmp/test_api_gateway";
@@ -462,5 +484,81 @@ int test_api_gateway_head(void) {
              !strstr(buf, "head-content");
 
     ipfs_node_free(local_node);
+    return ok;
+}
+
+int test_api_gateway_dnslink(void) {
+    const char* ipfs_path = "./tmp/test_api_gateway_dnslink";
+    {
+        char cmd[512];
+        snprintf(cmd, sizeof(cmd), "rm -rf %s", ipfs_path);
+        system(cmd);
+    }
+
+    const char* src = "./tmp/test_api_gateway_dnslink_src.txt";
+    FILE* f = fopen(src, "w");
+    if (!f) return 0;
+    fputs("dnslink-content", f);
+    fclose(f);
+
+    char* peer_id = NULL;
+    if (!drop_and_build_repository_without_bootstrap(ipfs_path, 0, &peer_id)) {
+        fprintf(stderr, "DROP FAIL\n");
+        return 0;
+    }
+    if (peer_id) free(peer_id);
+
+    struct IpfsNode* local_node = NULL;
+    if (!ipfs_node_offline_new(ipfs_path, &local_node)) {
+        fprintf(stderr, "OFFLINE FAIL\n");
+        return 0;
+    }
+    size_t bytes_written = 0;
+    struct HashtableNode* node = NULL;
+    ipfs_import_file(NULL, src, &node, local_node, &bytes_written, 0);
+    if (!node) {
+        ipfs_node_free(local_node);
+        return 0;
+    }
+
+    char hash[256] = "";
+    ipfs_cid_hash_to_base58(node->hash, node->hash_size, (unsigned char*)hash, 256);
+    ipfs_hashtable_node_free(node);
+
+    char path_buf[320];
+    snprintf(path_buf, sizeof(path_buf), "/ipfs/%s", hash);
+    test_dnslink_expected_path = path_buf;
+
+    int (*saved_lookup)(char***, char*) = ipfs_dnslink_lookup_txt;
+    ipfs_dnslink_lookup_txt = test_dnslink_mock_lookup;
+
+    char* resolved = NULL;
+    int sv[2];
+    if (socketpair(AF_UNIX, SOCK_STREAM, 0, sv) != 0) {
+        ipfs_node_free(local_node);
+        test_dnslink_expected_path = NULL;
+        ipfs_dnslink_lookup_txt = saved_lookup;
+        return 0;
+    }
+
+    int ret = ipfs_core_api_serve_gateway(sv[1], "/ipns/example.com", local_node);
+    close(sv[1]);
+    shutdown(sv[0], SHUT_WR);
+
+    char buf[4096] = "";
+    size_t total = 0;
+    for (;;) {
+        if (total >= sizeof(buf) - 1) break;
+        ssize_t n = read(sv[0], buf + total, sizeof(buf) - 1 - total);
+        if (n <= 0) break;
+        total += (size_t)n;
+    }
+    close(sv[0]);
+
+    int ok = ret && strstr(buf, "HTTP/1.1 200 OK") && strstr(buf, "dnslink-content");
+
+    ipfs_node_free(local_node);
+    test_dnslink_expected_path = NULL;
+    ipfs_dnslink_lookup_txt = saved_lookup;
     return ok;
 }

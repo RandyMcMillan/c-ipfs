@@ -155,7 +155,7 @@ int ipfs_dns (int argc, char **argv)
             if (memcmp(path, "/ipfs/", 6) == 0) {
                 break;
             }
-        } while (--r);
+        }
         fprintf (stdout, "%s\n", param);
         free (param);
 
@@ -188,6 +188,7 @@ int ipfs_dnslink_resolve_n (char **p, char *d, int depth)
     char *rest, **link, tail[500], buf[500], domain[500];
     char dns_prefix[] = "/dns/";
 
+    tail[0] = '\0';
     domain[sizeof(domain)-1] = '\0';
     strncpy (domain, d, sizeof(domain) - 1);
     for (i=0 ; i < depth ; i++) {
@@ -205,7 +206,7 @@ int ipfs_dnslink_resolve_n (char **p, char *d, int depth)
                 free(link);
                 return ErrAllocFailed;
             }
-            *p[l] = '\0';
+            (*p)[l] = '\0';
             strncpy(*p, *link, l);
             free(*link);
             free(link);
@@ -225,8 +226,14 @@ int ipfs_dnslink_resolve_n (char **p, char *d, int depth)
         strncpy (domain, d, sizeof(domain) - 1);
         free (d);
         strncpy (buf, tail, sizeof(buf) - 1);
-        strncpy (tail, rest, sizeof(tail) - 1);
-        strncat (tail, buf, sizeof(tail) - 1 - strlen(tail));
+        if (rest) {
+            strncpy (tail, rest, sizeof(tail) - 1);
+            strncat (tail, buf, sizeof(tail) - 1 - strlen(tail));
+            free (rest);
+        } else {
+            tail[0] = '\0';
+            strncat (tail, buf, sizeof(tail) - 1 - strlen(tail));
+        }
     }
 
     strncpy (buf, tail, sizeof(buf) - 1);
@@ -281,8 +288,8 @@ int ipfs_dnslink_resolve_n (char **p, char *d, int depth)
             }
             memcpy(p, buf, l); // transfer from buffer to allocated memory.
             for (i = 0 ; i < n ; i++) {
-                *txt[i] = p; // save position of current record at *txt array.
-                p = memchr(p, '\0', l - (p - *txt[0])) + 1; // find next record position after next \0
+                (*txt)[i] = p; // save position of current record at *txt array.
+                p = memchr(p, '\0', l - (p - (*txt)[0])) + 1; // find next record position after next \0
             }
         }
         return 0;
@@ -311,6 +318,16 @@ int ipfs_dnslink_resolve_once (char ***p, char *domain)
     }
 
     err = ipfs_dnslink_lookup_txt (&txt, domain);
+    if (err) {
+        /* Fallback to _dnslink.<domain> as Kubo does. */
+        size_t dl_len = strlen(domain) + sizeof("_dnslink.");
+        char* dl_domain = malloc(dl_len);
+        if (dl_domain) {
+            snprintf(dl_domain, dl_len, "_dnslink.%s", domain);
+            err = ipfs_dnslink_lookup_txt (&txt, dl_domain);
+            free(dl_domain);
+        }
+    }
 #endif
     if (err) {
         return err;
@@ -318,8 +335,16 @@ int ipfs_dnslink_resolve_once (char ***p, char *domain)
 
     err = ErrResolveFailed;
     for (i=0 ; txt[i] ; i++) {
-        err = ipfs_dnslink_parse_txt(*p, txt[i]);
+        char* parsed = NULL;
+        err = ipfs_dnslink_parse_txt(&parsed, txt[i]);
         if (!err) {
+            *p = (char**)malloc(sizeof(char*));
+            if (*p) {
+                **p = parsed;
+            } else {
+                free(parsed);
+                err = ErrAllocFailed;
+            }
             break;
         }
     }

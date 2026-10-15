@@ -20,6 +20,8 @@
 #include "ipfs/core/api.h"
 #include "ipfs/cid/cid.h"
 #include "ipfs/namesys/resolver.h"
+#include "ipfs/dnslink/dnslink.h"
+#include "ipfs/namesys/namesys.h"
 #include "ipfs/importer/exporter.h"
 #include "ipfs/merkledag/node.h"
 #include "ipfs/blocks/block.h"
@@ -359,28 +361,56 @@ static int api_serve_gateway_internal(int fd, const char* path, const char* quer
 		memcpy(name, name_start, name_len);
 		name[name_len] = '\0';
 
-		char ipns_path[512];
-		if (snprintf(ipns_path, sizeof(ipns_path), "/ipns/%s", name) >= (int)sizeof(ipns_path))
-			return 0;
-		if (!ipfs_namesys_resolver_resolve(local_node, ipns_path, 1, &resolved))
-			return 0;
-		if (!resolved || strncmp(resolved, "/ipfs/", 6) != 0) {
-			if (resolved)
-				free(resolved);
-			return 0;
-		}
-		if (name_end) {
-			size_t ipfs_len = strlen(resolved);
-			size_t suffix_len = strlen(name_end);
-			char* joined = malloc(ipfs_len + suffix_len + 1);
-			if (!joined) {
-				free(resolved);
+		if (ipfs_isdomain_is_domain(name)) {
+			/* DNSLink resolution for /ipns/<domain>. (dnslink.c uses 0 for success) */
+			char* dns_result = NULL;
+			if (ipfs_dnslink_resolve(&dns_result, name) != 0) {
+				libp2p_logger_error("api", "DNSLink resolution failed for %s\n", name);
 				return 0;
 			}
-			memcpy(joined, resolved, ipfs_len);
-			strcpy(joined + ipfs_len, name_end);
-			free(resolved);
-			resolved = joined;
+			libp2p_logger_info("api", "DNSLink resolved %s -> %s\n", name, dns_result);
+			if (!dns_result || strncmp(dns_result, "/ipfs/", 6) != 0) {
+				free(dns_result);
+				return 0;
+			}
+			resolved = dns_result;
+			if (name_end) {
+				size_t ipfs_len = strlen(resolved);
+				size_t suffix_len = strlen(name_end);
+				char* joined = malloc(ipfs_len + suffix_len + 1);
+				if (!joined) {
+					free(resolved);
+					return 0;
+				}
+				memcpy(joined, resolved, ipfs_len);
+				strcpy(joined + ipfs_len, name_end);
+				free(resolved);
+				resolved = joined;
+			}
+		} else {
+			char ipns_path[512];
+			if (snprintf(ipns_path, sizeof(ipns_path), "/ipns/%s", name) >= (int)sizeof(ipns_path))
+				return 0;
+			if (!ipfs_namesys_resolver_resolve(local_node, ipns_path, 1, &resolved))
+				return 0;
+			if (!resolved || strncmp(resolved, "/ipfs/", 6) != 0) {
+				if (resolved)
+					free(resolved);
+				return 0;
+			}
+			if (name_end) {
+				size_t ipfs_len = strlen(resolved);
+				size_t suffix_len = strlen(name_end);
+				char* joined = malloc(ipfs_len + suffix_len + 1);
+				if (!joined) {
+					free(resolved);
+					return 0;
+				}
+				memcpy(joined, resolved, ipfs_len);
+				strcpy(joined + ipfs_len, name_end);
+				free(resolved);
+				resolved = joined;
+			}
 		}
 	}
 
