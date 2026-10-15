@@ -393,7 +393,6 @@ static int api_serve_gateway(int fd, const char* path, struct IpfsNode* local_no
 		ipfs_cid_free(root_cid);
 		if (resolved)
 			free(resolved);
-		write_cstr(fd, HTTP_404);
 		return 0;
 	}
 	ipfs_cid_free(root_cid);
@@ -404,8 +403,7 @@ static int api_serve_gateway(int fd, const char* path, struct IpfsNode* local_no
 			ipfs_hashtable_node_free(node);
 			if (resolved)
 				free(resolved);
-			write_cstr(fd, HTTP_404);
-			return 0;
+				return 0;
 		}
 		char* segment = strtok(cursor, "/");
 		while (segment && *segment) {
@@ -424,8 +422,7 @@ static int api_serve_gateway(int fd, const char* path, struct IpfsNode* local_no
 					ipfs_hashtable_node_free(node);
 				if (resolved)
 					free(resolved);
-				write_cstr(fd, HTTP_404);
-				return 0;
+						return 0;
 			}
 			if (node)
 				ipfs_hashtable_node_free(node);
@@ -442,7 +439,6 @@ static int api_serve_gateway(int fd, const char* path, struct IpfsNode* local_no
 		ipfs_hashtable_node_free(node);
 		if (resolved)
 			free(resolved);
-		write_cstr(fd, HTTP_404);
 		return 0;
 	}
 
@@ -451,7 +447,6 @@ static int api_serve_gateway(int fd, const char* path, struct IpfsNode* local_no
 		ipfs_hashtable_node_free(node);
 		if (resolved)
 			free(resolved);
-		write_cstr(fd, HTTP_404);
 		return 0;
 	}
 
@@ -468,7 +463,6 @@ static int api_serve_gateway(int fd, const char* path, struct IpfsNode* local_no
 			free(content);
 		if (resolved)
 			free(resolved);
-		write_cstr(fd, HTTP_404);
 		return 0;
 	}
 
