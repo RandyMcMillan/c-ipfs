@@ -21,6 +21,7 @@
 #include "ipfs/cid/cid.h"
 #include "ipfs/namesys/resolver.h"
 #include "ipfs/importer/exporter.h"
+#include "ipfs/merkledag/node.h"
 #include "ipfs/core/http_request.h"
 
 /* Forward declaration from core/api_gzip.c */
@@ -450,13 +451,32 @@ static int api_serve_gateway_internal(int fd, const char* path, const char* rang
 		return 0;
 	}
 
+	int is_directory = ipfs_hashtable_node_is_directory(node);
+
 	char* content = NULL;
 	size_t content_size = 0;
-	FILE* mem = open_memstream(&content, &content_size);
-	int ret = ipfs_exporter_object_cat_to_file(local_node, final_cid->hash, final_cid->hash_length, mem);
+	int ret = 0;
+	if (is_directory) {
+		FILE* mem = open_memstream(&content, &content_size);
+		if (mem) {
+			fprintf(mem, "<html><body><h1>Index of %s</h1><ul>\n", request_path ? request_path : "");
+			for (struct NodeLink* link = node ? node->head_link : NULL; link; link = link->next) {
+				const char* name = (link->name && link->name[0]) ? link->name : "unnamed";
+				fprintf(mem, "<li><a href=\"./%s\">%s</a></li>\n", name, name);
+			}
+			fprintf(mem, "</ul></body></html>\n");
+			fclose(mem);
+			ret = content != NULL;
+		}
+	} else {
+		FILE* mem = open_memstream(&content, &content_size);
+		if (mem) {
+			ret = ipfs_exporter_object_cat_to_file(local_node, final_cid->hash, final_cid->hash_length, mem);
+			fclose(mem);
+		}
+	}
 	ipfs_cid_free(final_cid);
 	ipfs_hashtable_node_free(node);
-	fclose(mem);
 
 	if (!ret) {
 		if (content)
@@ -467,8 +487,10 @@ static int api_serve_gateway_internal(int fd, const char* path, const char* rang
 	}
 
 	const char* content_type = "application/octet-stream";
+	if (is_directory)
+		content_type = "text/html; charset=utf-8";
 	const char* ext = strrchr(request_path, '.');
-	if (ext) {
+	if (ext && !is_directory) {
 		if (strcasecmp(ext, ".html") == 0 || strcasecmp(ext, ".htm") == 0)
 			content_type = "text/html; charset=utf-8";
 		else if (strcasecmp(ext, ".css") == 0)

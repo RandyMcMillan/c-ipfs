@@ -144,7 +144,7 @@
 ### 14. HTTP Gateway
 - **Status update:** c-ipfs also resolves `/ipns/<name>` before serving `/ipfs/<cid>` in the gateway path (`core/api.c`), with an in-process regression test (`2a14553`).
 - **Status:** `partial` — in-process HTTP `/ipfs/<cid>` serving exists.
-- **Status update (2026-09-04):** c-ipfs now serves both `/ipfs/<cid>` and `/ipns/<name>`, resolves nested DAG paths, sniffs content type from the requested path, and returns 404s for unresolved gateway paths (`core/api.c`, `test/core/test_api_gateway.h`). Full Kubo-style range/CORS work remains open.
+- **Status update (2026-10-14):** Gateway now also parses HTTP `Range`, returns `206 Partial Content` with `Content-Range`, supports byte/suffix/open-ended ranges, returns `416 Range Not Satisfiable`, and sends `Access-Control-Allow-Origin: *` (`core/api.c`, `include/ipfs/core/api.h`). Directory listings, DNSLink, and trustless-gateway headers remain open.
 - **What we need:** Implement the remaining Kubo-compatible gateway features (range requests, content-type, COS, `ipns/name` resolution) beyond in-process serving.
 - **Files:** `core/api.c`, `core/http_request.c` (new gateway handlers)
 - **Complexity:** Medium
