@@ -313,70 +313,196 @@ struct ApiConnectionParam {
  */
 
 static int api_serve_gateway(int fd, const char* path, struct IpfsNode* local_node);
+
 int ipfs_core_api_serve_gateway(int fd, const char* path, struct IpfsNode* local_node) {
-    return api_serve_gateway(fd, path, local_node);
+	return api_serve_gateway(fd, path, local_node);
 }
 
 static int api_serve_gateway(int fd, const char* path, struct IpfsNode* local_node) {
-	const char* resolved_path = path;
+	const char* request_path = path ? path : "";
 	char* resolved = NULL;
 
-	if (strncmp(path, "/ipfs/", 6) != 0 && strncmp(path, "/ipns/", 6) != 0)
+	if (strncmp(request_path, "/ipfs/", 6) != 0 && strncmp(request_path, "/ipns/", 6) != 0)
 		return 0;
 
-	if (strncmp(path, "/ipns/", 6) == 0 && local_node) {
-		const char* name = path + 6;
-		if (!name || strlen(name) == 0)
+	if (strncmp(request_path, "/ipns/", 6) == 0 && local_node) {
+		const char* name_start = request_path + 6;
+		const char* name_end = strchr(name_start, '/');
+		char name[512];
+		size_t name_len = name_end ? (size_t)(name_end - name_start) : strlen(name_start);
+		if (name_len == 0 || name_len >= sizeof(name))
 			return 0;
+		memcpy(name, name_start, name_len);
+		name[name_len] = '\0';
+
 		char ipns_path[512];
 		if (snprintf(ipns_path, sizeof(ipns_path), "/ipns/%s", name) >= (int)sizeof(ipns_path))
 			return 0;
 		if (!ipfs_namesys_resolver_resolve(local_node, ipns_path, 1, &resolved))
 			return 0;
-		if (!resolved || strncmp(resolved, "/ipfs/", 6) != 0)
+		if (!resolved || strncmp(resolved, "/ipfs/", 6) != 0) {
+			if (resolved)
+				free(resolved);
 			return 0;
-		resolved_path = resolved;
+		}
+		if (name_end) {
+			size_t ipfs_len = strlen(resolved);
+			size_t suffix_len = strlen(name_end);
+			char* joined = malloc(ipfs_len + suffix_len + 1);
+			if (!joined) {
+				free(resolved);
+				return 0;
+			}
+			memcpy(joined, resolved, ipfs_len);
+			strcpy(joined + ipfs_len, name_end);
+			free(resolved);
+			resolved = joined;
+		}
 	}
 
-	const char* hash = resolved_path + 6;
-	if (!hash || strlen(hash) == 0) {
-		if (resolved) free(resolved);
+	const char* root_hash = resolved ? resolved + 6 : request_path + 6;
+	if (*root_hash == '\0') {
+		if (resolved)
+			free(resolved);
 		return 0;
 	}
 
-	struct Cid* cid = NULL;
-	if (!ipfs_cid_decode_hash_from_base58((unsigned char*)hash, strlen(hash), &cid)) {
-		if (resolved) free(resolved);
+	size_t root_hash_len = strcspn(root_hash, "/");
+	char root_hash_text[512];
+	if (root_hash_len == 0 || root_hash_len >= sizeof(root_hash_text)) {
+		if (resolved)
+			free(resolved);
+		return 0;
+	}
+	memcpy(root_hash_text, root_hash, root_hash_len);
+	root_hash_text[root_hash_len] = '\0';
+
+	struct Cid* root_cid = NULL;
+	if (!ipfs_cid_decode_hash_from_base58((unsigned char*)root_hash_text, root_hash_len, &root_cid)) {
+		if (resolved)
+			free(resolved);
+		return 0;
+	}
+
+	const char* extra_path = root_hash + root_hash_len;
+	while (*extra_path == '/')
+		extra_path++;
+
+	struct HashtableNode* node = NULL;
+	if (!ipfs_exporter_get_node(local_node, root_cid->hash, root_cid->hash_length, &node)) {
+		ipfs_cid_free(root_cid);
+		if (resolved)
+			free(resolved);
+		write_cstr(fd, HTTP_404);
+		return 0;
+	}
+	ipfs_cid_free(root_cid);
+
+	if (*extra_path) {
+		char* cursor = strdup(extra_path);
+		if (!cursor) {
+			ipfs_hashtable_node_free(node);
+			if (resolved)
+				free(resolved);
+			write_cstr(fd, HTTP_404);
+			return 0;
+		}
+		char* segment = strtok(cursor, "/");
+		while (segment && *segment) {
+			struct NodeLink* link = node ? node->head_link : NULL;
+			struct HashtableNode* child = NULL;
+			while (link) {
+				if (link->name && strcmp(link->name, segment) == 0
+				    && ipfs_exporter_get_node(local_node, link->hash, link->hash_size, &child)) {
+					break;
+				}
+				link = link->next;
+			}
+			if (!child) {
+				free(cursor);
+				if (node)
+					ipfs_hashtable_node_free(node);
+				if (resolved)
+					free(resolved);
+				write_cstr(fd, HTTP_404);
+				return 0;
+			}
+			if (node)
+				ipfs_hashtable_node_free(node);
+			node = child;
+			segment = strtok(NULL, "/");
+		}
+		free(cursor);
+	}
+
+	unsigned char final_b58[512];
+	final_b58[0] = '\0';
+	ipfs_cid_hash_to_base58(node->hash, node->hash_size, final_b58, sizeof(final_b58));
+	if (!final_b58[0]) {
+		ipfs_hashtable_node_free(node);
+		if (resolved)
+			free(resolved);
+		write_cstr(fd, HTTP_404);
+		return 0;
+	}
+
+	struct Cid* final_cid = NULL;
+	if (!ipfs_cid_decode_hash_from_base58(final_b58, strlen((const char*)final_b58), &final_cid)) {
+		ipfs_hashtable_node_free(node);
+		if (resolved)
+			free(resolved);
+		write_cstr(fd, HTTP_404);
 		return 0;
 	}
 
 	char* content = NULL;
 	size_t content_size = 0;
 	FILE* mem = open_memstream(&content, &content_size);
-	int ret = ipfs_exporter_object_cat_to_file(local_node, cid->hash, cid->hash_length, mem);
-	ipfs_cid_free(cid);
+	int ret = ipfs_exporter_object_cat_to_file(local_node, final_cid->hash, final_cid->hash_length, mem);
+	ipfs_cid_free(final_cid);
+	ipfs_hashtable_node_free(node);
 	fclose(mem);
 
 	if (!ret) {
-		if (content) free(content);
-		if (resolved) free(resolved);
+		if (content)
+			free(content);
+		if (resolved)
+			free(resolved);
+		write_cstr(fd, HTTP_404);
 		return 0;
 	}
 
-	char header[256];
+	const char* content_type = "application/octet-stream";
+	const char* ext = strrchr(request_path, '.');
+	if (ext) {
+		if (strcasecmp(ext, ".html") == 0 || strcasecmp(ext, ".htm") == 0)
+			content_type = "text/html; charset=utf-8";
+		else if (strcasecmp(ext, ".css") == 0)
+			content_type = "text/css; charset=utf-8";
+		else if (strcasecmp(ext, ".js") == 0)
+			content_type = "application/javascript; charset=utf-8";
+		else if (strcasecmp(ext, ".json") == 0)
+			content_type = "application/json; charset=utf-8";
+		else if (strcasecmp(ext, ".txt") == 0 || strcasecmp(ext, ".md") == 0)
+			content_type = "text/plain; charset=utf-8";
+		else if (strcasecmp(ext, ".svg") == 0)
+			content_type = "image/svg+xml";
+	}
+
+	char header[512];
 	snprintf(header, sizeof(header),
-		"HTTP/1.1 200 OK\r\n"
-		"Content-Type: application/octet-stream\r\n"
-		"Content-Length: %zu\r\n"
-		"Connection: close\r\n"
-		"\r\n", content_size);
+	  "HTTP/1.1 200 OK\r\n"
+	  "Content-Type: %s\r\n"
+	  "Content-Length: %zu\r\n"
+	  "Connection: close\r\n"
+	  "\r\n", content_type, content_size);
 	write_str(fd, header);
 	write(fd, content, content_size);
 	free(content);
-	if (resolved) free(resolved);
+	if (resolved)
+		free(resolved);
 	return 1;
 }
-
 /***
  * Take an s_request and turn it into an HttpRequest
  * @param req the incoming s_request
