@@ -141,6 +141,7 @@
 - **Complexity:** High
 
 ### 14. HTTP Gateway
+- **Status update (2026-09-04):** c-ipfs also resolves `/ipns/<name>` before serving `/ipfs/<cid>` in the gateway path (`core/api.c`).
 - **Status:** `partial` — in-process HTTP `/ipfs/<cid>` serving exists.
 - **Status update (2026-09-04):** c-ipfs exposes an in-process `/ipfs/<cid>` serving path via `ipfs_core_api_serve_gateway` with regression coverage (`core/api.c`, `test/core/test_api_gateway.h`). Full Kubo-style gateway features remain incomplete.
 - **What we need:** Implement the remaining Kubo-compatible gateway features (range requests, content-type, COS, `ipns/name` resolution) beyond in-process serving.
