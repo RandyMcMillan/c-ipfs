@@ -17,7 +17,7 @@
 ## P0 — Kubo Interop Blockers
 
 ### 1. Security Protocol: Noise XX (or TLS 1.3)
-- **Status:** `partial` — Outbound v2 Noise XX handshake works against Kubo v0.43.0. Inbound listener still uses legacy SECIO.
+- **Status:** `partial` — Outbound v2 Noise XX and inbound v2 listener (`ipfs_v2_listen_handler` via `core/null.c`) both run Noise XX → Yamux → Identify. Remaining work is broader daemon path parity and peerstate polish.
 - **Root cause:** The legacy c-libp2p stack only speaks SECIO. Kubo v0.43.0 removed SECIO entirely.
 - **What Kubo does:** Offers `/noise` as the only security protocol on incoming connections. Expects initiators to perform a Noise_XX_25519_ChaChaPoly_SHA256 handshake with libp2p-specific payloads.
 - **What we need:**
@@ -28,16 +28,16 @@
 - **Complexity:** High
 
 ### 2. Multistream Select 2.0 / Early Muxer Negotiation
-- **Status:** `partial` — Outbound dialer chains multistream correctly:
+- **Status:** `done` — `libp2p_stream_get_latest_stream` now recognizes `STREAM_TYPE_BRIDGE` and keeps bridge streams from being mistaken for raw `ConnectionContext` streams. — Outbound dialer chains multistream correctly:
   TCP → `/multistream/1.0.0` → `/noise` → Noise handshake → `/multistream/1.0.0` → `/yamux/1.0.0`.
   **Blocked by bridge stream bug:** `libp2p_stream_get_latest_stream` in `c-libp2p/net/stream.c` assumes `STREAM_TYPE_RAW` means `ConnectionContext*`. The Noise bridge stream (`transport/stream_bridge.c`) also uses `STREAM_TYPE_RAW` but holds `bridge_context_t`. When the swarm thread reads the multistream ack from Kubo, `libp2p_stream_get_latest_stream` reads garbage/NULL for `session_context`, so the multistream handler never updates the ack status and the dialer times out.
-- **Root cause:** `libp2p_stream_get_latest_stream` lacks bridge-stream handling.
-- **What we need:** Fix `libp2p_stream_get_latest_stream` to fall back to `parent_stream` when a RAW stream's `session_context` is NULL/invalid (or introduce `STREAM_TYPE_BRIDGE`).
+- **Root cause:** `libp2p_stream_get_latest_stream` initially assumed `STREAM_TYPE_RAW` always carried a `ConnectionContext`; bridge streams from `ipfs/transport/stream_bridge.c` also used `STREAM_TYPE_RAW` but held a `bridge_context_t`.
+- **Resolution:** Both `c-libp2p` and `c-ipfs` now classify bridge streams as `STREAM_TYPE_BRIDGE`, so multistream ack reads over a bridged Noise connection continue to use the correct parent stream.
 - **Files:** `c-libp2p/net/stream.c`, `transport/stream_bridge.c`
 - **Complexity:** Low
 
 ### 3. Identify Protocol (/ipfs/id/1.0.0)
-- **Status:** `partial` — `libp2p_identify_send_response` now encodes fields 1-6 (publicKey, listenAddrs, protocols, observedAddr, protocolVersion, agentVersion) using c-protobuf. `Peerstore` struct extended with `public_key` and `listen_addrs`. **Not wired into the live daemon yet; only used by v2 test swarm.**
+- **Status:** `partial` — inbound listener now drives Identify over Yamux, while daemon-wide v1-to-v2 migration remains open. `libp2p_identify_send_response` now encodes fields 1-6 (publicKey, listenAddrs, protocols, observedAddr, protocolVersion, agentVersion) using c-protobuf. `Peerstore` struct extended with `public_key` and `listen_addrs`. **Not wired into the live daemon yet; only used by v2 test swarm.**
 - **Root cause:** v2 identify encoder exists but daemon listener still uses v1 identify.
 - **What Kubo does:** After Yamux is established, opens a new stream and sends an Identify protobuf message containing: listen addrs, protocols, observed addr, agent version, public key.
 - **What we need:**
@@ -70,7 +70,7 @@
 
 ### 6. DNSADDR Bootstrap Resolution
 - **Status update (2026-09-04):** c-ipfs now recursively resolves dnsaddr TXT records and materializes /dns4 records into IP4 peers with peer IDs (`transport/dnsaddr_resolver.c`, `repo/config/bootstrap_peers.c`). Remaining: wire the resolver robustly into bootstrap peer construction and tests.
-- **Status:** `partial` — recursive DNSADDR resolver now exists; materializes `/dns4` results into `/ip4` peers (transport/dnsaddr_resolver.c).
+- **Status:** `partial` — recursive DNSADDR resolver runs from bootstrap peer construction and now materializes `/dns4` records into `/ip4` peers with peer IDs (`repo/config/bootstrap_peers.c`, `transport/dnsaddr_resolver.c`). Remaining: end-to-end targeted tests.
 - **Root cause:** c-multiaddr does not have a `dnsaddr` protocol code.
 - **What Kubo does:** Resolves `/dnsaddr/bootstrap.libp2p.io` via DNS TXT records to discover actual peer multiaddrs at runtime.
 - **What we need:**
@@ -144,7 +144,7 @@
 ### 14. HTTP Gateway
 - **Status update:** c-ipfs also resolves `/ipns/<name>` before serving `/ipfs/<cid>` in the gateway path (`core/api.c`), with an in-process regression test (`2a14553`).
 - **Status:** `partial` — in-process HTTP `/ipfs/<cid>` serving exists.
-- **Status update (2026-09-04):** c-ipfs exposes an in-process `/ipfs/<cid>` serving path via `ipfs_core_api_serve_gateway` with regression coverage (`core/api.c`, `test/core/test_api_gateway.h`). Full Kubo-style gateway features remain incomplete.
+- **Status update (2026-09-04):** c-ipfs now serves both `/ipfs/<cid>` and `/ipns/<name>`, resolves nested DAG paths, sniffs content type from the requested path, and returns 404s for unresolved gateway paths (`core/api.c`, `test/core/test_api_gateway.h`). Full Kubo-style range/CORS work remains open.
 - **What we need:** Implement the remaining Kubo-compatible gateway features (range requests, content-type, COS, `ipns/name` resolution) beyond in-process serving.
 - **Files:** `core/api.c`, `core/http_request.c` (new gateway handlers)
 - **Complexity:** Medium
@@ -163,7 +163,7 @@
 - **Complexity:** Medium
 
 ### 17. FFI Progress Callbacks
-- **Status:** `partial` — `ipfs_ffi_unixfs_add_bytes_with_progress` now reports the initial, intermediate 256 KiB, and final progress boundaries. Chunking for large files (> 256 KB) is also not yet implemented in the FFI path.
+- **Status:** `partial` — `ipfs_ffi_unixfs_add_bytes_with_progress` reports the initial, intermediate 256 KiB, and final progress boundaries for the full import, with existing unit coverage in `test/ffi/test_ffi.h`.
 - **What we need:** Add `ipfs_ffi_unixfs_add_bytes_with_progress` to the FFI header; chunk large inputs and fire the callback after each chunk.
 - **Files:** `ffi/ffi.c`, `include/ipfs/ffi/ffi.h`, `importer/importer.c`
 - **Complexity:** Low-Medium
