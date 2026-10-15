@@ -22,11 +22,29 @@ Last updated: 2026-10-15
 
 ## In Progress
 
-None — all listed P0 gaps are implemented and verified.
+None — the previously targeted P0 gaps are implemented and verified.
 
-## Next
+## Next (prioritized from remaining P0 gaps)
 
-1. Continue down the protocol-gap list (P0.5+ transports such as QUIC/WebTransport, P0.8 Noise interop maturation, P0.13/0.14 Bitswap 1.1/1.2, etc.) or transition to P1 portability/maturity items as prioritized.
+1. **P0.11 DNSADDR resolver maturation**
+   - `transport/dnsaddr_resolver.c` exists and is wired into `repo/config/bootstrap_peers.c`.
+   - Verify TXT-record `_dnsaddr.` recursion, `/dns4/` materialization, and memory handling.
+   - Add mocked unit tests (no live DNS dependency) and, if needed, fix parser/wiring gaps.
+   - Mark P0.11 done once tests pass and full default suite still passes.
+
+2. **P0.9.5 Exponential backoff for peer/DHT routing**
+   - Find current linear retry logic in routing/DHT code.
+   - Replace with bounded exponential backoff for peer lookups and DHT queries.
+   - Add tests where feasible.
+
+3. **P0.8 libp2p Noise security protocol interop**
+   - Validate the existing Noise XX handshake in `c-libp2p/v2` against Kubo-style peers.
+   - Add a local round-trip test that exercises Noise + Yamux + Identify end-to-end.
+
+4. **P0.13 / P0.14 Bitswap 1.1 / 1.2.0**
+   - Evaluate current bitswap implementation against 1.1/1.2.0 message formats.
+   - Implement want-have/want-block CIDv1 support, response presences, and ledger accounting as needed.
+   - This is the largest remaining P0 item; defer until after smaller gaps above.
 
 ## Open Questions
 
