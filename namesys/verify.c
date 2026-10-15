@@ -6,6 +6,7 @@
 #include "ipfs/namesys/verify.h"
 #include "ipfs/crypto/verify.h"
 #include "libp2p/crypto/rsa.h"
+#include "libp2p/crypto/key.h"
 
 /**
  * Read a protobuf varint from a buffer.
@@ -189,6 +190,17 @@ int ipfs_namesys_verify_ipns_record(enum IpfsKeyType key_type,
         verified = ipfs_crypto_verify_ed25519(pubkey, pubkey_len, signed_msg, signed_msg_len, sig, sig_len);
     } else if (key_type == IPFS_KEY_TYPE_SECP256K1) {
         verified = ipfs_crypto_verify_secp256k1(pubkey, pubkey_len, signed_msg, signed_msg_len, sig, sig_len);
+    } else if (key_type == IPFS_KEY_TYPE_RSA) {
+        struct PublicKey *public_key = NULL;
+        if (libp2p_crypto_public_key_protobuf_decode((unsigned char*)pubkey, (size_t)pubkey_len, &public_key) &&
+            public_key != NULL && public_key->type == KEYTYPE_RSA) {
+            struct RsaPublicKey rsa_pubkey = {0};
+            rsa_pubkey.der = public_key->data;
+            rsa_pubkey.der_length = public_key->data_size;
+            verified = libp2p_crypto_rsa_verify(&rsa_pubkey, signed_msg, signed_msg_len, sig);
+        }
+        if (public_key != NULL)
+            libp2p_crypto_public_key_free(public_key);
     }
 
     free(signed_msg);

@@ -3,6 +3,8 @@
 #include <stdlib.h>
 
 #include "ipfs/namesys/verify.h"
+#include "libp2p/crypto/key.h"
+#include "libp2p/crypto/rsa.h"
 #include <openssl/evp.h>
 
 /**
@@ -305,3 +307,56 @@ static size_t hex_to_bin_ns(const char *hex, uint8_t *out, size_t max_len) {
  * example/mock data that is not a valid cryptographic signature,
  * so those test functions have been removed.  Existing parse and
  * invalid-input tests still exercise the code. */
+
+
+int test_namesys_verify_ipns_record_rsa(void) {
+    int retVal = 0;
+    struct RsaPrivateKey private_key;
+    memset(&private_key, 0, sizeof(private_key));
+    if (!libp2p_crypto_rsa_generate_keypair(&private_key, 2048))
+        goto exit;
+
+    const char *data = "ipns-v2-record";
+    size_t data_len = strlen(data);
+    size_t signed_msg_len = IPNS_SIG_PREFIX_LEN + data_len;
+    uint8_t *signed_msg = (uint8_t*)malloc(signed_msg_len);
+    if (!signed_msg) goto cleanup_key;
+    memcpy(signed_msg, "ipns-signature:", IPNS_SIG_PREFIX_LEN);
+    memcpy(signed_msg + IPNS_SIG_PREFIX_LEN, data, data_len);
+
+    unsigned char *sig = NULL;
+    size_t sig_len = 0;
+    if (!libp2p_crypto_rsa_sign(&private_key, signed_msg, signed_msg_len, &sig, &sig_len)) {
+        goto cleanup_msg;
+    }
+
+    struct PublicKey public_key;
+    memset(&public_key, 0, sizeof(public_key));
+    public_key.type = KEYTYPE_RSA;
+    public_key.data = (unsigned char*)private_key.public_key_der;
+    public_key.data_size = private_key.public_key_length;
+
+    size_t pubkey_len = libp2p_crypto_public_key_protobuf_encode_size(&public_key);
+    uint8_t *pubkey_buf = pubkey_len ? (uint8_t*)malloc(pubkey_len) : NULL;
+    if (!pubkey_buf || !libp2p_crypto_public_key_protobuf_encode(&public_key, pubkey_buf, pubkey_len, &pubkey_len)) {
+        goto cleanup_sig;
+    }
+
+    if (!ipfs_namesys_verify_ipns_record(IPFS_KEY_TYPE_RSA, pubkey_buf, pubkey_len, (const uint8_t*)data, data_len, sig, sig_len)) {
+        goto cleanup_pub;
+    }
+
+    retVal = 1;
+
+cleanup_pub:
+    free(pubkey_buf);
+cleanup_sig:
+    free(sig);
+cleanup_msg:
+    free(signed_msg);
+cleanup_key:
+exit:
+    if (private_key.der) free(private_key.der);
+    if (private_key.public_key_der) free(private_key.public_key_der);
+    return retVal;
+}
