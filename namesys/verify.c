@@ -5,6 +5,7 @@
 
 #include "ipfs/namesys/verify.h"
 #include "ipfs/crypto/verify.h"
+#include "libp2p/crypto/rsa.h"
 
 /**
  * Read a protobuf varint from a buffer.
@@ -140,6 +141,13 @@ int ipfs_namesys_verify_entry_signature(const struct IpnsVerifyEntry *entry) {
     int verified = 0;
 
     switch (entry->key_type) {
+        case IPFS_KEY_TYPE_RSA: {
+            struct RsaPublicKey rsa_pk;
+            rsa_pk.der = (unsigned char*)entry->pubkey_bytes;
+            rsa_pk.der_length = entry->pubkey_bytes_len;
+            verified = libp2p_crypto_rsa_verify(&rsa_pk, signed_msg, signed_msg_len, entry->signature);
+            break;
+        }
         case IPFS_KEY_TYPE_ED25519:
             verified = ipfs_crypto_verify_ed25519(entry->pubkey_bytes, entry->pubkey_bytes_len,
                                                    signed_msg, signed_msg_len,
