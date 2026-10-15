@@ -10,6 +10,8 @@ struct ipns_entry {
     size_t signature_size;
     char *data;          /* optional V2 data payload (field 7) */
     size_t data_size;
+    char *pubkey;        /* optional V2 embedded public key (protobuf field 8) */
+    size_t pubkey_size;
     int32_t *validityType;
     char *validity;
     uint64_t *sequence;

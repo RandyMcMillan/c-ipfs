@@ -344,6 +344,11 @@ int repo_fsrepro_lmdb_open(int argc, char** argv, struct Datastore* datastore) {
 		return 0;
 	}
 
+	if (mdb_env_set_mapsize(mdb_env, (size_t)16 * 1024 * 1024) != 0) {
+		mdb_env_close(mdb_env);
+		return 0;
+	}
+
 	// open the environment
 	if (mdb_env_open(mdb_env, datastore->path, 0, S_IRWXU) < 0) {
 		mdb_env_close(mdb_env);
