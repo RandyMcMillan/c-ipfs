@@ -16,8 +16,8 @@
 #include "libp2p/utils/logger.h"
 
 static void* http_rpc_thread_wrapper(void* arg) {
-    uint16_t port = (uint16_t)(uintptr_t)arg;
-    ipfs_start_http_rpc_server(port);
+    struct IpfsNode* local_node = (struct IpfsNode*)arg;
+    ipfs_start_http_rpc_server(local_node, 0);
     return NULL;
 }
 
@@ -46,16 +46,8 @@ int ipfs_daemon_start(char* repo_path) {
     		goto exit;
     }
 
-    // Create pthread for Kubo-compatible HTTP RPC server on configured API port.
-    uint16_t api_port = 5002;
-    if (local_node->repo && local_node->repo->config && local_node->repo->config->addresses && local_node->repo->config->addresses->api) {
-        struct MultiAddress* api_ma = multiaddress_new_from_string(local_node->repo->config->addresses->api);
-        if (api_ma) {
-            api_port = multiaddress_get_ip_port(api_ma);
-            multiaddress_free(api_ma);
-        }
-    }
-    if (pthread_create(&work_pths[count_pths++], NULL, http_rpc_thread_wrapper, (void*)(uintptr_t)api_port) != 0) {
+    // Create pthread for Kubo-compatible HTTP RPC server on the dedicated RPC port.
+    if (pthread_create(&work_pths[count_pths++], NULL, http_rpc_thread_wrapper, (void*)local_node) != 0) {
         libp2p_logger_error("daemon", "Error creating thread for HTTP RPC server\n");
         goto exit;
     }

@@ -5,6 +5,7 @@
 #include "cmd/ipfs/test_init.h"
 #include "core/test_api.h"
 #include "core/test_api_gateway.h"
+#include "core/test_api_kubo_rpc.h"
 #include "core/test_ping.h"
 #include "core/test_null.h"
 #include "core/test_daemon.h"
@@ -158,6 +159,8 @@ int build_test_collection() {
 	add_test("test_api_gateway_format_raw", test_api_gateway_format_raw, 1);
 	add_test("test_api_gateway_head", test_api_gateway_head, 1);
 	add_test("test_api_gateway_dnslink", test_api_gateway_dnslink, 1);
+	add_test("test_api_kubo_rpc_id", test_api_kubo_rpc_id, 1);
+	add_test("test_api_kubo_rpc_version", test_api_kubo_rpc_version, 1);
 	add_test("test_core_api_id", test_core_api_id, 0); // CI heap-corruption crash (segfault / glibc malloc assertion) during repo init + HTTP request
 	add_test("test_core_api_version", test_core_api_version, 0); // CI heap-corruption crash (segfault / glibc malloc assertion) during repo init + HTTP request
 	add_test("test_core_api_block_get", test_core_api_block_get, 0); // CI heap-corruption crash (segfault / glibc malloc assertion) during repo init + HTTP request
