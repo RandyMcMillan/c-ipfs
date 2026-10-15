@@ -163,7 +163,7 @@
 - **Complexity:** Medium
 
 ### 17. FFI Progress Callbacks
-- **Status:** `partial` — `importer/progress.c` defines `import_progress_cb` and `importer_report_progress`, but the FFI `unixfs_add_bytes` does not yet expose progress reporting. Chunking for large files (> 256 KB) is also not yet implemented in the FFI path.
+- **Status:** `partial` — `ipfs_ffi_unixfs_add_bytes_with_progress` now reports the initial, intermediate 256 KiB, and final progress boundaries. Chunking for large files (> 256 KB) is also not yet implemented in the FFI path.
 - **What we need:** Add `ipfs_ffi_unixfs_add_bytes_with_progress` to the FFI header; chunk large inputs and fire the callback after each chunk.
 - **Files:** `ffi/ffi.c`, `include/ipfs/ffi/ffi.h`, `importer/importer.c`
 - **Complexity:** Low-Medium

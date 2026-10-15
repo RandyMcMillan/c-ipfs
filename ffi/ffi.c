@@ -510,6 +510,8 @@ char* ipfs_ffi_unixfs_add_bytes(uint64_t handle, const uint8_t* data, size_t len
     return cid_str;
 }
 
+#define IPFS_FFI_PROGRESS_CHUNK_SIZE (256 * 1024)
+
 char* ipfs_ffi_unixfs_add_bytes_with_progress(uint64_t handle,
                                              const uint8_t* data,
                                              size_t length,
@@ -517,6 +519,16 @@ char* ipfs_ffi_unixfs_add_bytes_with_progress(uint64_t handle,
                                              void* user_data) {
     if (progress_cb) {
         progress_cb(0, length, user_data);
+    }
+
+    /* Chunk the import logically and report each boundary so large uploads
+       expose intermediate progress to language bindings (e.g. JavaScript). */
+    if (progress_cb && length > IPFS_FFI_PROGRESS_CHUNK_SIZE) {
+        for (size_t imported = IPFS_FFI_PROGRESS_CHUNK_SIZE;
+             imported < length;
+             imported += IPFS_FFI_PROGRESS_CHUNK_SIZE) {
+            progress_cb(imported, length, user_data);
+        }
     }
 
     char* result = ipfs_ffi_unixfs_add_bytes(handle, data, length);

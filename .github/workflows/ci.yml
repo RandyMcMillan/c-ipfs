@@ -324,6 +324,31 @@ jobs:
           cd test
           timeout 180 ./test_ipfs
 
+      - name: Build nostril for Nostr tests
+        run: make nostril
+
+      - name: Smoke test — nostril signed event generation
+        run: bash test/scripts/test_nostril.sh
+
+      - name: Smoke test — NIP-34 event generation
+        run: bash test/scripts/test_nostril_nip34.sh
+
+      - name: Publish real c-ipfs test report to Nostr
+        if: github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+        run: bash scripts/nostr_test_report.sh --publish
+        continue-on-error: true
+
+      - name: Publish NIP-34 patch event for pull requests
+        if: github.event_name == 'pull_request'
+        env:
+          GITHUB_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          GITHUB_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          NOSTR_SECKEY: ${{ secrets.NOSTR_SECKEY }}
+          NOSTR_RELAYS: "wss://relay.damus.io wss://relay.nostr.info"
+        run: bash scripts/nostr_nip34_pr_patch.sh --publish
+        continue-on-error: true
+
       - name: Smoke test — c-libnostr standalone
         run: |
           cd test
