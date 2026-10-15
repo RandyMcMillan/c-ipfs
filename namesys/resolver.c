@@ -8,6 +8,7 @@
 #include "ipfs/util/time.h"
 #include "ipfs/namesys/resolver.h"
 #include "ipfs/namesys/pb.h"
+#include "ipfs/namesys/verify.h"
 
 /**
  * The opposite of publisher.c
@@ -63,13 +64,21 @@ int ipfs_namesys_resolver_resolve_once(struct IpfsNode* local_node, const char* 
 		if (entry->signature && entry->signature_size > 0 && local_node->identity) {
 			sig_data = ipns_entry_data_for_sig(entry);
 			if (sig_data) {
+				const char* data_payload = entry->data ? entry->data : sig_data;
+				size_t data_len = entry->data_size ? entry->data_size : strlen(sig_data);
+				size_t signed_len = IPNS_SIG_PREFIX_LEN + data_len;
+				char* signed_data = malloc(signed_len + 1);
+				memcpy(signed_data, IPNS_SIG_PREFIX, IPNS_SIG_PREFIX_LEN);
+				memcpy(signed_data + IPNS_SIG_PREFIX_LEN, data_payload, data_len);
 				struct RsaPublicKey pub_key;
 				pub_key.der = (unsigned char*)local_node->identity->private_key.public_key_der;
 				pub_key.der_length = local_node->identity->private_key.public_key_length;
-				if (!libp2p_crypto_rsa_verify(&pub_key, (unsigned char*)sig_data, strlen(sig_data), (unsigned char*)entry->signature)) {
+				if (!libp2p_crypto_rsa_verify(&pub_key, (unsigned char*)signed_data, signed_len, (unsigned char*)entry->signature)) {
 					libp2p_logger_error("resolver", "IPNS signature verification failed for %s.\n", path);
+					free(signed_data);
 					goto local_cleanup;
 				}
+				free(signed_data);
 			}
 		}
 

@@ -8,6 +8,7 @@
 #include "ipfs/util/errs.h"
 #include "ipfs/util/time.h"
 #include "ipfs/namesys/pb.h"
+#include "ipfs/namesys/verify.h"
 #include "ipfs/namesys/publisher.h"
 
 /**
@@ -197,6 +198,7 @@ int ipfs_namesys_publisher_publish(struct IpfsNode* local_node, char* path) {
 	unsigned char* pb_buffer = NULL;
 	size_t pb_buffer_size = 0;
 	char* sig_data = NULL;
+	char* signed_msg = NULL;
 	unsigned char* signature = NULL;
 	size_t signature_size = 0;
 
@@ -256,7 +258,20 @@ int ipfs_namesys_publisher_publish(struct IpfsNode* local_node, char* path) {
 	if (!sig_data) {
 		goto exit;
 	}
-	if (!libp2p_crypto_rsa_sign(&local_node->identity->private_key, sig_data, strlen(sig_data), &signature, &signature_size)) {
+	/* V2 records sign "ipns-signature:" + the canonical IPNS record bytes. */
+	if (signed_msg) free(signed_msg);
+	signed_msg = malloc(IPNS_SIG_PREFIX_LEN + (entry->data_size ? entry->data_size : strlen(sig_data)));
+	if (!signed_msg) {
+		goto exit;
+	}
+	memcpy(signed_msg, IPNS_SIG_PREFIX, IPNS_SIG_PREFIX_LEN);
+	if (entry->data && entry->data_size > 0) {
+		memcpy(signed_msg + IPNS_SIG_PREFIX_LEN, entry->data, entry->data_size);
+	} else {
+		memcpy(signed_msg + IPNS_SIG_PREFIX_LEN, sig_data, strlen(sig_data));
+	}
+	const size_t signed_msg_len = IPNS_SIG_PREFIX_LEN + (entry->data_size ? entry->data_size : strlen(sig_data));
+	if (!libp2p_crypto_rsa_sign(&local_node->identity->private_key, signed_msg, signed_msg_len, &signature, &signature_size)) {
 		goto exit;
 	}
 	entry->signature = (char*)signature;
@@ -363,6 +378,9 @@ exit:
 	}
 	if (signature) {
 		free(signature);
+	}
+	if (signed_msg) {
+		free(signed_msg);
 	}
 	return retVal;
 }
