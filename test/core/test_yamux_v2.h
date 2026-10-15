@@ -249,24 +249,6 @@ struct yamux_window_ctx {
     int ok;
 };
 
-static void yamux_send_raw_window_update(int fd, uint32_t stream_id, uint32_t increment)
-{
-    unsigned char frame[12];
-    frame[0] = 0; /* version */
-    frame[1] = 1; /* type = WINDOW_UPDATE */
-    frame[2] = 0; /* flags high */
-    frame[3] = 0; /* flags low */
-    frame[4] = (stream_id >> 24) & 0xff;
-    frame[5] = (stream_id >> 16) & 0xff;
-    frame[6] = (stream_id >> 8) & 0xff;
-    frame[7] = stream_id & 0xff;
-    frame[8] = (increment >> 24) & 0xff;
-    frame[9] = (increment >> 16) & 0xff;
-    frame[10] = (increment >> 8) & 0xff;
-    frame[11] = increment & 0xff;
-    (void)write(fd, frame, sizeof(frame));
-}
-
 static void* yamux_window_server(void* arg)
 {
     struct yamux_window_ctx* ctx = (struct yamux_window_ctx*)arg;
