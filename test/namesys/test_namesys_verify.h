@@ -279,8 +279,6 @@ int test_namesys_verify_entry_signature_valid_ed25519(void) {
 
     /* 5. Parse and verify */
     struct IpnsVerifyEntry entry;
-    FILE* dbg_entry_file = fopen("/tmp/ipns-entry.bin", "wb");
-    if (dbg_entry_file) { fwrite(buf, 1, offset, dbg_entry_file); fclose(dbg_entry_file); }
     if (!ipfs_namesys_verify_entry_parse(buf, offset, &entry)) {
         fprintf(stderr, "parse failed\n");
         goto cleanup_ctx;
@@ -446,8 +444,6 @@ int test_namesys_verify_entry_signature_valid_rsa(void) {
     offset += data_len;
 
     struct IpnsVerifyEntry entry;
-    FILE* dbg_entry_file = fopen("/tmp/ipns-entry.bin", "wb");
-    if (dbg_entry_file) { fwrite(buf, 1, offset, dbg_entry_file); fclose(dbg_entry_file); }
     if (!ipfs_namesys_verify_entry_parse(buf, offset, &entry)) {
         fprintf(stderr, "parse failed: offset=%zu sig_len=%zu publen=%zu\n", offset, sig_len, pubkey_pb_len);
         goto cleanup_sig;
