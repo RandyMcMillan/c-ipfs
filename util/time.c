@@ -11,11 +11,13 @@ int ipfs_util_time_parse_RFC3339 (struct timespec *ts, char *s)
     if (!ts || !s || strlen(s) != 35) {
         return 1;
     }
+    memset(&tm, 0, sizeof(tm));
     r = strptime (s, "%Y-%m-%dT%H:%M:%S", &tm);
     if (!r || *r != '.') {
         return 2;
     }
-    ts->tv_sec = mktime(&tm);
+    tm.tm_isdst = 0;
+    ts->tv_sec = timegm(&tm);
     ts->tv_nsec = atoll(++r);
     return 0;
 }

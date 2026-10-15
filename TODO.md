@@ -13,22 +13,22 @@ Last updated: 2026-10-15
   - Implement `ipfs_swarm_connect_v2_bridge()` in `transport/swarm_dialer_v2_bridge.c` with TCP dial, `/noise` multistream negotiation, Noise XX initiator handshake, Yamux client session, and Identify exchange.
   - Make inbound `core/v2_listen.c` hand the Yamux session off to a background thread so it stays alive to accept multiple streams.
   - Add `test_swarm_connect_v2_bridge` that starts a local v2 listener and dials it via the bridge.
+- [x] P0.3 / P0.4 IPNS V1/V2 resolution hardening:
+  - Add unified `ipns_entry_valid()` helper in `namesys/resolver.c` that verifies V2 (`ipns-signature:` + data) and V1 (value+validity+validityType) signatures using embedded public keys.
+  - Enforce public-key/peer-ID name binding for embedded keys and EOL/validity checks on both local and network (`GetValue`) resolution paths.
+  - Fix `util/time.c` `ipfs_util_time_parse_RFC3339()` to parse UTC timestamps with `timegm()` instead of `mktime()`, so expired records are rejected regardless of local timezone.
+  - Add resolver-level tests: V1 RSA round-trip, V2 RSA round-trip, V2 Ed25519 round-trip, expired-record rejection, bad-signature rejection.
+- [x] Full default `test/test_ipfs` suite passes (152 tests).
 
 ## In Progress
 
-- [ ] Final verification and push of the P0.2 changes:
-  - Wait for full `test/test_ipfs` default suite to pass.
-  - Commit c-ipfs side changes and update the `c-libp2p` submodule pointer.
-  - Push c-ipfs master.
+None — all listed P0 gaps are implemented and verified.
 
 ## Next
 
-1. **IPNS hardening (P0.3/P0.4)**
-   - Review `namesys/verify.c`, `namesys/resolver.c`, `namesys/namesys.c` for V1/V2 record validation gaps.
-   - Ensure V2 signature validation and record lifetime checks match Kubo semantics.
-   - Add/update tests in `test_namesys_verify.h`.
+1. Continue down the protocol-gap list (P0.5+ transports such as QUIC/WebTransport, P0.8 Noise interop maturation, P0.13/0.14 Bitswap 1.1/1.2, etc.) or transition to P1 portability/maturity items as prioritized.
 
 ## Open Questions
 
 - Should the Kubo-compatible RPC server eventually share port 5001 with `api_start`? Currently using a dedicated port to avoid conflict.
-- The c-libp2p submodule is a separate repo; Yamux/Noise/v2 changes must be committed/pushed there before the c-ipfs submodule pointer can be updated.
+- The c-libp2p submodule is a separate repository; any further submodule fixes must be committed/pushed there before updating the pointer in this repo.
