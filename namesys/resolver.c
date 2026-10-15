@@ -60,27 +60,38 @@ int ipfs_namesys_resolver_resolve_once(struct IpfsNode* local_node, const char* 
 			goto local_cleanup;
 		}
 
-		// Validate signature using local node's public key
-		if (entry->signature && entry->signature_size > 0 && local_node->identity) {
-			sig_data = ipns_entry_data_for_sig(entry);
-			if (sig_data) {
-				const char* data_payload = entry->data ? entry->data : sig_data;
-				size_t data_len = entry->data_size ? entry->data_size : strlen(sig_data);
-				size_t signed_len = IPNS_SIG_PREFIX_LEN + data_len;
-				char* signed_data = malloc(signed_len + 1);
-				memcpy(signed_data, IPNS_SIG_PREFIX, IPNS_SIG_PREFIX_LEN);
-				memcpy(signed_data + IPNS_SIG_PREFIX_LEN, data_payload, data_len);
-				struct RsaPublicKey pub_key;
-				pub_key.der = (unsigned char*)local_node->identity->private_key.public_key_der;
-				pub_key.der_length = local_node->identity->private_key.public_key_length;
-				if (!libp2p_crypto_rsa_verify(&pub_key, (unsigned char*)signed_data, signed_len, (unsigned char*)entry->signature)) {
-					libp2p_logger_error("resolver", "IPNS signature verification failed for %s.\n", path);
-					free(signed_data);
+		// Prefer the publisher-provided public key when present (IPNS V2). */
+		if (entry->signature && entry->signature_size > 0) {
+			struct IpnsVerifyEntry verify_entry;
+			memset(&verify_entry, 0, sizeof(verify_entry));
+			if (ipfs_namesys_verify_entry_parse(record->value, record->value_size, &verify_entry) && verify_entry.pubkey_bytes_len && verify_entry.sig_len) {
+				if (!ipfs_namesys_verify_entry_signature(&verify_entry)) {
+					libp2p_logger_error("resolver", "IPNS V2 signature verification failed for %s.\n", path);
 					goto local_cleanup;
 				}
-				free(signed_data);
+			} else if (local_node->identity) {
+				// Fallback for records that use the resolver's local RSA key. */
+				sig_data = ipns_entry_data_for_sig(entry);
+				if (sig_data) {
+					const char* data_payload = entry->data ? entry->data : sig_data;
+					size_t data_len = entry->data_size ? entry->data_size : strlen(sig_data);
+					size_t signed_len = IPNS_SIG_PREFIX_LEN + data_len;
+					char* signed_data = malloc(signed_len + 1);
+					memcpy(signed_data, IPNS_SIG_PREFIX, IPNS_SIG_PREFIX_LEN);
+					memcpy(signed_data + IPNS_SIG_PREFIX_LEN, data_payload, data_len);
+					struct RsaPublicKey pub_key;
+					pub_key.der = (unsigned char*)local_node->identity->private_key.public_key_der;
+					pub_key.der_length = local_node->identity->private_key.public_key_length;
+					if (!libp2p_crypto_rsa_verify(&pub_key, (unsigned char*)signed_data, signed_len, (unsigned char*)entry->signature)) {
+						libp2p_logger_error("resolver", "IPNS signature verification failed for %s.\n", path);
+						free(signed_data);
+						goto local_cleanup;
+					}
+					free(signed_data);
+				}
 			}
 		}
+
 
 		// Check EOL
 		if (entry->validityType && *entry->validityType == IpnsEntry_EOL && entry->validity) {
