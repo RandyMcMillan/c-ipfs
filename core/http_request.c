@@ -728,6 +728,32 @@ static int ipfs_core_http_process_dht_findprovs(struct IpfsNode* local_node, str
 	return 1;
 }
 
+static int ipfs_core_http_process_pin_rm(struct IpfsNode* local_node, struct HttpRequest* request, struct HttpResponse** response) {
+	if (!request->arguments || request->arguments->total < 1) return 0;
+	char* hash = (char*)libp2p_utils_vector_get(request->arguments, 0);
+	struct Cid* cid = NULL;
+	if (!ipfs_cid_decode_hash_from_base58((unsigned char*)hash, strlen(hash), &cid)) {
+		return 0;
+	}
+	int retVal = ipfs_pin_rm(local_node->repo, cid->hash, cid->hash_length);
+	ipfs_cid_free(cid);
+	if (!retVal) return 0;
+	*response = ipfs_core_http_response_new();
+	if (!*response) return 0;
+	struct HttpResponse* res = *response;
+	res->content_type = "application/json";
+	int bytes_needed = 32 + (int)strlen(hash);
+	res->bytes = (uint8_t*)malloc((size_t)bytes_needed);
+	if (!res->bytes) {
+		ipfs_core_http_response_free(res);
+		*response = NULL;
+		return 0;
+	}
+	snprintf((char*)res->bytes, (size_t)bytes_needed, "{\"Pins\":[\"%s\"]}", hash);
+	res->bytes_size = strlen((char*)res->bytes);
+	return 1;
+}
+
 static int ipfs_core_http_process_pin_add(struct IpfsNode* local_node, struct HttpRequest* request, struct HttpResponse** response) {
 	if (!request->arguments || request->arguments->total < 1) return 0;
 	char* hash = (char*)libp2p_utils_vector_get(request->arguments, 0);
@@ -1126,6 +1152,8 @@ int ipfs_core_http_request_process(struct IpfsNode* local_node, struct HttpReque
 		retVal = ipfs_core_http_process_pin_add(local_node, request, response);
 	} else if (strcmp(request->command, "pin") == 0 && request->sub_command && strcmp(request->sub_command, "ls") == 0) {
 		retVal = ipfs_core_http_process_pin_ls(local_node, request, response);
+	} else if (strcmp(request->command, "pin") == 0 && request->sub_command && strcmp(request->sub_command, "rm") == 0) {
+		retVal = ipfs_core_http_process_pin_rm(local_node, request, response);
 	} else if (strcmp(request->command, "repo") == 0 && request->sub_command && strcmp(request->sub_command, "gc") == 0) {
 		retVal = ipfs_core_http_process_repo_gc(local_node, request, response);
 	} else if (strcmp(request->command, "repo") == 0 && request->sub_command && strcmp(request->sub_command, "version") == 0) {
