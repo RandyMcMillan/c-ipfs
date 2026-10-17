@@ -999,6 +999,34 @@ static int ipfs_core_http_process_get(struct IpfsNode* local_node, struct HttpRe
 	return ipfs_core_http_process_cat(local_node, request, response);
 }
 
+static int ipfs_core_http_process_resolve(struct IpfsNode* local_node, struct HttpRequest* request, struct HttpResponse** response) {
+	if (!request->arguments || request->arguments->total < 1) return 0;
+	char* path = (char*)libp2p_utils_vector_get(request->arguments, 0);
+	char* result = NULL;
+	if (!ipfs_namesys_resolver_resolve(local_node, path, 1, &result) || !result) {
+		return 0;
+	}
+	*response = ipfs_core_http_response_new();
+	if (!*response) {
+		if (result) free(result);
+		return 0;
+	}
+	struct HttpResponse* res = *response;
+	res->content_type = "application/json";
+	int bytes_needed = 32 + (int)strlen(result);
+	res->bytes = (uint8_t*)malloc((size_t)bytes_needed);
+	if (!res->bytes) {
+		ipfs_core_http_response_free(res);
+		*response = NULL;
+		free(result);
+		return 0;
+	}
+	snprintf((char*)res->bytes, (size_t)bytes_needed, "{\"Path\":\"%s\"}", result);
+	res->bytes_size = strlen((char*)res->bytes);
+	free(result);
+	return 1;
+}
+
 static int ipfs_core_http_process_ls(struct IpfsNode* local_node, struct HttpRequest* request, struct HttpResponse** response) {
 	if (!request->arguments || request->arguments->total < 1) return 0;
 	char* hash = (char*)libp2p_utils_vector_get(request->arguments, 0);
@@ -1092,6 +1120,8 @@ int ipfs_core_http_request_process(struct IpfsNode* local_node, struct HttpReque
 		retVal = ipfs_core_http_process_dag_put(local_node, request, response);
 	} else if (strcmp(request->command, "ls") == 0) {
 		retVal = ipfs_core_http_process_ls(local_node, request, response);
+	} else if (strcmp(request->command, "resolve") == 0) {
+		retVal = ipfs_core_http_process_resolve(local_node, request, response);
 	} else if (strcmp(request->command, "pin") == 0 && request->sub_command && strcmp(request->sub_command, "add") == 0) {
 		retVal = ipfs_core_http_process_pin_add(local_node, request, response);
 	} else if (strcmp(request->command, "pin") == 0 && request->sub_command && strcmp(request->sub_command, "ls") == 0) {
