@@ -211,6 +211,29 @@ static int ipfs_core_http_process_object_stat(struct IpfsNode* local_node, struc
 	return 1;
 }
 
+static int ipfs_core_http_process_object_data(struct IpfsNode* local_node, struct HttpRequest* request, struct HttpResponse** response) {
+	if (!request->arguments || request->arguments->total < 1) return 0;
+	char* hash = (char*)libp2p_utils_vector_get(request->arguments, 0);
+	struct Cid* cid = NULL;
+	if (!ipfs_cid_decode_hash_from_base58((unsigned char*)hash, strlen(hash), &cid)) {
+		return 0;
+	}
+	struct Block* block = NULL;
+	int retVal = ipfs_blockstore_get(local_node->blockstore->blockstoreContext, cid, &block);
+	ipfs_cid_free(cid);
+	if (!retVal || !block) return 0;
+	*response = ipfs_core_http_response_new();
+	if (!*response) { ipfs_block_free(block); return 0; }
+	struct HttpResponse* res = *response;
+	res->content_type = "application/octet-stream";
+	res->bytes = (uint8_t*)malloc(block->data_length);
+	if (!res->bytes) { ipfs_block_free(block); ipfs_core_http_response_free(res); *response = NULL; return 0; }
+	memcpy(res->bytes, block->data, block->data_length);
+	res->bytes_size = block->data_length;
+	ipfs_block_free(block);
+	return 1;
+}
+
 int ipfs_core_http_process_object(struct IpfsNode* local_node, struct HttpRequest* request, struct HttpResponse** response) {
 	int retVal = 0;
 	if (strcmp(request->sub_command, "get") == 0) {
@@ -1362,6 +1385,8 @@ int ipfs_core_http_request_process(struct IpfsNode* local_node, struct HttpReque
 		retVal = ipfs_core_http_process_name(local_node, request, response);
 	} else if (strcmp(request->command, "object") == 0 && request->sub_command && strcmp(request->sub_command, "stat") == 0) {
 		retVal = ipfs_core_http_process_object_stat(local_node, request, response);
+	} else if (strcmp(request->command, "object") == 0 && request->sub_command && strcmp(request->sub_command, "data") == 0) {
+		retVal = ipfs_core_http_process_object_data(local_node, request, response);
 	} else if (strcmp(request->command, "object") == 0) {
 		retVal = ipfs_core_http_process_object(local_node, request, response);
 	} else if (strcmp(request->command, "dht") == 0 && request->sub_command && strcmp(request->sub_command, "findprovs") == 0) {
