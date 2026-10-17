@@ -1017,7 +1017,7 @@ void *api_connection_thread (void *ptr)
 
 						p = boundary_find(req.buf + req.body, boundary, NULL, NULL);
 						if (p) {
-							req.boundary_size = boundary_size(p, boundary, req.size - (p - buf));
+							req.boundary_size = boundary_size(p, boundary, req.size - (p - req.buf));
 							if (req.boundary_size > 0) {
 								req.boundary = p - req.buf;
 							}

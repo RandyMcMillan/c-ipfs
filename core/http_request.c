@@ -39,6 +39,8 @@ struct HttpRequest* ipfs_core_http_request_new() {
 		result->sub_command = NULL;
 		result->params = libp2p_utils_vector_new(1);
 		result->arguments = libp2p_utils_vector_new(1);
+		result->data = NULL;
+		result->data_size = 0;
 	}
 	return result;
 }
