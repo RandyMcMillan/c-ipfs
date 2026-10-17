@@ -215,6 +215,8 @@ char *str_tok(char *str, char *tok)
  */
 char *bin_tok(char *bin, size_t limit, char *tok, size_t tok_size)
 {
+	if (!bin || !tok || tok_size == 0 || limit < tok_size)
+		return NULL;
 	char *p = memmem(bin, limit, tok, tok_size);
 	if (p) {
 		p += tok_size;
@@ -291,6 +293,8 @@ char *boundary_find(char *str, char *boundary, char **filename, char **contentty
  */
 size_t boundary_size(char *str, char *boundary, size_t limit)
 {
+	if (!str || !boundary || limit < 4)
+		return 0;
 	char *p = bin_tok(str, limit, "\r\n--", 4);
 	while (p) {
 		if (strstart(p, boundary)) {
