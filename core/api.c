@@ -712,8 +712,7 @@ static int api_serve_gateway_internal(int fd, const char* path, const char* quer
 	char content_location[512];
 	if (resolved) {
 		size_t rlen = strlen(resolved);
-		const char* suffix = request_path + 6 + root_hash_len;
-		while (*suffix == '/') suffix++;
+		const char* suffix = extra_path;
 		if (snprintf(content_location, sizeof(content_location), "%s%s%s",
 		             resolved, (rlen > 0 && resolved[rlen-1] == '/' ? "" : "/"), suffix) >= (int)sizeof(content_location))
 			content_location[0] = '\0';
