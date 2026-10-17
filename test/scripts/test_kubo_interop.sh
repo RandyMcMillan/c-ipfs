@@ -121,27 +121,59 @@ if [ ! -f "${MANIFEST}" ]; then
     exit 1
 fi
 
-if [ "${INTEROP_MODE}" = "ci" ]; then
-    echo "=== Setup: Installing Kubo ${KUBO_VERSION} ==="
-    mkdir -p "${TMP_DIR}/kubo_bin"
-    ARCH="$(uname -m)"
-    OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
-    case "${ARCH}" in
-        x86_64) GOARCH="amd64" ;;
-        arm64|aarch64) GOARCH="arm64" ;;
-        *) echo "Unsupported architecture: ${ARCH}"; exit 1 ;;
-    esac
+KUBO_SOURCE="${KUBO_SOURCE:-release}"
 
-    KUBO_TAR="kubo_${KUBO_VERSION}_${OS}-${GOARCH}.tar.gz"
-    KUBO_URL="https://github.com/ipfs/kubo/releases/download/${KUBO_VERSION}/${KUBO_TAR}"
+if [ "${INTEROP_MODE}" = "ci" ] && [ ! -x "${KUBO_BIN:-}" ]; then
+    if [ "${KUBO_SOURCE}" = "source" ]; then
+        echo "=== Setup: Building Kubo from source ==="
+        REF="${KUBO_REF:-}"
+        if [ -z "${REF}" ]; then
+            REF="${KUBO_VERSION}"
+        fi
+        if ! git clone --depth 1 --branch "${REF}" https://github.com/ipfs/kubo.git "${TMP_DIR}/kubo_src" 2>/dev/null; then
+            git clone https://github.com/ipfs/kubo.git "${TMP_DIR}/kubo_src"
+            (cd "${TMP_DIR}/kubo_src" && git checkout "${REF}")
+        fi
+        (cd "${TMP_DIR}/kubo_src" && (make build || go build -o cmd/ipfs/ipfs ./cmd/ipfs))
+        if [ -x "${TMP_DIR}/kubo_src/cmd/ipfs/ipfs" ]; then
+            KUBO_BIN="${TMP_DIR}/kubo_src/cmd/ipfs/ipfs"
+        elif [ -x "${TMP_DIR}/kubo_src/ipfs" ]; then
+            KUBO_BIN="${TMP_DIR}/kubo_src/ipfs"
+        else
+            KUBO_BIN="$(find "${TMP_DIR}/kubo_src" -type f -name ipfs -perm -111 | head -n1)"
+        fi
+        if [ -z "${KUBO_BIN}" ] || [ ! -x "${KUBO_BIN}" ]; then
+            echo "Failed to build Kubo from source"
+            exit 1
+        fi
+    else
+        echo "=== Setup: Installing Kubo ${KUBO_VERSION} ==="
+        mkdir -p "${TMP_DIR}/kubo_bin"
+        ARCH="$(uname -m)"
+        OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
+        case "${ARCH}" in
+            x86_64) GOARCH="amd64" ;;
+            arm64|aarch64) GOARCH="arm64" ;;
+            *) echo "Unsupported architecture: ${ARCH}"; exit 1 ;;
+        esac
 
-    curl -fsSL "${KUBO_URL}" | tar -xz -C "${TMP_DIR}/kubo_bin" --strip-components=1
-    KUBO_BIN="${TMP_DIR}/kubo_bin/ipfs"
+        KUBO_TAR="kubo_${KUBO_VERSION}_${OS}-${GOARCH}.tar.gz"
+        KUBO_URL="https://github.com/ipfs/kubo/releases/download/${KUBO_VERSION}/${KUBO_TAR}"
+
+        curl -fsSL "${KUBO_URL}" | tar -xz -C "${TMP_DIR}/kubo_bin" --strip-components=1
+        KUBO_BIN="${TMP_DIR}/kubo_bin/ipfs"
+    fi
 else
     if [ -z "${KUBO_BIN}" ]; then
         echo "Host mode requires KUBO_BIN to point to an installed Kubo binary."
         exit 1
     fi
+fi
+
+if [ -n "${KUBO_BIN_CACHE:-}" ] && [ -x "${KUBO_BIN:-}" ] && [ "${INTEROP_MODE}" = "ci" ]; then
+    mkdir -p "${KUBO_BIN_CACHE}"
+    cp -f "${KUBO_BIN}" "${KUBO_BIN_CACHE}/ipfs"
+    KUBO_BIN="${KUBO_BIN_CACHE}/ipfs"
 fi
 
 echo "=== Initializing test repositories ==="

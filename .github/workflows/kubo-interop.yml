@@ -22,6 +22,19 @@ on:
         type: string
         required: false
         default: v0.43.0
+      kubo_source:
+        description: How to obtain Kubo (release tarball or build from GitHub source)
+        type: choice
+        required: false
+        default: release
+        options:
+          - release
+          - source
+      kubo_ref:
+        description: Git ref (branch/tag/commit) to build when kubo_source=source (defaults to kubo_version)
+        type: string
+        required: false
+        default: ''
   workflow_call:
     inputs:
       interop_mode:
@@ -39,6 +52,16 @@ on:
         type: string
         required: false
         default: v0.43.0
+      kubo_source:
+        description: How to obtain Kubo (release or source)
+        type: string
+        required: false
+        default: release
+      kubo_ref:
+        description: Git ref to build when kubo_source=source (defaults to kubo_version)
+        type: string
+        required: false
+        default: ''
       cache_key:
         description: Exact shared cache key produced by the Cache Factory to wait for
         type: string
@@ -111,8 +134,44 @@ jobs:
       - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential cmake libcurl4-openssl-dev autoconf automake libtool
+          sudo apt-get install -y build-essential cmake libcurl4-openssl-dev autoconf automake libtool git
 
+      - name: Resolve Kubo cache ref
+        id: kubo-cache-ref
+        run: |
+          REF="${{ inputs.kubo_ref }}"
+          if [ -z "$REF" ]; then
+            REF="${{ inputs.kubo_version }}"
+          fi
+          if [ "${{ inputs.kubo_source }}" != "source" ]; then
+            REF="release-${REF}"
+          fi
+          echo "ref=$REF" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Go modules and build cache (source builds)
+        if: inputs.kubo_source == 'source'
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: go-${{ runner.os }}-${{ runner.arch }}-${{ steps.kubo-cache-ref.outputs.ref }}
+          restore-keys: |
+            go-${{ runner.os }}-${{ runner.arch }}-
+
+      - name: Cache Kubo binary
+        id: kubo-bin-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/kubo-ipfs
+          key: kubo-bin-${{ steps.kubo-cache-ref.outputs.ref }}-${{ runner.os }}-${{ runner.arch }}
+
+      - name: Setup Go (for Kubo source builds)
+        if: inputs.kubo_source == 'source'
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache: false
       - name: Build secp256k1
         if: steps.shared-cache.outputs.cache-hit != 'true'
         run: |
@@ -145,6 +204,10 @@ jobs:
           INTEROP_MODE: ${{ inputs.interop_mode || 'ci' }}
           VERBOSE: ${{ inputs.verbose || false }}
           KUBO_VERSION: ${{ inputs.kubo_version || 'v0.43.0' }}
+          KUBO_SOURCE: ${{ inputs.kubo_source || 'release' }}
+          KUBO_REF: ${{ inputs.kubo_ref || '' }}
+          KUBO_BIN_CACHE: ${{ runner.temp }}/kubo-ipfs
+          KUBO_BIN: ${{ runner.temp }}/kubo-ipfs/ipfs
         run: |
           chmod +x test/scripts/test_kubo_interop.sh test/scripts/test_kubo_ipns_pubsub.sh
           ./test/scripts/test_kubo_interop.sh
