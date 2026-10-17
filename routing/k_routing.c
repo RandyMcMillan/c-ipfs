@@ -47,6 +47,19 @@ int ipfs_routing_kademlia_find_peer(struct IpfsRouting* routing, const unsigned 
 /**
  * Calling this method notifies the network that this peer can provide this key
  */
+int ipfs_routing_kademlia_reprovide(struct IpfsRouting* routing) {
+	if (!routing || !routing->local_node || !routing->local_node->providerstore) return 0;
+	struct ProviderStore* store = routing->local_node->providerstore;
+	if (!store->provider_entries) return 0;
+	for (int i = 0; i < store->provider_entries->total; i++) {
+		struct ProviderEntry* entry = (struct ProviderEntry*)libp2p_utils_vector_get(store->provider_entries, i);
+		if (entry && entry->hash && entry->hash_size > 0) {
+			routing->Provide(routing, entry->hash, entry->hash_size);
+		}
+	}
+	return 1;
+}
+
 int ipfs_routing_kademlia_provide(struct IpfsRouting* routing, const unsigned char* key, size_t key_size) {
 	// Store locally
 	libp2p_providerstore_add(routing->local_node->providerstore, (unsigned char*)key, key_size,
@@ -130,6 +143,7 @@ struct IpfsRouting* ipfs_routing_new_kademlia(struct IpfsNode* local_node, struc
 		routing->FindProviders = ipfs_routing_kademlia_find_providers;
 		routing->FindPeer = ipfs_routing_kademlia_find_peer;
 		routing->Provide = ipfs_routing_kademlia_provide;
+		routing->Reprovide = ipfs_routing_kademlia_reprovide;
 		routing->Ping = ipfs_routing_kademlia_ping;
 		routing->Bootstrap = ipfs_routing_kademlia_bootstrap;
 		routing->Listen = ipfs_null_listen;

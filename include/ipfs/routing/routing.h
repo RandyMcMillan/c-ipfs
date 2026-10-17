@@ -61,6 +61,12 @@ struct IpfsRouting {
 	 */
 	int (*Provide)       (struct IpfsRouting*, const unsigned char*, size_t);
 	/**
+	 * Re-announce all locally provided keys to the network.
+	 * @param routing the context
+	 * @returns true(1) on success, otherwise false(0)
+	 */
+	int (*Reprovide)     (struct IpfsRouting*);
+	/**
 	 * Ping
 	 * @param routing the context
 	 * @param peer the peer

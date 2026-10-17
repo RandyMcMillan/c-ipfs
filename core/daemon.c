@@ -22,6 +22,24 @@ static void* http_rpc_thread_wrapper(void* arg) {
     return NULL;
 }
 
+static void* reprovide_thread_wrapper(void* arg) {
+    struct IpfsNode* local_node = (struct IpfsNode*)arg;
+    int interval = 12 * 3600;
+    if (local_node->repo && local_node->repo->config && local_node->repo->config->reprovider.interval) {
+        char *end = NULL;
+        long val = strtol(local_node->repo->config->reprovider.interval, &end, 10);
+        if (val > 0 && end && (*end == 'h' || *end == 'H')) interval = (int)(val * 3600);
+        else if (val > 0 && end && (*end == 'm' || *end == 'M')) interval = (int)(val * 60);
+        else if (val > 0) interval = (int)val;
+    }
+    for (;;) {
+        sleep(interval);
+        if (local_node->routing && local_node->routing->Reprovide)
+            local_node->routing->Reprovide(local_node->routing);
+    }
+    return NULL;
+}
+
 int ipfs_daemon_start(char* repo_path) {
     int count_pths = 0, retVal = 0;
     pthread_t work_pths[MAX];
@@ -51,6 +69,11 @@ int ipfs_daemon_start(char* repo_path) {
     if (pthread_create(&work_pths[count_pths++], NULL, http_rpc_thread_wrapper, (void*)local_node) != 0) {
         libp2p_logger_error("daemon", "Error creating thread for HTTP RPC server\n");
         goto exit;
+    }
+
+    pthread_t reprovide_tid;
+    if (pthread_create(&reprovide_tid, NULL, reprovide_thread_wrapper, (void*)local_node) == 0) {
+        pthread_detach(reprovide_tid);
     }
 
     local_node->routing->Bootstrap(local_node->routing);

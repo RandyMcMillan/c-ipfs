@@ -4,6 +4,7 @@
 #include <ipfs/util/errs.h>
 #include "libp2p/crypto/rsa.h"
 #include "libp2p/utils/logger.h"
+#include "libp2p/peer/providerstore.h"
 #include "libp2p/record/record.h"
 #include "ipfs/core/http_request.h"
 #include "ipfs/datastore/ds_helper.h"
@@ -324,6 +325,19 @@ int ipfs_routing_offline_bootstrap (ipfs_routing* routing)
 	return 0;
 }
 
+int ipfs_routing_offline_reprovide (struct IpfsRouting* routing) {
+	if (!routing || !routing->local_node || !routing->local_node->providerstore) return 0;
+	struct ProviderStore* store = routing->local_node->providerstore;
+	if (!store->provider_entries) return 0;
+	for (int i = 0; i < store->provider_entries->total; i++) {
+		struct ProviderEntry* entry = (struct ProviderEntry*)libp2p_utils_vector_get(store->provider_entries, i);
+		if (entry && entry->hash && entry->hash_size > 0) {
+			routing->Provide(routing, entry->hash, entry->hash_size);
+		}
+	}
+	return 1;
+}
+
 struct IpfsRouting* ipfs_routing_new_offline (struct IpfsNode* local_node, struct RsaPrivateKey *private_key)
 {
     struct IpfsRouting *offlineRouting = malloc (sizeof(struct IpfsRouting));
@@ -337,6 +351,7 @@ struct IpfsRouting* ipfs_routing_new_offline (struct IpfsNode* local_node, struc
         offlineRouting->FindProviders = ipfs_routing_offline_find_providers;
         offlineRouting->FindPeer      = ipfs_routing_offline_find_peer;
         offlineRouting->Provide       = ipfs_routing_offline_provide;
+        offlineRouting->Reprovide     = ipfs_routing_offline_reprovide;
         offlineRouting->Ping          = ipfs_routing_offline_ping;
         offlineRouting->Bootstrap     = ipfs_routing_offline_bootstrap;
     }
