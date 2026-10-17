@@ -1118,6 +1118,25 @@ static int ipfs_core_http_process_config_show(struct IpfsNode* local_node, struc
 	return 1;
 }
 
+static int ipfs_core_http_process_key_list(struct IpfsNode* local_node, struct HttpRequest* request, struct HttpResponse** response) {
+	(void)request;
+	*response = ipfs_core_http_response_new();
+	if (!*response) return 0;
+	struct HttpResponse* res = *response;
+	res->content_type = "application/json";
+	char* peer_id = (local_node && local_node->identity && local_node->identity->peer) ? local_node->identity->peer->id : "";
+	int bytes_needed = 64 + (int)strlen(peer_id);
+	res->bytes = (uint8_t*)malloc((size_t)bytes_needed);
+	if (!res->bytes) {
+		ipfs_core_http_response_free(res);
+		*response = NULL;
+		return 0;
+	}
+	snprintf((char*)res->bytes, (size_t)bytes_needed, "{\"Keys\":[{\"Name\":\"self\",\"Id\":\"%s\"}]}", peer_id);
+	res->bytes_size = strlen((char*)res->bytes);
+	return 1;
+}
+
 static int ipfs_core_http_process_ls(struct IpfsNode* local_node, struct HttpRequest* request, struct HttpResponse** response) {
 	if (!request->arguments || request->arguments->total < 1) return 0;
 	char* hash = (char*)libp2p_utils_vector_get(request->arguments, 0);
@@ -1213,6 +1232,8 @@ int ipfs_core_http_request_process(struct IpfsNode* local_node, struct HttpReque
 		retVal = ipfs_core_http_process_dag_put(local_node, request, response);
 	} else if (strcmp(request->command, "ls") == 0) {
 		retVal = ipfs_core_http_process_ls(local_node, request, response);
+	} else if (strcmp(request->command, "key") == 0 && request->sub_command && strcmp(request->sub_command, "list") == 0) {
+		retVal = ipfs_core_http_process_key_list(local_node, request, response);
 	} else if (strcmp(request->command, "config") == 0 && request->sub_command && strcmp(request->sub_command, "show") == 0) {
 		retVal = ipfs_core_http_process_config_show(local_node, request, response);
 	} else if (strcmp(request->command, "resolve") == 0) {
