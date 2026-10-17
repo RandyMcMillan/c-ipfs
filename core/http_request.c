@@ -234,6 +234,38 @@ static int ipfs_core_http_process_object_data(struct IpfsNode* local_node, struc
 	return 1;
 }
 
+static int ipfs_core_http_process_object_links(struct IpfsNode* local_node, struct HttpRequest* request, struct HttpResponse** response) {
+	if (!request->arguments || request->arguments->total < 1) return 0;
+	char* hash = (char*)libp2p_utils_vector_get(request->arguments, 0);
+	struct Cid* cid = NULL;
+	if (!ipfs_cid_decode_hash_from_base58((unsigned char*)hash, strlen(hash), &cid)) {
+		return 0;
+	}
+	struct HashtableNode* node = NULL;
+	int retVal = ipfs_merkledag_get(cid->hash, cid->hash_length, &node, local_node->repo);
+	ipfs_cid_free(cid);
+	if (!retVal || !node) return 0;
+	*response = ipfs_core_http_response_new();
+	if (!*response) { ipfs_hashtable_node_free(node); return 0; }
+	struct HttpResponse* res = *response;
+	res->content_type = "application/json";
+	FILE* out = open_memstream((char**)&res->bytes, &res->bytes_size);
+	fprintf(out, "{\"Links\":[");
+	int first = 1;
+	for (struct NodeLink* l = node->head_link; l; l = l->next) {
+		char link_hash[256] = {0};
+		if (l->hash && ipfs_cid_hash_to_base58(l->hash, l->hash_size, (unsigned char*)link_hash, 256)) {
+			if (!first) fprintf(out, ",");
+			fprintf(out, "{\"Name\":\"%s\",\"Hash\":\"%s\",\"Size\":%zu}", l->name ? l->name : "", link_hash, l->t_size);
+			first = 0;
+		}
+	}
+	fprintf(out, "]}");
+	fclose(out);
+	ipfs_hashtable_node_free(node);
+	return 1;
+}
+
 int ipfs_core_http_process_object(struct IpfsNode* local_node, struct HttpRequest* request, struct HttpResponse** response) {
 	int retVal = 0;
 	if (strcmp(request->sub_command, "get") == 0) {
@@ -1387,6 +1419,8 @@ int ipfs_core_http_request_process(struct IpfsNode* local_node, struct HttpReque
 		retVal = ipfs_core_http_process_object_stat(local_node, request, response);
 	} else if (strcmp(request->command, "object") == 0 && request->sub_command && strcmp(request->sub_command, "data") == 0) {
 		retVal = ipfs_core_http_process_object_data(local_node, request, response);
+	} else if (strcmp(request->command, "object") == 0 && request->sub_command && strcmp(request->sub_command, "links") == 0) {
+		retVal = ipfs_core_http_process_object_links(local_node, request, response);
 	} else if (strcmp(request->command, "object") == 0) {
 		retVal = ipfs_core_http_process_object(local_node, request, response);
 	} else if (strcmp(request->command, "dht") == 0 && request->sub_command && strcmp(request->sub_command, "findprovs") == 0) {
