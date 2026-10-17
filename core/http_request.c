@@ -794,6 +794,33 @@ static int ipfs_core_http_process_dht_put(struct IpfsNode* local_node, struct Ht
 	return retVal;
 }
 
+static int ipfs_core_http_process_dht_findpeer(struct IpfsNode* local_node, struct HttpRequest* request, struct HttpResponse** response) {
+	if (!request->arguments || request->arguments->total < 1) return 0;
+	char* peer_id = (char*)libp2p_utils_vector_get(request->arguments, 0);
+	struct Libp2pPeer* peer = NULL;
+	int retVal = local_node->routing->FindPeer(local_node->routing, (const unsigned char*)peer_id, strlen(peer_id), &peer);
+	*response = ipfs_core_http_response_new();
+	if (!*response) return 0;
+	struct HttpResponse* res = *response;
+	res->content_type = "application/json";
+	if (!retVal || !peer) {
+		const char* msg = "{\"ID\":\"\"}";
+		res->bytes = (uint8_t*)malloc(strlen(msg) + 1);
+		if (res->bytes) { strcpy((char*)res->bytes, msg); res->bytes_size = strlen(msg); }
+		return retVal ? 1 : 0;
+	}
+	int bytes_needed = 64 + (int)strlen(peer_id);
+	res->bytes = (uint8_t*)malloc((size_t)bytes_needed);
+	if (!res->bytes) {
+		ipfs_core_http_response_free(res);
+		*response = NULL;
+		return 0;
+	}
+	snprintf((char*)res->bytes, (size_t)bytes_needed, "{\"ID\":\"%s\"}", peer->id ? peer->id : peer_id);
+	res->bytes_size = strlen((char*)res->bytes);
+	return 1;
+}
+
 static int ipfs_core_http_process_dht_findprovs(struct IpfsNode* local_node, struct HttpRequest* request, struct HttpResponse** response) {
 	if (!request->arguments || request->arguments->total < 1) return 0;
 	char* hash = (char*)libp2p_utils_vector_get(request->arguments, 0);
@@ -1286,6 +1313,8 @@ int ipfs_core_http_request_process(struct IpfsNode* local_node, struct HttpReque
 		retVal = ipfs_core_http_process_dht_get(local_node, request, response);
 	} else if (strcmp(request->command, "dht") == 0 && request->sub_command && strcmp(request->sub_command, "put") == 0) {
 		retVal = ipfs_core_http_process_dht_put(local_node, request, response);
+	} else if (strcmp(request->command, "dht") == 0 && request->sub_command && strcmp(request->sub_command, "findpeer") == 0) {
+		retVal = ipfs_core_http_process_dht_findpeer(local_node, request, response);
 	} else if (strcmp(request->command, "dht") == 0) {
 		retVal = ipfs_core_http_process_dht(local_node, request, response);
 	} else if (strcmp(request->command, "swarm") == 0 && request->sub_command && strcmp(request->sub_command, "addrs") == 0) {
