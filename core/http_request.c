@@ -773,6 +773,27 @@ static int ipfs_core_http_process_cat(struct IpfsNode* local_node, struct HttpRe
 	return 1;
 }
 
+static int ipfs_core_http_process_dht_put(struct IpfsNode* local_node, struct HttpRequest* request, struct HttpResponse** response) {
+	if (!request->arguments || request->arguments->total < 2) return 0;
+	char* key = (char*)libp2p_utils_vector_get(request->arguments, 0);
+	char* value = (char*)libp2p_utils_vector_get(request->arguments, 1);
+	int retVal = local_node->routing->PutValue(local_node->routing, (const unsigned char*)key, strlen(key), value, strlen(value));
+	*response = ipfs_core_http_response_new();
+	if (!*response) return 0;
+	struct HttpResponse* res = *response;
+	res->content_type = "application/json";
+	const char* msg = "{\"Value\":{}}";
+	res->bytes = (uint8_t*)malloc(strlen(msg) + 1);
+	if (!res->bytes) {
+		ipfs_core_http_response_free(res);
+		*response = NULL;
+		return 0;
+	}
+	strcpy((char*)res->bytes, msg);
+	res->bytes_size = strlen(msg);
+	return retVal;
+}
+
 static int ipfs_core_http_process_dht_findprovs(struct IpfsNode* local_node, struct HttpRequest* request, struct HttpResponse** response) {
 	if (!request->arguments || request->arguments->total < 1) return 0;
 	char* hash = (char*)libp2p_utils_vector_get(request->arguments, 0);
@@ -1261,6 +1282,10 @@ int ipfs_core_http_request_process(struct IpfsNode* local_node, struct HttpReque
 		retVal = ipfs_core_http_process_object(local_node, request, response);
 	} else if (strcmp(request->command, "dht") == 0 && request->sub_command && strcmp(request->sub_command, "findprovs") == 0) {
 		retVal = ipfs_core_http_process_dht_findprovs(local_node, request, response);
+	} else if (strcmp(request->command, "dht") == 0 && request->sub_command && strcmp(request->sub_command, "get") == 0) {
+		retVal = ipfs_core_http_process_dht_get(local_node, request, response);
+	} else if (strcmp(request->command, "dht") == 0 && request->sub_command && strcmp(request->sub_command, "put") == 0) {
+		retVal = ipfs_core_http_process_dht_put(local_node, request, response);
 	} else if (strcmp(request->command, "dht") == 0) {
 		retVal = ipfs_core_http_process_dht(local_node, request, response);
 	} else if (strcmp(request->command, "swarm") == 0 && request->sub_command && strcmp(request->sub_command, "addrs") == 0) {
