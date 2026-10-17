@@ -1,6 +1,6 @@
-# c-ipfs P0 Protocol Gap Plan
+# c-ipfs P0/P1 Protocol Gap Plan
 
-Last updated: 2026-10-16
+Last updated: 2026-10-17
 
 ## Done
 
@@ -8,43 +8,29 @@ Last updated: 2026-10-16
 - [x] P0.92 DNSLink: fix resolver bugs, `_dnslink.` fallback, wire `/ipns/<domain>` into gateway, add mocked test.
 - [x] P0.12 HTTP API JSON: integrate `core/api_kubo_rpc.c` with real `/api/v0` dispatcher (`id`, `version`), default to dedicated port, add `id`/`version` tests, commit and push.
 - [x] P0.9 Yamux: implement WINDOW_UPDATE handling, automatic receive-window replenishment, SYN-ACK on accept, PING request/response, GO_AWAY handling, and safe stream/session close.
-- [x] P0.9 Yamux tests: `test_yamux_v2_stream_roundtrip`, `test_yamux_v2_ping`, `test_yamux_v2_goaway`, `test_yamux_v2_window_update` all pass; c-libp2p submodule committed and pushed; pointer updated in c-ipfs.
-- [x] P0.2 v2 wire protocol handshake integration:
-  - Implement `ipfs_swarm_connect_v2_bridge()` in `transport/swarm_dialer_v2_bridge.c` with TCP dial, `/noise` multistream negotiation, Noise XX initiator handshake, Yamux client session, and Identify exchange.
-  - Make inbound `core/v2_listen.c` hand the Yamux session off to a background thread so it stays alive to accept multiple streams.
-  - Add `test_swarm_connect_v2_bridge` that starts a local v2 listener and dials it via the bridge.
-- [x] P0.3 / P0.4 IPNS V1/V2 resolution hardening:
-  - Add unified `ipns_entry_valid()` helper in `namesys/resolver.c` that verifies V2 (`ipns-signature:` + data) and V1 (value+validity+validityType) signatures using embedded public keys.
-  - Enforce public-key/peer-ID name binding for embedded keys and EOL/validity checks on both local and network (`GetValue`) resolution paths.
-  - Fix `util/time.c` `ipfs_util_time_parse_RFC3339()` to parse UTC timestamps with `timegm()` instead of `mktime()`, so expired records are rejected regardless of local timezone.
-  - Add resolver-level tests: V1 RSA round-trip, V2 RSA round-trip, V2 Ed25519 round-trip, expired-record rejection, bad-signature rejection.
-- [x] P0.11 DNSADDR resolver maturation:
-  - Make `res_query`, `getaddrinfo`, and `freeaddrinfo` test-injectable in `transport/dnsaddr_resolver.c`.
-  - Add mocked tests for single TXT resolution, `/dnsaddr/` recursion, `/dns4/` materialization, missing records, and missing `dnsaddr=` prefix.
-- [x] Stability: fix missing null-terminator in `nostr/event.c` `ipfs_nostr_event_to_json()` that caused intermittent `test_ffi_nostr_event_sign_and_verify` failures in the full default suite.
-- [x] Full default `test/test_ipfs` suite passes (157 tests).
+- [x] P0.9 Yamux tests: `test_yamux_v2_stream_roundtrip`, `test_yamux_v2_ping`, `test_yamux_v2_goaway`, `test_yamux_v2_window_update` all pass.
+- [x] P0.2 v2 wire protocol handshake integration: `ipfs_swarm_connect_v2_bridge()`, inbound `core/v2_listen.c` background session thread, `test_swarm_connect_v2_bridge`.
+- [x] P0.3 / P0.4 IPNS V1/V2 resolution hardening: unified `ipns_entry_valid()`, EOL/validity, timegm fix, resolver tests.
+- [x] P0.11 DNSADDR resolver maturation: injectable resolvers, mocked tests.
+- [x] Stability: fix missing null-terminator in `nostr/event.c`.
+- [x] Full default `test/test_ipfs` suite passes (157+ tests).
+- [x] P0.9.5 Exponential backoff for DHT/routing: `dht_backoff_delay_us()` in c-libp2p, kademlia integration, test added.
+- [x] P0.8 Noise interop round-trip: local test verifies Noise + Yamux + Identify (agent + protocol version).
+- [x] Heap/ASan fixes: HTTP request `data` init, boundary size correction, gateway suffix overflow, boundary size guards, daemon api_stop before free.
+- [x] HTTP API expansion: `/api/v0/block/stat`.
+- [x] RESUME_PLAN.md added.
 
 ## In Progress
 
-None — the previously targeted P0 gaps are implemented and verified.
-
-## Next (prioritized from remaining P0 gaps)
-
-1. **P0.9.5 Exponential backoff for peer/DHT routing**
-   - Find current linear retry logic in routing/DHT code.
-   - Replace with bounded exponential backoff for peer lookups and DHT queries.
-   - Add tests where feasible.
-
-2. **P0.8 libp2p Noise security protocol interop**
-   - Validate the existing Noise XX handshake in `c-libp2p/v2` against Kubo-style peers.
-   - Add a local round-trip test that exercises Noise + Yamux + Identify end-to-end.
-
-3. **P0.13 / P0.14 Bitswap 1.1 / 1.2.0**
-   - Evaluate current bitswap implementation against 1.1/1.2.0 message formats.
-   - Implement want-have/want-block CIDv1 support, response presences, and ledger accounting as needed.
-   - This is the largest remaining P0 item; defer until after smaller gaps above.
+- [ ] P0.13 / P0.14 Bitswap 1.1/1.2.0: sessions, cancel, ledger accounting.
+- [ ] P1 Kademlia standard compliance: bucket maintenance, provider re-provide.
+- [ ] P1 IPNS v2 completeness: EOL enforcement, pubsub distribution.
+- [ ] P1 DAG-CBOR full codec.
+- [ ] P2 QUIC/WebSocket real dial/listen.
+- [ ] P2 GossipSub, resource manager, fuzz targets.
+- [ ] P2 HTTP API/CLI expansion to Kubo parity.
 
 ## Open Questions
 
-- Should the Kubo-compatible RPC server eventually share port 5001 with `api_start`? Currently using a dedicated port to avoid conflict.
-- The c-libp2p submodule is a separate repository; any further submodule fixes must be committed/pushed there before updating the pointer in this repo.
+- Should the Kubo-compatible RPC server eventually share port 5001 with `api_start`?
+- c-libp2p submodule is separate; push there first, then update pointer.

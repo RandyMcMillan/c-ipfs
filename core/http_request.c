@@ -524,7 +524,7 @@ static int ipfs_core_http_process_version(struct IpfsNode* local_node, struct Ht
 	if (!*response) return 0;
 	struct HttpResponse* res = *response;
 	res->content_type = "application/json";
-	const char* format = "{\"Version\":\"%s\",\"Commit\":\"\",\"Repo\":\"12\",\"System\":\"amd64/darwin\",\"Golang\":\"\"}";
+	const char* format = "{\"Version\":\"%s\",\"Commit\":\"\",\"Repo\":\"18\",\"System\":\"amd64/darwin\",\"Golang\":\"\"}";
 	int bytes_needed = snprintf(NULL, 0, format, C_IPFS_VERSION);
 	if (bytes_needed < 0) {
 		ipfs_core_http_response_free(res);
