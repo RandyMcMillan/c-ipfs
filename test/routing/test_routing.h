@@ -2,9 +2,11 @@
 #include <pthread.h>
 #include <fcntl.h>
 #include <sys/stat.h>
+#include <stdlib.h>
 
 #include "libp2p/os/utils.h"
 #include "libp2p/utils/logger.h"
+#include "libp2p/routing/kademlia.h"
 
 #include "multiaddr/multiaddr.h"
 
@@ -833,5 +835,29 @@ int test_dht_utils_xor_distance() {
 	// ab < ad
 	if (libp2p_routing_dht_distance_cmp(dist_ab, dist_ad) >= 0) return 0;
 
+	return 1;
+}
+
+int test_dht_backoff_delay(void) {
+	unsigned int base_us = 1000;
+	unsigned int max_us = 100000;
+	unsigned int prev_cap = 0;
+	unsigned int prev_d = 0;
+
+	for (int attempt = 0; attempt < 10; attempt++) {
+		unsigned int delay_cap = base_us << attempt;
+		if (delay_cap > max_us)
+			delay_cap = max_us;
+		unsigned int d = dht_backoff_delay_us(attempt, base_us, max_us);
+		if (d > delay_cap)
+			return 0;
+		if (delay_cap > 1 && d < delay_cap / 2)
+			return 0;
+		/* Monotonic only while the cap is still growing; after capping, jitter may overlap. */
+		if (attempt > 0 && delay_cap > prev_cap && d < prev_d)
+			return 0;
+		prev_cap = delay_cap;
+		prev_d = d;
+	}
 	return 1;
 }
