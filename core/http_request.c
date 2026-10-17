@@ -1242,6 +1242,25 @@ static int ipfs_core_http_process_commands(struct IpfsNode* local_node, struct H
 	return 1;
 }
 
+static int ipfs_core_http_process_diag_sys(struct IpfsNode* local_node, struct HttpRequest* request, struct HttpResponse** response) {
+	(void)local_node;
+	(void)request;
+	*response = ipfs_core_http_response_new();
+	if (!*response) return 0;
+	struct HttpResponse* res = *response;
+	res->content_type = "application/json";
+	const char* msg = "{\"Memory\":{\"Sys\":0},\"NumGoroutine\":1}";
+	res->bytes = (uint8_t*)malloc(strlen(msg) + 1);
+	if (!res->bytes) {
+		ipfs_core_http_response_free(res);
+		*response = NULL;
+		return 0;
+	}
+	strcpy((char*)res->bytes, msg);
+	res->bytes_size = strlen(msg);
+	return 1;
+}
+
 static int ipfs_core_http_process_ls(struct IpfsNode* local_node, struct HttpRequest* request, struct HttpResponse** response) {
 	if (!request->arguments || request->arguments->total < 1) return 0;
 	char* hash = (char*)libp2p_utils_vector_get(request->arguments, 0);
@@ -1347,6 +1366,8 @@ int ipfs_core_http_request_process(struct IpfsNode* local_node, struct HttpReque
 		retVal = ipfs_core_http_process_dag_put(local_node, request, response);
 	} else if (strcmp(request->command, "ls") == 0) {
 		retVal = ipfs_core_http_process_ls(local_node, request, response);
+	} else if (strcmp(request->command, "diag") == 0 && request->sub_command && strcmp(request->sub_command, "sys") == 0) {
+		retVal = ipfs_core_http_process_diag_sys(local_node, request, response);
 	} else if (strcmp(request->command, "commands") == 0) {
 		retVal = ipfs_core_http_process_commands(local_node, request, response);
 	} else if (strcmp(request->command, "key") == 0 && request->sub_command && strcmp(request->sub_command, "list") == 0) {
