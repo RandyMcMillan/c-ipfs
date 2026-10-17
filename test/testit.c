@@ -118,6 +118,7 @@ int build_test_collection() {
 	add_test("test_ipld_dag_cbor_link_large_cid", test_ipld_dag_cbor_link_large_cid, 1);
 	add_test("test_ipld_dag_cbor_link_invalid_inputs", test_ipld_dag_cbor_link_invalid_inputs, 1);
 	add_test("test_ipld_dag_cbor_link_decode_corrupt", test_ipld_dag_cbor_link_decode_corrupt, 1);
+	add_test("test_dag_cbor_value_roundtrip", test_dag_cbor_value_roundtrip, 1);
 	add_test("test_ipns_pubsub_entry_parse_basic", test_ipns_pubsub_entry_parse_basic, 1);
 	add_test("test_ipns_pubsub_topic_valid", test_ipns_pubsub_topic_valid, 1);
 	add_test("test_ipns_pubsub_on_message_valid", test_ipns_pubsub_on_message_valid, 1);

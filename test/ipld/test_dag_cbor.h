@@ -198,3 +198,34 @@ int test_ipld_dag_cbor_link_decode_corrupt(void) {
 exit:
     return retVal;
 }
+
+int test_dag_cbor_value_roundtrip(void) {
+    struct DagCborValue *m = dag_cbor_value_new_map();
+    dag_cbor_value_map_set(m, "a", dag_cbor_value_new_int(42));
+    dag_cbor_value_map_set(m, "b", dag_cbor_value_new_bool(1));
+    dag_cbor_value_map_set(m, "c", dag_cbor_value_new_string("hello"));
+    struct DagCborValue *arr = dag_cbor_value_new_array();
+    dag_cbor_value_array_append(arr, dag_cbor_value_new_int(1));
+    dag_cbor_value_array_append(arr, dag_cbor_value_new_int(2));
+    dag_cbor_value_map_set(m, "d", arr);
+
+    uint8_t *buf = NULL;
+    size_t len = 0;
+    if (!dag_cbor_encode(m, &buf, &len)) {
+        dag_cbor_value_free(m);
+        return 0;
+    }
+
+    struct DagCborValue *dec = NULL;
+    if (!dag_cbor_decode(buf, len, &dec)) {
+        free(buf);
+        dag_cbor_value_free(m);
+        return 0;
+    }
+
+    int ok = (dec->type == DAG_CBOR_TYPE_MAP && dec->as.map.count == 4);
+    free(buf);
+    dag_cbor_value_free(m);
+    dag_cbor_value_free(dec);
+    return ok;
+}
