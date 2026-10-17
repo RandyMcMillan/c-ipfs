@@ -18,6 +18,7 @@
 #include "ipfs/merkledag/merkledag.h"
 #include "ipfs/merkledag/node.h"
 #include "ipfs/pin/pin.h"
+#include "ipfs/thirdparty/ipfsaddr/ipfs_addr.h"
 #include "ipfs/routing/routing.h"
 
 #ifndef C_IPFS_VERSION
@@ -443,6 +444,27 @@ int ipfs_core_http_process_swarm_peers(struct IpfsNode* local_node, struct HttpR
 	}
 	ptr += sprintf(ptr, "]}");
 	response->bytes_size = strlen((char*)response->bytes);
+	return 1;
+}
+
+static int ipfs_core_http_process_bootstrap_list(struct IpfsNode* local_node, struct HttpRequest* request, struct HttpResponse** response) {
+	(void)request;
+	*response = ipfs_core_http_response_new();
+	if (!*response) return 0;
+	struct HttpResponse* res = *response;
+	res->content_type = "application/json";
+	FILE* out = open_memstream((char**)&res->bytes, &res->bytes_size);
+	fprintf(out, "{\"Peers\":[");
+	if (local_node->repo && local_node->repo->config && local_node->repo->config->bootstrap_peers) {
+		struct Libp2pVector* peers = local_node->repo->config->bootstrap_peers;
+		for (int i = 0; i < peers->total; i++) {
+			struct IPFSAddr* addr = (struct IPFSAddr*)libp2p_utils_vector_get(peers, i);
+			if (i > 0) fprintf(out, ",");
+			fprintf(out, "\"%s\"", (addr && addr->entire_string) ? addr->entire_string : "");
+		}
+	}
+	fprintf(out, "]}");
+	fclose(out);
 	return 1;
 }
 
@@ -1046,6 +1068,8 @@ int ipfs_core_http_request_process(struct IpfsNode* local_node, struct HttpReque
 		retVal = ipfs_core_http_process_dht(local_node, request, response);
 	} else if (strcmp(request->command, "swarm") == 0) {
 		retVal = ipfs_core_http_process_swarm(local_node, request, response);
+	} else if (strcmp(request->command, "bootstrap") == 0 && request->sub_command && strcmp(request->sub_command, "list") == 0) {
+		retVal = ipfs_core_http_process_bootstrap_list(local_node, request, response);
 	} else if (strcmp(request->command, "id") == 0) {
 		retVal = ipfs_core_http_process_id(local_node, request, response);
 	} else if (strcmp(request->command, "version") == 0) {
