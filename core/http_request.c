@@ -542,6 +542,47 @@ static int ipfs_core_http_process_version(struct IpfsNode* local_node, struct Ht
 	return 1;
 }
 
+static int ipfs_core_http_process_block_stat(struct IpfsNode* local_node, struct HttpRequest* request, struct HttpResponse** response) {
+	if (!request->arguments || request->arguments->total < 1) return 0;
+	char* hash = (char*)libp2p_utils_vector_get(request->arguments, 0);
+	struct Cid* cid = NULL;
+	if (!ipfs_cid_decode_hash_from_base58((unsigned char*)hash, strlen(hash), &cid)) {
+		return 0;
+	}
+	struct Block* block = NULL;
+	int retVal = ipfs_blockstore_get(local_node->blockstore->blockstoreContext, cid, &block);
+	ipfs_cid_free(cid);
+	if (!retVal || !block) {
+		return 0;
+	}
+	*response = ipfs_core_http_response_new();
+	if (!*response) {
+		ipfs_block_free(block);
+		return 0;
+	}
+	struct HttpResponse* res = *response;
+	res->content_type = "application/json";
+	char hash_str[256] = {0};
+	if (!ipfs_cid_hash_to_base58(block->cid->hash, block->cid->hash_length, (unsigned char*)hash_str, 256)) {
+		ipfs_block_free(block);
+		ipfs_core_http_response_free(res);
+		*response = NULL;
+		return 0;
+	}
+	int bytes_needed = 64 + strlen(hash_str);
+	res->bytes = (uint8_t*)malloc(bytes_needed);
+	if (!res->bytes) {
+		ipfs_block_free(block);
+		ipfs_core_http_response_free(res);
+		*response = NULL;
+		return 0;
+	}
+	snprintf((char*)res->bytes, bytes_needed, "{\"Key\":\"%s\",\"Size\":%zu}", hash_str, block->data_length);
+	res->bytes_size = strlen((char*)res->bytes);
+	ipfs_block_free(block);
+	return 1;
+}
+
 static int ipfs_core_http_process_block_get(struct IpfsNode* local_node, struct HttpRequest* request, struct HttpResponse** response) {
 	if (!request->arguments || request->arguments->total < 1) return 0;
 	char* hash = (char*)libp2p_utils_vector_get(request->arguments, 0);
@@ -975,6 +1016,8 @@ int ipfs_core_http_request_process(struct IpfsNode* local_node, struct HttpReque
 		retVal = ipfs_core_http_process_block_get(local_node, request, response);
 	} else if (strcmp(request->command, "block") == 0 && request->sub_command && strcmp(request->sub_command, "put") == 0) {
 		retVal = ipfs_core_http_process_block_put(local_node, request, response);
+	} else if (strcmp(request->command, "block") == 0 && request->sub_command && strcmp(request->sub_command, "stat") == 0) {
+		retVal = ipfs_core_http_process_block_stat(local_node, request, response);
 	} else if (strcmp(request->command, "cat") == 0) {
 		retVal = ipfs_core_http_process_cat(local_node, request, response);
 	} else if (strcmp(request->command, "get") == 0) {
