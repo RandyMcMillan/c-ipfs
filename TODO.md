@@ -1,6 +1,6 @@
 # c-ipfs P0 Protocol Gap Plan
 
-Last updated: 2026-10-15
+Last updated: 2026-10-16
 
 ## Done
 
@@ -18,7 +18,11 @@ Last updated: 2026-10-15
   - Enforce public-key/peer-ID name binding for embedded keys and EOL/validity checks on both local and network (`GetValue`) resolution paths.
   - Fix `util/time.c` `ipfs_util_time_parse_RFC3339()` to parse UTC timestamps with `timegm()` instead of `mktime()`, so expired records are rejected regardless of local timezone.
   - Add resolver-level tests: V1 RSA round-trip, V2 RSA round-trip, V2 Ed25519 round-trip, expired-record rejection, bad-signature rejection.
-- [x] Full default `test/test_ipfs` suite passes (152 tests).
+- [x] P0.11 DNSADDR resolver maturation:
+  - Make `res_query`, `getaddrinfo`, and `freeaddrinfo` test-injectable in `transport/dnsaddr_resolver.c`.
+  - Add mocked tests for single TXT resolution, `/dnsaddr/` recursion, `/dns4/` materialization, missing records, and missing `dnsaddr=` prefix.
+- [x] Stability: fix missing null-terminator in `nostr/event.c` `ipfs_nostr_event_to_json()` that caused intermittent `test_ffi_nostr_event_sign_and_verify` failures in the full default suite.
+- [x] Full default `test/test_ipfs` suite passes (157 tests).
 
 ## In Progress
 
@@ -26,22 +30,16 @@ None — the previously targeted P0 gaps are implemented and verified.
 
 ## Next (prioritized from remaining P0 gaps)
 
-1. **P0.11 DNSADDR resolver maturation**
-   - `transport/dnsaddr_resolver.c` exists and is wired into `repo/config/bootstrap_peers.c`.
-   - Verify TXT-record `_dnsaddr.` recursion, `/dns4/` materialization, and memory handling.
-   - Add mocked unit tests (no live DNS dependency) and, if needed, fix parser/wiring gaps.
-   - Mark P0.11 done once tests pass and full default suite still passes.
-
-2. **P0.9.5 Exponential backoff for peer/DHT routing**
+1. **P0.9.5 Exponential backoff for peer/DHT routing**
    - Find current linear retry logic in routing/DHT code.
    - Replace with bounded exponential backoff for peer lookups and DHT queries.
    - Add tests where feasible.
 
-3. **P0.8 libp2p Noise security protocol interop**
+2. **P0.8 libp2p Noise security protocol interop**
    - Validate the existing Noise XX handshake in `c-libp2p/v2` against Kubo-style peers.
    - Add a local round-trip test that exercises Noise + Yamux + Identify end-to-end.
 
-4. **P0.13 / P0.14 Bitswap 1.1 / 1.2.0**
+3. **P0.13 / P0.14 Bitswap 1.1 / 1.2.0**
    - Evaluate current bitswap implementation against 1.1/1.2.0 message formats.
    - Implement want-have/want-block CIDv1 support, response presences, and ledger accounting as needed.
    - This is the largest remaining P0 item; defer until after smaller gaps above.

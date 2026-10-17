@@ -42,6 +42,7 @@
 #include "exchange/test_bitswap_future.h"
 #include "pubsub/test_gossipsub.h"
 #include "transport/test_transport.h"
+#include "transport/test_dnsaddr_resolver.h"
 #include "transport/test_swarm_dialer_v2_bridge.h"
 #include "core/test_yamux_v2.h"
 #include "repo/test_repo_lock.h"
@@ -267,6 +268,11 @@ int build_test_collection() {
 	add_test("test_transport_registry_dial_no_match", test_transport_registry_dial_no_match, 1);
 	add_test("test_transport_registry_dial_match", test_transport_registry_dial_match, 1);
 	add_test("test_transport_registry_live_tcp_dial", test_transport_registry_live_tcp_dial, 0); // manual live integration; can be flaky under daemon startup timing
+	add_test("test_dnsaddr_resolver_single_txt", test_dnsaddr_resolver_single_txt, 1);
+	add_test("test_dnsaddr_resolver_recursion", test_dnsaddr_resolver_recursion, 1);
+	add_test("test_dnsaddr_resolver_dns4_materialize", test_dnsaddr_resolver_dns4_materialize, 1);
+	add_test("test_dnsaddr_resolver_no_records", test_dnsaddr_resolver_no_records, 1);
+	add_test("test_dnsaddr_resolver_missing_dnsaddr_prefix", test_dnsaddr_resolver_missing_dnsaddr_prefix, 1);
 	add_test("test_yamux_v2_stream_roundtrip", test_yamux_v2_stream_roundtrip, 1);
 	add_test("test_yamux_v2_ping", test_yamux_v2_ping, 1);
 	add_test("test_yamux_v2_goaway", test_yamux_v2_goaway, 1);

@@ -15,6 +15,23 @@
 #define DNSDNS_MAX_RESPONSE 65535
 #endif
 
+/* Test-injectable DNS/network hooks. Production uses real res_query/getaddrinfo. */
+static int (*dnsaddr_res_query)(const char *dname, int class, int type, unsigned char *answer, int anslen) = res_query;
+static int (*dnsaddr_getaddrinfo)(const char *node, const char *service, const struct addrinfo *hints, struct addrinfo **res) = getaddrinfo;
+static void (*dnsaddr_freeaddrinfo)(struct addrinfo *res) = freeaddrinfo;
+
+void ipfs_dnsaddr_resolver_set_res_query(int (*fn)(const char *dname, int class, int type, unsigned char *answer, int anslen)) {
+	dnsaddr_res_query = fn ? fn : res_query;
+}
+
+void ipfs_dnsaddr_resolver_set_getaddrinfo(int (*fn)(const char *node, const char *service, const struct addrinfo *hints, struct addrinfo **res)) {
+	dnsaddr_getaddrinfo = fn ? fn : getaddrinfo;
+}
+
+void ipfs_dnsaddr_resolver_set_freeaddrinfo(void (*fn)(struct addrinfo *res)) {
+	dnsaddr_freeaddrinfo = fn ? fn : freeaddrinfo;
+}
+
 static int translate_dnsaddr(const char *input, int depth, char ***results, size_t *count, size_t *capacity);
 static int materialize_dns_multiaddr(const char *value, char ***results, size_t *count, size_t *capacity);
 
@@ -66,7 +83,7 @@ static int resolve_one_query(const char *domain, int depth, char ***results, siz
     unsigned char *answer = calloc(1, DNSDNS_MAX_RESPONSE);
     if (!answer) return -1;
 
-    int len = res_query(query_name, 1, T_TXT, answer, DNSDNS_MAX_RESPONSE);
+    int len = dnsaddr_res_query(query_name, 1, T_TXT, answer, DNSDNS_MAX_RESPONSE);
     if (len < 12) {
         free(answer);
         return -1;
@@ -169,7 +186,7 @@ static int materialize_dns_multiaddr(const char *value, char ***results, size_t 
             hints.ai_family = AF_INET;
             hints.ai_socktype = SOCK_STREAM;
 
-            if (getaddrinfo(host, NULL, &hints, &res) == 0) {
+            if (dnsaddr_getaddrinfo(host, NULL, &hints, &res) == 0) {
                 const char *suffix = host_end ? host_end : "";
                 int found = 0;
                 for (p = res; p != NULL; p = p->ai_next) {
@@ -181,7 +198,7 @@ static int materialize_dns_multiaddr(const char *value, char ***results, size_t 
                     if (append_multiaddr(results, count, capacity, buf) != 0) break;
                     found = 1;
                 }
-                freeaddrinfo(res);
+                dnsaddr_freeaddrinfo(res);
                 if (found) {
                     return 0;
                 }

@@ -177,6 +177,7 @@ int ipfs_nostr_event_to_json(struct NostrEvent *ev, char *buf, size_t buflen)
     if (!push_str(&p, end, ",\"sig\":\"")) return 0;
     if (!push_hex(&p, end, ev->sig, 64)) return 0;
     if (!push_str(&p, end, "\"}")) return 0;
+    *p = '\0';
     return 1;
 }
 
