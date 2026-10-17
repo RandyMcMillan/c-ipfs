@@ -102,7 +102,8 @@ int test_swarm_connect_v2_bridge(void)
         }
         buf[total] = '\0';
         /* The Identify response contains the agent version string. */
-        if (total > 0 && strstr(buf, "c-ipfs") != NULL)
+        if (total > 0 && strstr(buf, "c-ipfs") != NULL &&
+            strstr(buf, "ipfs/0.1.0") != NULL)
             ok = 1;
     }
 
