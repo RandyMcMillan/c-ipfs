@@ -504,6 +504,25 @@ static int ipfs_core_http_process_bootstrap_list(struct IpfsNode* local_node, st
 	return 1;
 }
 
+static int ipfs_core_http_process_swarm_addrs(struct IpfsNode* local_node, struct HttpRequest* request, struct HttpResponse** response) {
+	(void)request;
+	*response = ipfs_core_http_response_new();
+	if (!*response) return 0;
+	struct HttpResponse* res = *response;
+	res->content_type = "application/json";
+	const char* addr = (local_node && local_node->repo && local_node->repo->config && local_node->repo->config->addresses && local_node->repo->config->addresses->swarm_head && local_node->repo->config->addresses->swarm_head->item) ? (const char*)local_node->repo->config->addresses->swarm_head->item : "";
+	int bytes_needed = 64 + (int)strlen(addr);
+	res->bytes = (uint8_t*)malloc((size_t)bytes_needed);
+	if (!res->bytes) {
+		ipfs_core_http_response_free(res);
+		*response = NULL;
+		return 0;
+	}
+	snprintf((char*)res->bytes, (size_t)bytes_needed, "{\"Addrs\":[\"%s\"]}", addr);
+	res->bytes_size = strlen((char*)res->bytes);
+	return 1;
+}
+
 int ipfs_core_http_process_swarm(struct IpfsNode* local_node, struct HttpRequest* request, struct HttpResponse** response) {
 	int retVal = 0;
 	if (strcmp(request->sub_command, "connect") == 0) {
@@ -1206,6 +1225,8 @@ int ipfs_core_http_request_process(struct IpfsNode* local_node, struct HttpReque
 		retVal = ipfs_core_http_process_dht_findprovs(local_node, request, response);
 	} else if (strcmp(request->command, "dht") == 0) {
 		retVal = ipfs_core_http_process_dht(local_node, request, response);
+	} else if (strcmp(request->command, "swarm") == 0 && request->sub_command && strcmp(request->sub_command, "addrs") == 0) {
+		retVal = ipfs_core_http_process_swarm_addrs(local_node, request, response);
 	} else if (strcmp(request->command, "swarm") == 0) {
 		retVal = ipfs_core_http_process_swarm(local_node, request, response);
 	} else if (strcmp(request->command, "bootstrap") == 0 && request->sub_command && strcmp(request->sub_command, "list") == 0) {
