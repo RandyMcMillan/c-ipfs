@@ -1,7 +1,7 @@
 CC = gcc
-CFLAGS = -O0 -I../include -I../c-libp2p/include -I../c-libp2p/v2/include -I../c-libp2p/c-multihash/include -I../c-libp2p/c-multiaddr/include -I../c-libp2p/c-protobuf -I../lmdb/libraries/liblmdb -I../nostril -I../nostril/deps/secp256k1/include -I../c-libnostr/include -I../c-libnostr/build/include -g3 -Wall -std=gnu99
+CFLAGS = -O0 -fsanitize=address -fno-omit-frame-pointer -I../include -I../c-libp2p/include -I../c-libp2p/v2/include -I../c-libp2p/c-multihash/include -I../c-libp2p/c-multiaddr/include -I../c-libp2p/c-protobuf -I../lmdb/libraries/liblmdb -I../nostril -I../nostril/deps/secp256k1/include -I../c-libnostr/include -I../c-libnostr/build/include -g3 -Wall -std=gnu99
 LWS_LIB = ../libwebsockets/build-c-ipfs/lib/libwebsockets.a
-LFLAGS = -L../c-libp2p -L../c-libp2p/c-multihash -L../c-libp2p/c-multiaddr -lp2p -lm -lmultihash -lmultiaddr -lpthread -lresolv $(LWS_LIB)
+LFLAGS = -fsanitize=address -L../c-libp2p -L../c-libp2p/c-multihash -L../c-libp2p/c-multiaddr -lp2p -lm -lmultihash -lmultiaddr -lpthread -lresolv $(LWS_LIB)
 ifeq ($(shell uname -s),Darwin)
 LFLAGS += -Wl,-rpath,@loader_path/../c-libp2p -framework SystemConfiguration -framework CoreFoundation
 else

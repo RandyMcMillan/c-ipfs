@@ -8,6 +8,7 @@
 #include "libp2p/peer/peerstore.h"
 #include "ipfs/core/daemon.h"
 #include "ipfs/core/null.h" // for ipfs_null_shutdown
+#include "ipfs/core/api.h"
 #include "ipfs/core/ipfs_node.h"
 #include "ipfs/core/bootstrap.h"
 #include "ipfs/core/api_kubo_rpc.h"
@@ -71,6 +72,7 @@ int ipfs_daemon_start(char* repo_path) {
     if (ma != NULL)
     	multiaddress_free(ma);
     if (local_node != NULL) {
+    	api_stop(local_node);
     	ipfs_node_free(local_node);
     }
     return retVal;
