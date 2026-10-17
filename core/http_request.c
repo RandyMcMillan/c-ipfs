@@ -594,6 +594,25 @@ static int ipfs_core_http_process_id(struct IpfsNode* local_node, struct HttpReq
 	return 1;
 }
 
+static int ipfs_core_http_process_version_deps(struct IpfsNode* local_node, struct HttpRequest* request, struct HttpResponse** response) {
+	(void)local_node;
+	(void)request;
+	*response = ipfs_core_http_response_new();
+	if (!*response) return 0;
+	struct HttpResponse* res = *response;
+	res->content_type = "application/json";
+	const char* msg = "[]";
+	res->bytes = (uint8_t*)malloc(strlen(msg) + 1);
+	if (!res->bytes) {
+		ipfs_core_http_response_free(res);
+		*response = NULL;
+		return 0;
+	}
+	strcpy((char*)res->bytes, msg);
+	res->bytes_size = strlen(msg);
+	return 1;
+}
+
 static int ipfs_core_http_process_version(struct IpfsNode* local_node, struct HttpRequest* request, struct HttpResponse** response) {
 	(void)local_node;
 	(void)request;
@@ -1252,6 +1271,8 @@ int ipfs_core_http_request_process(struct IpfsNode* local_node, struct HttpReque
 		retVal = ipfs_core_http_process_bootstrap_list(local_node, request, response);
 	} else if (strcmp(request->command, "id") == 0) {
 		retVal = ipfs_core_http_process_id(local_node, request, response);
+	} else if (strcmp(request->command, "version") == 0 && request->sub_command && strcmp(request->sub_command, "deps") == 0) {
+		retVal = ipfs_core_http_process_version_deps(local_node, request, response);
 	} else if (strcmp(request->command, "version") == 0) {
 		retVal = ipfs_core_http_process_version(local_node, request, response);
 	} else if (strcmp(request->command, "block") == 0 && request->sub_command && strcmp(request->sub_command, "get") == 0) {
