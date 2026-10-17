@@ -1053,6 +1053,35 @@ static int ipfs_core_http_process_resolve(struct IpfsNode* local_node, struct Ht
 	return 1;
 }
 
+static int ipfs_core_http_process_config_show(struct IpfsNode* local_node, struct HttpRequest* request, struct HttpResponse** response) {
+	(void)request;
+	if (!local_node || !local_node->repo || !local_node->repo->path) return 0;
+	char config_path[4096];
+	snprintf(config_path, sizeof(config_path), "%s/config", local_node->repo->path);
+	FILE* f = fopen(config_path, "r");
+	if (!f) return 0;
+	fseek(f, 0, SEEK_END);
+	long sz = ftell(f);
+	fseek(f, 0, SEEK_SET);
+	if (sz < 0) { fclose(f); return 0; }
+	*response = ipfs_core_http_response_new();
+	if (!*response) { fclose(f); return 0; }
+	struct HttpResponse* res = *response;
+	res->content_type = "application/json";
+	res->bytes = (uint8_t*)malloc((size_t)sz + 1);
+	if (!res->bytes) {
+		ipfs_core_http_response_free(res);
+		*response = NULL;
+		fclose(f);
+		return 0;
+	}
+	size_t read = fread(res->bytes, 1, (size_t)sz, f);
+	res->bytes[read] = '\\0';
+	res->bytes_size = read;
+	fclose(f);
+	return 1;
+}
+
 static int ipfs_core_http_process_ls(struct IpfsNode* local_node, struct HttpRequest* request, struct HttpResponse** response) {
 	if (!request->arguments || request->arguments->total < 1) return 0;
 	char* hash = (char*)libp2p_utils_vector_get(request->arguments, 0);
@@ -1146,6 +1175,8 @@ int ipfs_core_http_request_process(struct IpfsNode* local_node, struct HttpReque
 		retVal = ipfs_core_http_process_dag_put(local_node, request, response);
 	} else if (strcmp(request->command, "ls") == 0) {
 		retVal = ipfs_core_http_process_ls(local_node, request, response);
+	} else if (strcmp(request->command, "config") == 0 && request->sub_command && strcmp(request->sub_command, "show") == 0) {
+		retVal = ipfs_core_http_process_config_show(local_node, request, response);
 	} else if (strcmp(request->command, "resolve") == 0) {
 		retVal = ipfs_core_http_process_resolve(local_node, request, response);
 	} else if (strcmp(request->command, "pin") == 0 && request->sub_command && strcmp(request->sub_command, "add") == 0) {
