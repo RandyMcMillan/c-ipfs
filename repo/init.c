@@ -155,10 +155,20 @@ int ipfs_repo_init(int argc, char** argv) {
 		fprintf(stderr, "Error: cannot determine repo directory\n");
 		return 0;
 	}
-	// reject only if already initialized, not if directory merely exists
+	// reject only if already initialized and usable, not if directory merely exists
 	if (fs_repo_is_initialized(repo_directory)) {
-		fprintf(stderr, "Error: ipfs configuration file already exists below %s\n", repo_directory);
-		return 0;
+		struct FSRepo* test_repo = NULL;
+		int usable = 0;
+		if (ipfs_repo_fsrepo_new(repo_directory, NULL, &test_repo) && test_repo != NULL) {
+			if (ipfs_repo_fsrepo_open(test_repo))
+				usable = 1;
+			ipfs_repo_fsrepo_free(test_repo);
+		}
+		if (usable) {
+			fprintf(stderr, "Error: ipfs configuration file already exists below %s\n", repo_directory);
+			return 0;
+		}
+		fprintf(stderr, "Warning: existing repository is corrupt or unusable; reinitializing.\\n");
 	}
 	// make the directory if it doesn't exist yet
 	if (!os_utils_directory_exists(repo_directory) && !os_mkdir(repo_directory)) {

@@ -376,14 +376,35 @@ int repo_config_is_initialized(char* full_path) {
 	int retVal = repo_config_get_file_name(full_path, &config_file_full_path);
 	if (!retVal)
 		return 0;
-	
-	if (os_utils_file_exists(config_file_full_path))
-		retVal = 1;
-	else
-		retVal = 0;
-	
+
+	if (!os_utils_file_exists(config_file_full_path)) {
+		free(config_file_full_path);
+		return 0;
+	}
+
+	/* Validate that the config file contains parseable JSON. A corrupt or
+	 * truncated config (e.g. from an interrupted init) should not block
+	 * re-initialization. */
+	FILE* f = fopen(config_file_full_path, "r");
 	free(config_file_full_path);
-	return retVal;
+	if (!f) return 0;
+	fseek(f, 0, SEEK_END);
+	long sz = ftell(f);
+	fseek(f, 0, SEEK_SET);
+	if (sz <= 0) { fclose(f); return 0; }
+	char* buf = malloc(sz + 1);
+	if (!buf) { fclose(f); return 0; }
+	size_t rd = fread(buf, 1, sz, f);
+	buf[rd] = '\0';
+	fclose(f);
+
+	jsmn_parser parser;
+	jsmn_init(&parser);
+	int tokens = jsmn_parse(&parser, buf, rd, NULL, 0);
+	free(buf);
+	if (tokens == JSMN_ERROR_INVAL || tokens == JSMN_ERROR_NOMEM || tokens == JSMN_ERROR_PART || tokens <= 0)
+		return 0;
+	return 1;
 }
 
 /***
@@ -566,11 +587,22 @@ int fs_repo_open_config(struct FSRepo* repo) {
 	// parse the data
 	jsmn_parser parser;
 	jsmn_init(&parser);
-	int num_tokens = 256;
-	jsmntok_t tokens[num_tokens];
-	num_tokens = jsmn_parse(&parser, data, strlen(data), tokens, 256);
+	int num_tokens = jsmn_parse(&parser, data, strlen(data), NULL, 0);
+	if (num_tokens <= 0) {
+		libp2p_logger_error("fs_repo", "fs_repo_open_config: jsmn_parse (count) failed with %d for %s\n", num_tokens, full_filename);
+		free(data);
+		return 0;
+	}
+	jsmntok_t *tokens = malloc(sizeof(jsmntok_t) * num_tokens);
+	if (!tokens) {
+		free(data);
+		return 0;
+	}
+	jsmn_init(&parser);
+	num_tokens = jsmn_parse(&parser, data, strlen(data), tokens, num_tokens);
 	if (num_tokens <= 0) {
 		libp2p_logger_error("fs_repo", "fs_repo_open_config: jsmn_parse failed with %d for %s\n", num_tokens, full_filename);
+		free(tokens);
 		free(data);
 		return 0;
 	}
@@ -748,6 +780,7 @@ int fs_repo_open_config(struct FSRepo* repo) {
 		}
 	}
 	// free the memory used reading the json file
+	free(tokens);
 	free(data);
 	free(priv_key_base64);
 	return 1;
