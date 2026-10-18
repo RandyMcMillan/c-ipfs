@@ -28,6 +28,7 @@ static void* reprovide_thread_wrapper(void* arg) {
     if (local_node->repo && local_node->repo->config && local_node->repo->config->reprovider.interval) {
         char *end = NULL;
         long val = strtol(local_node->repo->config->reprovider.interval, &end, 10);
+        if (end == local_node->repo->config->reprovider.interval) val = 0;
         if (val > 0 && end && (*end == 'h' || *end == 'H')) interval = (int)(val * 3600);
         else if (val > 0 && end && (*end == 'm' || *end == 'M')) interval = (int)(val * 60);
         else if (val > 0) interval = (int)val;

@@ -191,12 +191,13 @@ int ipfs_repo_config_init(struct RepoConfig* config, unsigned int num_bits_for_k
  * @returns true(1) on success
  */
 int ipfs_repo_config_new(struct RepoConfig** config) {
-	*config = (struct RepoConfig*)malloc(sizeof(struct RepoConfig));
+	*config = (struct RepoConfig*)calloc(1, sizeof(struct RepoConfig));
 	if (*config == NULL)
 		return 0;
 
 	// set initial values
 	(*config)->bootstrap_peers = NULL;
+	(*config)->reprovider.interval = strdup("12h");
 
 	int retVal = 1;
 	retVal = repo_config_identity_new(&((*config)->identity));
