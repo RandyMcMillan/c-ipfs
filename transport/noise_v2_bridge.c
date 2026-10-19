@@ -87,8 +87,17 @@ static int noise_rsa_verify(const uint8_t *identity_key, size_t identity_key_len
     }
 
     if (pubkey->type == KEYTYPE_ED25519) {
+        unsigned char *to_verify = (unsigned char *)malloc(NOISE_SIG_PREFIX_LEN + data_len);
+        if (!to_verify) {
+            libp2p_crypto_public_key_free(pubkey);
+            return 0;
+        }
+        memcpy(to_verify, NOISE_SIG_PREFIX, NOISE_SIG_PREFIX_LEN);
+        memcpy(to_verify + NOISE_SIG_PREFIX_LEN, data, data_len);
         int ret = ipfs_crypto_verify_ed25519(pubkey->data, pubkey->data_size,
-                                              data, data_len, sig, sig_len);
+                                              to_verify, NOISE_SIG_PREFIX_LEN + data_len,
+                                              sig, sig_len);
+        free(to_verify);
         libp2p_crypto_public_key_free(pubkey);
         return ret;
     }

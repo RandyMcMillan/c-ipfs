@@ -17,14 +17,16 @@
 ## P0 — Kubo Interop Blockers
 
 ### 1. Security Protocol: Noise XX (or TLS 1.3)
-- **Status:** `partial` — Outbound v2 Noise XX and inbound v2 listener (`ipfs_v2_listen_handler` via `core/null.c`) both run Noise XX → Yamux → Identify. Remaining work is broader daemon path parity and peerstate polish.
+- **Status update (2026-10-19):** `partial` — Outbound v2 Noise XX and inbound v2 listener (`ipfs_v2_listen_handler` via `core/null.c`) both run Noise XX → Yamux → Identify. Temporary `DEBUG:` prints were removed from `c-libp2p/conn/dialer.c`. Ed25519 remote identity signatures now verify the required `noise-libp2p-static-key:` prefix in both `transport/noise_v2_bridge.c` and `c-libp2p/v2/src/conn/noise_callbacks.c`. Remaining work is getting the legacy dialer to complete muxer negotiation over the Noise bridge and broader daemon path parity.
 - **Root cause:** The legacy c-libp2p stack only speaks SECIO. Kubo v0.43.0 removed SECIO entirely.
 - **What Kubo does:** Offers `/noise` as the only security protocol on incoming connections. Expects initiators to perform a Noise_XX_25519_ChaChaPoly_SHA256 handshake with libp2p-specific payloads.
 - **What we need:**
   1. ✅ Add libp2p-specific payload extensions — Done in `transport/noise_v2_bridge.c` and `c-libp2p/v2/src/conn/noise_callbacks.c`. Matches Kubo/go-libp2p exactly.
-  2. Wire v2 Noise into the **inbound listener** path (`core/null.c` `ipfs_null_listen`) so accepted connections run multistream → Noise → Yamux → Identify instead of raw SECIO.
-  3. Replace or augment the legacy `libp2p_conn_dialer_join_swarm` path in the main daemon so it uses the v2 stack consistently.
-- **Files:** `c-libp2p/v2/src/conn/noise.c`, `c-libp2p/v2/src/conn/noise_callbacks.c`, `transport/noise_v2_bridge.c`, `core/null.c`, `core/daemon.c`, `core/bootstrap_impl.c`
+  2. ✅ Wire v2 Noise into the **inbound listener** path (`core/null.c` `ipfs_null_listen`) so accepted connections run multistream → Noise → Yamux → Identify instead of raw SECIO.
+  3. ✅ Verify Ed25519 as well as RSA identity signatures during the Noise handshake.
+  4. Fix legacy dialer muxer negotiation over the Noise bridge so `swarm connect` completes against Kubo.
+  5. Replace or augment the legacy `libp2p_conn_dialer_join_swarm` path in the main daemon so it uses the v2 stack consistently.
+- **Files:** `c-libp2p/v2/src/conn/noise.c`, `c-libp2p/v2/src/conn/noise_callbacks.c`, `transport/noise_v2_bridge.c`, `c-libp2p/conn/dialer.c`, `core/null.c`, `core/daemon.c`, `core/bootstrap_impl.c`
 - **Complexity:** High
 
 ### 2. Multistream Select 2.0 / Early Muxer Negotiation

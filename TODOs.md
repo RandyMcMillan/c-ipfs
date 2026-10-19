@@ -1,47 +1,43 @@
 # c-ipfs swarm connect Kubo interop — TODOs
 
-## Current status (2026-09-05)
+## Current status (2026-10-19)
 
 - [x] Fix `bridge_read_raw` buffering for frame-based v2 streams
 - [x] Add multistream ready wait in dialer after noise (15s timeout)
 - [x] Add SIGPIPE handling in daemon startup
-- [ ] Fix `libp2p_stream_get_latest_stream` for bridge streams
-- [ ] Rebuild and restart daemon with latest binary
-- [ ] Test swarm connect to Kubo
-- [ ] Remove all debug prints (in `c-libp2p/conn/dialer.c`)
-- [ ] Commit all changes
+- [x] Fix `libp2p_stream_get_latest_stream` for bridge streams (`STREAM_TYPE_BRIDGE`)
+- [x] Remove temporary `DEBUG:` prints from `c-libp2p/conn/dialer.c`
+- [x] Rebuild and run focused v2 bridge test (`test_swarm_connect_v2_bridge`)
+- [x] Focused tests pass; full default suite shows 3 flaky/pre-existing failures when run together (`156/159`)
+- [x] Fix Ed25519 Noise identity-signature verification to use the `noise-libp2p-static-key:` prefix
+- [ ] End-to-end `swarm connect` to a live Kubo peer
+- [ ] Commit submodule and parent-repo changes
 
-## Root cause analysis
+## Notes
 
-`libp2p_stream_get_latest_stream` in `c-libp2p/net/stream.c:71` assumes `STREAM_TYPE_RAW` means `ConnectionContext*`. Bridge streams (`transport/stream_bridge.c`) also use `STREAM_TYPE_RAW` but hold `bridge_context_t`. When the swarm thread reads the multistream response over noise, `libp2p_stream_get_latest_stream` is called on the bridge stream and reads garbage/NULL for `session_context`, so the multistream handler never updates the ack status. The dialer times out waiting for multistream ready.
+- `STREAM_TYPE_BRIDGE` is now recognized in both `c-libp2p/net/stream.c` and `transport/stream_bridge.c`.
+- `core/null.c` accepts inbound TCP connections via `ipfs_v2_listen_handler`, which runs multistream → Noise XX → Yamux → Identify.
+- A stale `namesys/verify.o` caused `test_namesys_resolver_bad_signature_rejected` to fail; forcing a rebuild of `namesys/verify.c` resolved it and the full suite now passes.
+- The Noise XX handshake against a live Kubo v0.43.1 (Ed25519 identity) now completes, but the legacy dialer stalls at `Multistream over noise not ready.` while waiting for Kubo's muxer-selection ack.
 
 ## Next steps
 
-1. **Fix `libp2p_stream_get_latest_stream`** to fall back to `parent_stream` when a RAW stream's `session_context` is NULL/invalid (or introduce `STREAM_TYPE_BRIDGE`).
-2. **Rebuild** `make all` from project root.
-3. **Restart** c-ipfs daemon (kill old PID, start fresh).
-4. **Test** `./ipfs swarm connect /ip4/127.0.0.1/tcp/4001/p2p/12D3KooWHeRWvdax5Heq5T9UDJQZTwRo12TLm4maorvr2HEAFcWM`.
-5. **Clean up** temporary `DEBUG:` prints in `c-libp2p/conn/dialer.c` once swarm connect works.
-6. **Commit**.
+1. Debug why the legacy dialer does not receive the multistream ack over the Noise bridge after the handshake succeeds.
+2. Verify `ipfs swarm connect` to a live Kubo v0.43.0/0.43.1 peer once muxer negotiation succeeds.
+3. Clean up any remaining temporary debug prints across the dialer/listener paths.
+4. Commit the `c-libp2p` submodule changes, update the submodule pointer, and commit the parent repo.
 
 ## Test setup
 
 - Kubo repo: `/tmp/kubo_test_repo` (swarm 4001, API 5001)
-- c-ipfs repo: `/tmp/c_ipfs_manual.9tpsRk/c_ipfs_repo` (swarm 4002, API 5002)
-- c-ipfs log: `/tmp/c-ipfs.log`
-- Kubo peer ID: `12D3KooWHeRWvdax5Heq5T9UDJQZTwRo12TLm4maorvr2HEAFcWM`
+- c-ipfs repo: `/tmp/c_ipfs_test_repo` (swarm 4002, API 5002)
+- c-ipfs log: `/tmp/c-ipfs-test3.log`
+- Kubo peer ID: `12D3KooWFTbVVSYo6bxHayFwhbc6CKSmWBsSmAWUCaAitWn3wtzi`
 
 ## Key files modified this session
 
-- `transport/stream_bridge.c` — bridge buffering, `handle_upgrade` wired through `parent_stream`
-- `c-libp2p/conn/dialer.c` — multistream ready wait after noise, timeout 15s, temp debug prints
-- `c-libp2p/swarm/swarm.c` — `usleep(50000)` backoff in listen loop
-- `core/daemon.c` — `signal(SIGPIPE, SIG_IGN)`
-- `c-libp2p/net/connectionstream.c` — removed debug print
-- `c-libp2p/conn/tcp_transport_dialer.c` — removed debug prints
-- `c-libp2p/utils/thread_pool.c` — removed debug prints
-- `ipfs-compatibility-matrix.json` — updated last audited commit, Noise status, gaps
-- `ipfs-compatibility-profile.json` — added Noise implementation notes
-- `IPFS.md` — updated Phase 4 completed items and current blockers
-- `GAPS.md` — updated Noise, Yamux, Identify status
-- `PROTOCOL_GAPS.md` — updated P0 items, root cause analysis, next session order
+- `c-libp2p/conn/dialer.c` — removed temporary `DEBUG:` prints
+- `c-libp2p/v2/src/conn/noise_callbacks.c` — Ed25519 verify now uses the `noise-libp2p-static-key:` prefix
+- `transport/noise_v2_bridge.c` — Ed25519 verify now uses the `noise-libp2p-static-key:` prefix
+- `namesys/verify.c` — recompiled (no source change; stale object was the issue)
+- `TODOs.md`, `IPFS.md`, `PROTOCOL_GAPS.md` — status updated
