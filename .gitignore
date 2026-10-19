@@ -103,3 +103,4 @@ scripts/dag_cbor_encode
 **.DS_Store
 
 test.config
+test/fixtures/noise_responder/noise_responder
