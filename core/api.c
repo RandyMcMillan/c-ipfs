@@ -321,14 +321,14 @@ struct ApiConnectionParam {
  * @returns 1 on success, 0 on failure
  */
 
-static int api_serve_gateway_internal(int fd, const char* path, const char* query, const char* range, int is_head, struct IpfsNode* local_node);
+static int api_serve_gateway_internal(int fd, const char* path, const char* query, const char* range, const char* accept, int is_head, struct IpfsNode* local_node);
 
 int ipfs_core_api_serve_gateway(int fd, const char* path, struct IpfsNode* local_node) {
-	return api_serve_gateway_internal(fd, path, NULL, NULL, 0, local_node);
+	return api_serve_gateway_internal(fd, path, NULL, NULL, NULL, 0, local_node);
 }
 
 int ipfs_core_api_serve_gateway_ex(int fd, const char* path, const char* query, const char* range, int is_head, struct IpfsNode* local_node) {
-	return api_serve_gateway_internal(fd, path, query, range, is_head, local_node);
+	return api_serve_gateway_internal(fd, path, query, range, NULL, is_head, local_node);
 }
 
 static const char* gateway_query_value(const char* query, const char* key)
@@ -348,7 +348,7 @@ static const char* gateway_query_value(const char* query, const char* key)
 	return NULL;
 }
 
-static int api_serve_gateway_internal(int fd, const char* path, const char* query, const char* range, int is_head, struct IpfsNode* local_node) {
+static int api_serve_gateway_internal(int fd, const char* path, const char* query, const char* range, const char* accept, int is_head, struct IpfsNode* local_node) {
 	const char* request_path = path ? path : "";
 	char* resolved = NULL;
 
@@ -639,6 +639,15 @@ static int api_serve_gateway_internal(int fd, const char* path, const char* quer
 			content_type = "text/plain; charset=utf-8";
 		else if (strcasecmp(ext, ".svg") == 0)
 			content_type = "image/svg+xml";
+	}
+
+	/* Content-type negotiation via Accept header. */
+	if (accept && *accept) {
+		if (strstr(accept, "text/html")) content_type = "text/html; charset=utf-8";
+		else if (strstr(accept, "application/json")) content_type = "application/json; charset=utf-8";
+		else if (strstr(accept, "text/plain")) content_type = "text/plain; charset=utf-8";
+		else if (strstr(accept, "text/css")) content_type = "text/css; charset=utf-8";
+		else if (strstr(accept, "application/javascript")) content_type = "application/javascript; charset=utf-8";
 	}
 
 	size_t range_start = 0;
@@ -970,8 +979,9 @@ void *api_connection_thread (void *ptr)
 				char* range = header_value_cmp(&req, "Range:", "bytes=");
 				if (range && !strstart(range, "bytes="))
 					range = NULL;
+				char* accept = str_tok(req.buf + req.header, "Accept:");
 				const char* query = req.query ? req.buf + req.query : NULL;
-				if (!api_serve_gateway_internal(s, req.buf + req.path, query, range, 0, params->this_node)) {
+				if (!api_serve_gateway_internal(s, req.buf + req.path, query, range, accept, 0, params->this_node)) {
 					write_cstr(s, HTTP_404);
 				}
 			} else if (!cstrstart(req.buf + req.path, API_V0_START)) {
@@ -981,7 +991,8 @@ void *api_connection_thread (void *ptr)
 		} else if (strncmp(req.buf + req.method, "HEAD", 4)==0) {
 			if (cstrstart(req.buf + req.path, "/ipfs/")) {
 				const char* query = req.query ? req.buf + req.query : NULL;
-				if (!api_serve_gateway_internal(s, req.buf + req.path, query, NULL, 1, params->this_node)) {
+				char* accept = str_tok(req.buf + req.header, "Accept:");
+				if (!api_serve_gateway_internal(s, req.buf + req.path, query, NULL, accept, 1, params->this_node)) {
 					write_cstr(s, HTTP_404);
 				}
 			} else {
