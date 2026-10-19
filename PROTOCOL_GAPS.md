@@ -17,7 +17,7 @@
 ## P0 — Kubo Interop Blockers
 
 ### 1. Security Protocol: Noise XX (or TLS 1.3)
-- **Status update (2026-10-19):** `partial` — Outbound v2 Noise XX handshake now completes against Kubo v0.43.0 (Ed25519 identity) and is covered by a CI test. Inbound v2 listener (`ipfs_v2_listen_handler` via `core/null.c`) also runs Noise XX → Yamux → Identify. Ed25519 remote identity signatures verify the required `noise-libp2p-static-key:` prefix in both `transport/noise_v2_bridge.c` and `c-libp2p/v2/src/conn/noise_callbacks.c`. Debug prints are kept and gated by `DEBUG=1`. Remaining work is getting the legacy dialer to complete muxer/identify negotiation over the Noise bridge so `swarm connect` exits successfully.
+- **Status update (2026-10-19):** `done` — Outbound v2 Noise XX handshake now completes against Kubo v0.43.1 (Ed25519 identity) and is covered by a CI test. The legacy dialer completes multistream → Noise → Yamux → Identify, and `ipfs swarm connect /ip4/.../tcp/.../p2p/<kubo>` exits 0. Inbound v2 listener (`ipfs_v2_listen_handler` via `core/null.c`) also runs Noise XX → Yamux → Identify. Ed25519 remote identity signatures verify the required `noise-libp2p-static-key:` prefix in both `transport/noise_v2_bridge.c` and `c-libp2p/v2/src/conn/noise_callbacks.c`. Debug prints are kept and gated by `DEBUG=1`.
 - **Root cause:** The legacy c-libp2p stack only speaks SECIO. Kubo v0.43.0 removed SECIO entirely.
 - **What Kubo does:** Offers `/noise` as the only security protocol on incoming connections. Expects initiators to perform a Noise_XX_25519_ChaChaPoly_SHA256 handshake with libp2p-specific payloads.
 - **What we need:**
@@ -25,7 +25,7 @@
   2. ✅ Wire v2 Noise into the **inbound listener** path (`core/null.c` `ipfs_null_listen`) so accepted connections run multistream → Noise → Yamux → Identify instead of raw SECIO.
   3. ✅ Verify Ed25519 as well as RSA identity signatures during the Noise handshake.
   4. ✅ Fix Noise_XX nonce handling so each Encrypt/Decrypt under the same `temp_k` session increments the ChaCha20-Poly1305 nonce, matching `github.com/flynn/noise`.
-  5. ❌ Fix legacy dialer muxer/identify negotiation over the Noise bridge so `swarm connect` completes against Kubo.
+  5. ✅ Fix legacy dialer muxer/identify negotiation over the Noise bridge so `swarm connect` completes against Kubo. Done in `c-libp2p/yamux/yamux.c` (send WINDOW_UPDATE+SYN on new streams) and `c-libp2p/yamux/session.c` (store inbound streams in session slots).
   6. Replace or augment the legacy `libp2p_conn_dialer_join_swarm` path in the main daemon so it uses the v2 stack consistently.
 - **Files:** `c-libp2p/v2/src/conn/noise.c`, `c-libp2p/v2/src/conn/noise_callbacks.c`, `transport/noise_v2_bridge.c`, `c-libp2p/conn/dialer.c`, `core/null.c`, `core/daemon.c`, `core/bootstrap_impl.c`
 - **Complexity:** High
@@ -190,7 +190,7 @@
 | `ipfs add/cat/get/id` | Partial | Basic smoke tests pass |
 | Bitswap message encoding | Partial | No session layer |
 | DHT message encoding | Partial | No standard-compliant iterative lookup |
-| Noise XX | Partial | Outbound handshake works against Kubo; inbound listener still uses SECIO; swarm connect blocked by bridge stream bug |
+| Noise XX | Done | Outbound handshake completes against Kubo; `swarm connect` exits 0; inbound listener uses Noise/Yamux/Identify |
 
 ---
 

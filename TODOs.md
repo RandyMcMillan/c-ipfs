@@ -11,20 +11,20 @@
 - [x] Gate debug prints on `DEBUG=1` env var via reusable `libp2p/utils/debug.h` / `ipfs/utils/debug.h` wrappers; keep prints for future agents
 - [x] Add Kubo/Go-libp2p Noise handshake compatibility test (`test/scripts/test_kubo_noise_handshake.sh`) and wire it into GitHub CI (`.github/workflows/kubo-interop.yml`)
 - [x] Commit `c-libp2p` submodule changes and update submodule pointer
-- [ ] End-to-end `swarm connect` to a live Kubo peer
+- [x] End-to-end `swarm connect` to a live Kubo peer
 
 ## Notes
 
 - `STREAM_TYPE_BRIDGE` is now recognized in both `c-libp2p/net/stream.c` and `transport/stream_bridge.c`.
 - `core/null.c` accepts inbound TCP connections via `ipfs_v2_listen_handler`, which runs multistream → Noise XX → Yamux → Identify.
-- The Noise XX handshake against a live Kubo v0.43.0 (Ed25519 identity) now completes successfully. The responder logs `[net] Connected`, which the new CI test asserts.
-- After the handshake, the legacy dialer still times out during the post-Noise multistream/yamux/identify exchange, so `ipfs swarm connect` exits non-zero. This is the remaining gap.
+- The Noise XX handshake against a live Kubo v0.43.1 (Ed25519 identity) now completes successfully. The responder logs `[net] Connected`, which the CI test asserts.
+- `ipfs swarm connect /ip4/127.0.0.1/tcp/<port>/p2p/<kubo-id>` now exits 0. The legacy dialer sends WINDOW_UPDATE+SYN on new Yamux streams and stores inbound streams in session slots.
 - Debug prints are intentionally preserved and gated by `DEBUG=1`. Future agents should keep them gated rather than deleting them.
 
 ## Next steps
 
-1. Debug why the legacy dialer does not complete multistream → yamux → identify over the Noise bridge after the handshake succeeds.
-2. Verify `ipfs swarm connect` to a live Kubo v0.43.0 peer once muxer/identify negotiation succeeds.
+1. Harden the post-connect Yamux path (thread-safe Noise bridge reads/writes, clean up the non-fatal decode errors seen after `swarm connect` succeeds).
+2. Expand Kubo interop tests (e.g., `add`/`cat` round-trips are already covered by `test_kubo_interop.sh`).
 
 ## Test setup
 

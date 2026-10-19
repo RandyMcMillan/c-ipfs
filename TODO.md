@@ -16,6 +16,7 @@ Last updated: 2026-10-17
 - [x] Full default `test/test_ipfs` suite passes (157+ tests).
 - [x] P0.9.5 Exponential backoff for DHT/routing: `dht_backoff_delay_us()` in c-libp2p, kademlia integration, test added.
 - [x] P0.8 Noise interop round-trip: local test verifies Noise + Yamux + Identify (agent + protocol version).
+- [x] P0.8 `swarm connect` to Kubo: legacy dialer completes Noise → multistream → Yamux → Identify and exits 0 against Kubo v0.43.1.
 - [x] Heap/ASan fixes: HTTP request `data` init, boundary size correction, gateway suffix overflow, boundary size guards, daemon api_stop before free.
 - [x] HTTP API expansion: `/api/v0/block/stat`, `/api/v0/object/stat`, `/api/v0/object/data`, `/api/v0/object/links`, `/api/v0/repo/version`, `/api/v0/config/show`, `/api/v0/bootstrap/list`, `/api/v0/resolve`, `/api/v0/pin/rm`, `/api/v0/dht/get`, `/api/v0/dht/put`, `/api/v0/dht/findpeer`, `/api/v0/diag/sys`, `/api/v0/stats/repo`, `/api/v0/stats/bw`, `/api/v0/commands`, `/api/v0/version/deps`, `/api/v0/swarm/addrs`, `/api/v0/shutdown`, `/api/v0/key/list`.
 - [x] Fuzz harnesses: `fuzz/fuzz_cid.c`, `fuzz/fuzz_varint.c`.

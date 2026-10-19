@@ -208,7 +208,8 @@ jobs:
           KUBO_BIN_CACHE: ${{ runner.temp }}/kubo-ipfs
           KUBO_BIN: ${{ runner.temp }}/kubo-ipfs/ipfs
         run: |
-          chmod +x test/scripts/test_kubo_interop.sh test/scripts/test_kubo_ipns_pubsub.sh test/scripts/test_kubo_noise_handshake.sh
+          chmod +x test/scripts/test_kubo_interop.sh test/scripts/test_kubo_ipns_pubsub.sh test/scripts/test_kubo_noise_handshake.sh test/scripts/test_kubo_swarm_connect.sh
           ./test/scripts/test_kubo_noise_handshake.sh
+          ./test/scripts/test_kubo_swarm_connect.sh
           ./test/scripts/test_kubo_interop.sh
           ./test/scripts/test_kubo_ipns_pubsub.sh

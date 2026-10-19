@@ -5,6 +5,10 @@
 
 set -euo pipefail
 
+# Silence Kubo's one-time telemetry notice in CI and local harness runs.
+export IPFS_TELEMETRY="${IPFS_TELEMETRY:-off}"
+export DO_NOT_TRACK="${DO_NOT_TRACK:-1}"
+
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 FIXTURE_DIR="$REPO_ROOT/test/fixtures/noise_responder"
 RESPONDER_LOG="$(mktemp)"
@@ -76,6 +80,8 @@ with open(config_path, 'r') as f:
 cfg['Addresses']['API'] = f'/ip4/127.0.0.1/tcp/{os.environ["API_PORT"]}'
 cfg['Addresses']['Gateway'] = f'/ip4/127.0.0.1/tcp/{os.environ["GATEWAY_PORT"]}'
 cfg['Addresses']['Swarm'] = [f'/ip4/127.0.0.1/tcp/{os.environ["SWARM_PORT"]}']
+cfg['Bootstrap'] = []
+cfg['Discovery']['MDNS']['Enabled'] = False
 with open(config_path, 'w') as f:
     json.dump(cfg, f, indent=1)
 PY
@@ -110,7 +116,7 @@ sleep 2
 # Stop the daemon
 kill "$DAEMON_PID" 2>/dev/null || true
 wait "$DAEMON_PID" 2>/dev/null || true
-rm -f "$DAEMON_LOG"
+echo "keeping $DAEMON_LOG"
 
 echo "Responder log:"
 cat "$RESPONDER_LOG"
