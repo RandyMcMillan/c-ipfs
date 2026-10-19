@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 
 #include "libp2p/net/stream.h"
 #include "libp2p/net/tcp.h"
@@ -7,6 +8,7 @@
 #include "ipfs/transport/stream.h"
 #include "ipfs/transport/v2_stream_wrapper.h"
 #include "ipfs/transport/stream_bridge.h"
+#include "libp2p/utils/debug.h"
 
 /* ============================================================================
  * v2 -> libp2p_stream_t wrapper
@@ -72,23 +74,41 @@ typedef struct {
     struct Stream *legacy;
 } legacy_wrap_ctx_t;
 
+static void hexdump(const char *label, const unsigned char *data, size_t len) {
+    DEBUG_PRINTF("[v2wrap] %s (%zu bytes): ", label, len);
+    for (size_t i = 0; i < len; i++)
+        DEBUG_PRINTF("%02x", data[i]);
+    DEBUG_PRINTF("\n");
+}
+
 static ssize_t legacy_read_wrapper(struct Libp2pV2Stream *s, unsigned char *buf, size_t count) {
     legacy_wrap_ctx_t *ctx = (legacy_wrap_ctx_t *)s->stream_context;
-    if (!ctx || !ctx->legacy || !ctx->legacy->read_raw)
+    if (!ctx || !ctx->legacy || !ctx->legacy->read_raw) {
+        DEBUG_PRINTF("[v2wrap] read: no legacy read_raw\n");
         return -1;
+    }
     int ret = ctx->legacy->read_raw(ctx->legacy->stream_context, buf, (int)count, 10);
+    if (ret > 0)
+        hexdump("legacy read", buf, (size_t)ret);
+    else
+        DEBUG_PRINTF("[v2wrap] read: legacy read_raw returned %d\n", ret);
     return (ret < 0) ? -1 : (ssize_t)ret;
 }
 
 static ssize_t legacy_write_wrapper(struct Libp2pV2Stream *s, const unsigned char *buf, size_t count) {
     legacy_wrap_ctx_t *ctx = (legacy_wrap_ctx_t *)s->stream_context;
-    if (!ctx || !ctx->legacy || !ctx->legacy->write)
+    if (!ctx || !ctx->legacy || !ctx->legacy->write) {
+        DEBUG_PRINTF("[v2wrap] write: no legacy write\n");
         return -1;
+    }
+    hexdump("legacy write", buf, count);
     struct StreamMessage msg;
     memset(&msg, 0, sizeof(msg));
     msg.data = (uint8_t *)buf;
     msg.data_size = count;
     int ret = ctx->legacy->write(ctx->legacy->stream_context, &msg);
+    if (ret <= 0)
+        DEBUG_PRINTF("[v2wrap] write: legacy write returned %d\n", ret);
     return (ret > 0) ? (ssize_t)count : -1;
 }
 

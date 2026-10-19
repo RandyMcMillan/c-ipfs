@@ -8,6 +8,7 @@
 #include "multiaddr/multiaddr.h"
 #include "ipfs/transport/stream.h"
 #include "ipfs/transport/stream_bridge.h"
+#include "libp2p/utils/debug.h"
 
 /* Context held inside Stream->stream_context */
 typedef struct {
@@ -42,11 +43,15 @@ static int bridge_peek(void *stream_context) {
 static int bridge_read(void *stream_context, struct StreamMessage **msg, int timeout_secs) {
     (void)timeout_secs;
     bridge_context_t *ctx = (bridge_context_t *)stream_context;
-    if (!ctx || !ctx->lstream || !ctx->lstream->read)
+    if (!ctx || !ctx->lstream || !ctx->lstream->read) {
+        DEBUG_PRINTF("[bridge] read: no lstream\n");
         return 0;
+    }
 
+    DEBUG_PRINTF("[bridge] read: calling lstream read\n");
     uint8_t buffer[4096];
     ssize_t bytes = ctx->lstream->read(ctx->lstream, buffer, sizeof(buffer));
+    DEBUG_PRINTF("[bridge] read: lstream returned %zd\n", bytes);
     if (bytes < 0)
         return 0;
 
@@ -116,10 +121,14 @@ static int bridge_read_raw(void *stream_context, uint8_t *buffer, int buffer_siz
 
 static int bridge_write(void *stream_context, struct StreamMessage *msg) {
     bridge_context_t *ctx = (bridge_context_t *)stream_context;
-    if (!ctx || !ctx->lstream || !ctx->lstream->write)
+    if (!ctx || !ctx->lstream || !ctx->lstream->write) {
+        DEBUG_PRINTF("[bridge] write: no lstream\n");
         return -1;
+    }
 
+    DEBUG_PRINTF("[bridge] write: %zu bytes to lstream\n", msg->data_size);
     ssize_t written = ctx->lstream->write(ctx->lstream, msg->data, msg->data_size);
+    DEBUG_PRINTF("[bridge] write: lstream returned %zd\n", written);
     return (int)written;
 }
 
