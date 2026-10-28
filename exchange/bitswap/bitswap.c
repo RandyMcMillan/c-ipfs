@@ -9,9 +9,12 @@
 #include "libp2p/utils/logger.h"
 #include "libp2p/net/stream.h"
 #include "libp2p/net/connectionstream.h"
+#include "libp2p/net/multistream.h"
+#include "libp2p/net/protocol.h"
 #include "ipfs/core/ipfs_node.h"
 #include "ipfs/datastore/ds_helper.h"
 #include "ipfs/exchange/exchange.h"
+#include "ipfs/cid/cid.h"
 #include "ipfs/exchange/bitswap/bitswap.h"
 #include "ipfs/exchange/bitswap/message.h"
 #include "ipfs/exchange/bitswap/network.h"
@@ -44,10 +47,46 @@ int ipfs_bitswap_handle_message(const struct StreamMessage* msg, struct Stream* 
 	struct SessionContext* session_context = libp2p_net_connection_get_session_context(stream);
 	if (session_context == NULL)
 		return -1;
-	int retVal = ipfs_bitswap_network_handle_message(local_node, session_context, msg->data, msg->data_size);
-	if (retVal == 0)
-		return -1;
-	return retVal;
+
+	// Tag this multistream as belonging to Bitswap so subsequent length-prefixed
+	// protobuf messages are routed here even though they don't contain a newline.
+	if (stream != NULL && stream->stream_type == STREAM_TYPE_MULTISTREAM) {
+		struct MultistreamContext* ms_ctx = (struct MultistreamContext*)stream->stream_context;
+		if (ms_ctx != NULL && ms_ctx->negotiated_handler == NULL) {
+			const struct Libp2pProtocolHandler* self = libp2p_protocol_get_handler(local_node->protocol_handlers, "/ipfs/bitswap/1.2.0\n");
+			if (self != NULL)
+				ms_ctx->negotiated_handler = self;
+		}
+	}
+
+	// If this is the protocol id proposal, ack it and then consume the remaining
+	// Bitswap messages on this stream.
+	if (msg->data_size >= 14 && strncmp((char*)msg->data, "/ipfs/bitswap/", 14) == 0) {
+		struct StreamMessage ack;
+		ack.data = (uint8_t*)"/ipfs/bitswap/1.2.0\n";
+		ack.data_size = 20;
+		stream->write(stream->stream_context, &ack);
+	} else {
+		ipfs_bitswap_network_handle_message(local_node, session_context, msg->data, msg->data_size);
+	}
+
+	// Continue reading Bitswap messages until the stream closes or times out.
+	struct StreamMessage* next = NULL;
+	while (stream->read(stream->stream_context, &next, 5) && next != NULL) {
+		if (next->data_size >= 14 && strncmp((char*)next->data, "/ipfs/bitswap/", 14) == 0) {
+			// protocol re-negotiation on the same stream; ack and continue
+			struct StreamMessage ack;
+			ack.data = (uint8_t*)"/ipfs/bitswap/1.2.0\n";
+			ack.data_size = 20;
+			stream->write(stream->stream_context, &ack);
+		} else {
+			ipfs_bitswap_network_handle_message(local_node, session_context, next->data, next->data_size);
+		}
+		libp2p_stream_message_free(next);
+		next = NULL;
+	}
+
+	return 1;
 }
 
 struct Libp2pProtocolHandler* ipfs_bitswap_build_protocol_handler(const struct IpfsNode* local_node) {
@@ -170,10 +209,12 @@ int ipfs_bitswap_has_block(struct Exchange* exchange, struct Block* block) {
 	if (announce != NULL) {
 		struct BitswapBlockPresence* bp = ipfs_bitswap_block_presence_new();
 		if (bp != NULL) {
-			bp->cid = (unsigned char*)malloc(block->cid->hash_length);
+			bp->cid_size = ipfs_cid_to_bytes_size(block->cid);
+			bp->cid = (unsigned char*)malloc(bp->cid_size);
 			if (bp->cid != NULL) {
-				memcpy(bp->cid, block->cid->hash, block->cid->hash_length);
-				bp->cid_size = block->cid->hash_length;
+				size_t written = 0;
+				ipfs_cid_to_bytes(block->cid, bp->cid, bp->cid_size, &written);
+				bp->cid_size = written;
 				bp->type = BLOCK_PRESENCE_HAVE;
 				if (announce->block_presences == NULL)
 					announce->block_presences = libp2p_utils_vector_new(1);

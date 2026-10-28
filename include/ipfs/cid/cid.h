@@ -139,6 +139,25 @@ char* ipfs_cid_to_string(const struct Cid* cid, char **result);
  */
 int ipfs_cid_cast(const unsigned char* incoming, size_t incoming_size, struct Cid* cid);
 
+/***
+ * Return the size of the raw CID bytes for a Cid struct.
+ * For CIDv0 this is the multihash length; for CIDv1 it is
+ * version varint + codec varint + multihash length.
+ * @param cid the Cid
+ * @returns the number of bytes required
+ */
+size_t ipfs_cid_to_bytes_size(const struct Cid* cid);
+
+/***
+ * Encode a Cid into its raw binary representation.
+ * @param cid the Cid to encode
+ * @param buffer the output buffer
+ * @param buffer_length the maximum bytes to write
+ * @param bytes_written the actual bytes written
+ * @returns true(1) on success, false(0) otherwise
+ */
+int ipfs_cid_to_bytes(const struct Cid* cid, unsigned char* buffer, size_t buffer_length, size_t* bytes_written);
+
 struct CidSet *ipfs_cid_set_new ();
 void ipfs_cid_set_destroy (struct CidSet **set);
 int ipfs_cid_set_add (struct CidSet *set, struct Cid *cid, int visit);

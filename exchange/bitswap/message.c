@@ -3,6 +3,7 @@
 #include "varint.h"
 #include "libp2p/utils/vector.h"
 #include "ipfs/blocks/block.h"
+#include "ipfs/cid/cid.h"
 #include "ipfs/exchange/bitswap/message.h"
 #include "ipfs/exchange/bitswap/peer_request_queue.h"
 
@@ -262,10 +263,10 @@ int ipfs_bitswap_wantlist_entry_protobuf_encode(struct WantlistEntry* entry, uns
 		if (!protobuf_encode_length_delimited(1, WIRETYPE_LENGTH_DELIMITED, (char*)entry->block, entry->block_size, &buffer[*bytes_written], buffer_length - (*bytes_written), &bytes_used))
 			return 0;
 		*bytes_written += bytes_used;
-		if (!protobuf_encode_varint(2, WIRETYPE_VARINT, entry->cancel, &buffer[*bytes_written], buffer_length - (*bytes_written), &bytes_used))
+		if (!protobuf_encode_varint(2, WIRETYPE_VARINT, entry->priority, &buffer[*bytes_written], buffer_length - (*bytes_written), &bytes_used))
 			return 0;
 		*bytes_written += bytes_used;
-		if (!protobuf_encode_varint(3, WIRETYPE_VARINT, entry->priority, &buffer[*bytes_written], buffer_length - (*bytes_written), &bytes_used))
+		if (!protobuf_encode_varint(3, WIRETYPE_VARINT, entry->cancel, &buffer[*bytes_written], buffer_length - (*bytes_written), &bytes_used))
 			return 0;
 		*bytes_written += bytes_used;
 		if (!protobuf_encode_varint(4, WIRETYPE_VARINT, entry->want_type, &buffer[*bytes_written], buffer_length - (*bytes_written), &bytes_used))
@@ -841,18 +842,22 @@ int ipfs_bitswap_message_add_wantlist_items(struct BitswapMessage* message, stru
 		if (!cidEntry->cancel && cidEntry->request_has_been_sent)
 			continue;
 		struct WantlistEntry* entry = ipfs_bitswap_wantlist_entry_new();
-		entry->block_size = ipfs_cid_protobuf_encode_size(cidEntry->cid);
+		entry->block_size = ipfs_cid_to_bytes_size(cidEntry->cid);
 		entry->block = (unsigned char*) malloc(entry->block_size);
 		if (entry->block == NULL) {
 			return 0;
 		}
-		if (!ipfs_cid_protobuf_encode(cidEntry->cid, entry->block, entry->block_size, &entry->block_size)) {
+		if (!ipfs_cid_to_bytes(cidEntry->cid, entry->block, entry->block_size, &entry->block_size)) {
 			// Clean up partially built entry and skip this CID
 			ipfs_bitswap_wantlist_entry_free(entry);
 			continue;
 		}
 		entry->cancel = cidEntry->cancel;
 		entry->priority = 1;
+		if (!entry->cancel) {
+			entry->want_type = WANT_TYPE_BLOCK;
+			entry->send_dont_have = 1;
+		}
 		libp2p_utils_vector_add(message->wantlist->entries, entry);
 		if (cidEntry->cancel)
 			cidEntry->cancel_has_been_sent = 1;

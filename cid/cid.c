@@ -395,6 +395,45 @@ char* ipfs_cid_to_string(const struct Cid* cid, char **result) {
 	return str;
 }
 
+size_t ipfs_cid_to_bytes_size(const struct Cid* cid) {
+	if (cid == NULL)
+		return 0;
+	if (cid->version == 0) {
+		// CIDv0 is the full SHA2-256 multihash: code + length + digest.
+		return mh_new_length(MH_H_SHA2_256, cid->hash_length);
+	}
+	return varint_encoding_length(cid->version) + varint_encoding_length(cid->codec) + cid->hash_length;
+}
+
+int ipfs_cid_to_bytes(const struct Cid* cid, unsigned char* buffer, size_t buffer_length, size_t* bytes_written) {
+	if (cid == NULL || buffer == NULL || bytes_written == NULL)
+		return 0;
+	*bytes_written = 0;
+	if (cid->version == 0) {
+		// CIDv0 is a raw SHA2-256 multihash, not just the digest.
+		size_t mh_len = mh_new_length(MH_H_SHA2_256, cid->hash_length);
+		if (buffer_length < mh_len)
+			return 0;
+		if (mh_new(buffer, MH_H_SHA2_256, cid->hash, cid->hash_length) < 0)
+			return 0;
+		*bytes_written = mh_len;
+		return 1;
+	}
+	size_t version_size = 0;
+	if (!varint_encode(cid->version, buffer, buffer_length, &version_size))
+		return 0;
+	*bytes_written += version_size;
+	size_t codec_size = 0;
+	if (!varint_encode(cid->codec, &buffer[*bytes_written], buffer_length - *bytes_written, &codec_size))
+		return 0;
+	*bytes_written += codec_size;
+	if (buffer_length - *bytes_written < cid->hash_length)
+		return 0;
+	memcpy(&buffer[*bytes_written], cid->hash, cid->hash_length);
+	*bytes_written += cid->hash_length;
+	return 1;
+}
+
 /***
  * Turn a multibase decoded string of bytes into a Cid struct
  * @param incoming the multibase decoded array
@@ -402,6 +441,9 @@ char* ipfs_cid_to_string(const struct Cid* cid, char **result) {
  * @param cid the Cid structure to fill
  */
 int ipfs_cid_cast(const unsigned char* incoming, size_t incoming_size, struct Cid* cid) {
+	if (incoming == NULL || incoming_size == 0 || cid == NULL)
+		return 0;
+
 	if (incoming_size == 34 && incoming[0] == 18 && incoming[1] == 32) {
 		// this is a multihash
 		cid->hash_length = mh_multihash_length(incoming, incoming_size);
