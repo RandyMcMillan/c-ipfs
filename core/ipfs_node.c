@@ -1,4 +1,5 @@
 #include <stdlib.h>
+#include <string.h>
 #include <pthread.h>
 
 #include "libp2p/conn/dialer.h"
@@ -10,6 +11,7 @@
 #include "libp2p/secio/secio.h"
 #include "libp2p/routing/dht_protocol.h"
 #include "libp2p/yamux/yamux.h"
+#include "libp2p/crypto/key.h"
 #include "ipfs/core/api.h"
 #include "ipfs/core/client_api.h"
 #include "ipfs/core/ipfs_node.h"
@@ -54,8 +56,52 @@ struct Libp2pVector* ipfs_node_online_build_protocol_handlers(struct IpfsNode* n
 		libp2p_utils_vector_add(retVal, libp2p_yamux_build_protocol_handler());
 		// mplex scaffold
 		libp2p_utils_vector_add(retVal, libp2p_mplex_build_protocol_handler(retVal));
-		// identify
-		libp2p_utils_vector_add(retVal, libp2p_identify_build_protocol_handler(node->identity->peer->id, node->identity->peer->id_size));
+		// identify: build protobuf-encoded RSA public key and listen addrs
+		struct RsaPrivateKey* rsa = &node->identity->private_key;
+		char* pubkey_pb = NULL;
+		int pubkey_pb_len = 0;
+		if (rsa->public_key_der != NULL && rsa->public_key_length > 0) {
+			struct PublicKey pubkey;
+			memset(&pubkey, 0, sizeof(pubkey));
+			pubkey.type = KEYTYPE_RSA;
+			pubkey.data = (unsigned char*)rsa->public_key_der;
+			pubkey.data_size = rsa->public_key_length;
+			size_t needed = libp2p_crypto_public_key_protobuf_encode_size(&pubkey);
+			unsigned char* buf = malloc(needed);
+			if (buf != NULL) {
+				size_t written = 0;
+				if (libp2p_crypto_public_key_protobuf_encode(&pubkey, buf, needed, &written)) {
+					pubkey_pb = (char*)buf;
+					pubkey_pb_len = (int)written;
+				} else {
+					free(buf);
+				}
+			}
+		}
+		// collect listen addrs from config
+		char** listen_addrs = NULL;
+		size_t listen_count = 0;
+		if (node->repo && node->repo->config && node->repo->config->addresses && node->repo->config->addresses->swarm_head) {
+			struct Libp2pLinkedList* cur = node->repo->config->addresses->swarm_head;
+			while (cur) { listen_count++; cur = cur->next; }
+			listen_addrs = (char**)calloc(listen_count + 1, sizeof(char*));
+			if (listen_addrs) {
+				size_t idx = 0;
+				cur = node->repo->config->addresses->swarm_head;
+				while (cur && idx < listen_count) {
+					if (cur->item)
+						listen_addrs[idx++] = strdup((char*)cur->item);
+					cur = cur->next;
+				}
+				listen_addrs[idx] = NULL;
+			}
+		}
+		struct Libp2pProtocolHandler* identify_handler = libp2p_identify_build_protocol_handler(pubkey_pb, pubkey_pb_len);
+		if (identify_handler != NULL && identify_handler->context != NULL) {
+			Identify* identify = (Identify*)identify_handler->context;
+			identify->ListenAddrs = listen_addrs;
+		}
+		libp2p_utils_vector_add(retVal, identify_handler);
 	}
 	return retVal;
 }

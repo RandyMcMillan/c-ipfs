@@ -13,6 +13,7 @@
 /* Context held inside Stream->stream_context */
 typedef struct {
     libp2p_stream_t *lstream;
+    pthread_mutex_t *stream_mutex;
     unsigned long long last_comm_epoch;
     uint8_t *read_buffer;
     size_t read_buffer_len;
@@ -48,10 +49,12 @@ static int bridge_read(void *stream_context, struct StreamMessage **msg, int tim
         return 0;
     }
 
+    pthread_mutex_lock(ctx->stream_mutex);
     DEBUG_PRINTF("[bridge] read: calling lstream read\n");
     uint8_t buffer[4096];
     ssize_t bytes = ctx->lstream->read(ctx->lstream, buffer, sizeof(buffer));
     DEBUG_PRINTF("[bridge] read: lstream returned %zd\n", bytes);
+    pthread_mutex_unlock(ctx->stream_mutex);
     if (bytes < 0)
         return 0;
 
@@ -78,12 +81,15 @@ static int bridge_read_raw(void *stream_context, uint8_t *buffer, int buffer_siz
     if (!ctx || !ctx->lstream || !ctx->lstream->read)
         return -1;
 
+    pthread_mutex_lock(ctx->stream_mutex);
+
     /* Serve from existing buffer first */
     if (ctx->read_buffer && ctx->read_buffer_pos < ctx->read_buffer_len) {
         size_t available = ctx->read_buffer_len - ctx->read_buffer_pos;
         size_t to_copy = (buffer_size < (int)available) ? (size_t)buffer_size : available;
         memcpy(buffer, ctx->read_buffer + ctx->read_buffer_pos, to_copy);
         ctx->read_buffer_pos += to_copy;
+        pthread_mutex_unlock(ctx->stream_mutex);
         return (int)to_copy;
     }
 
@@ -92,12 +98,15 @@ static int bridge_read_raw(void *stream_context, uint8_t *buffer, int buffer_siz
      * requested in a single frame; we buffer the excess. */
     size_t temp_size = 65536;
     uint8_t *temp = (uint8_t *)malloc(temp_size);
-    if (!temp)
+    if (!temp) {
+        pthread_mutex_unlock(ctx->stream_mutex);
         return -1;
+    }
 
     ssize_t bytes = ctx->lstream->read(ctx->lstream, temp, temp_size);
     if (bytes <= 0) {
         free(temp);
+        pthread_mutex_unlock(ctx->stream_mutex);
         return -1;
     }
 
@@ -116,6 +125,7 @@ static int bridge_read_raw(void *stream_context, uint8_t *buffer, int buffer_siz
     }
 
     free(temp);
+    pthread_mutex_unlock(ctx->stream_mutex);
     return (int)to_copy;
 }
 
@@ -126,9 +136,11 @@ static int bridge_write(void *stream_context, struct StreamMessage *msg) {
         return -1;
     }
 
+    pthread_mutex_lock(ctx->stream_mutex);
     DEBUG_PRINTF("[bridge] write: %zu bytes to lstream\n", msg->data_size);
     ssize_t written = ctx->lstream->write(ctx->lstream, msg->data, msg->data_size);
     DEBUG_PRINTF("[bridge] write: lstream returned %zd\n", written);
+    pthread_mutex_unlock(ctx->stream_mutex);
     return (int)written;
 }
 
@@ -160,7 +172,11 @@ struct Stream *ipfs_transport_stream_bridge_new(libp2p_stream_t *lstream, const 
 
     out->socket_mutex = (pthread_mutex_t *)malloc(sizeof(pthread_mutex_t));
     if (out->socket_mutex) {
-        pthread_mutex_init(out->socket_mutex, NULL);
+        pthread_mutexattr_t attr;
+        pthread_mutexattr_init(&attr);
+        pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
+        pthread_mutex_init(out->socket_mutex, &attr);
+        pthread_mutexattr_destroy(&attr);
     }
 
     bridge_context_t *ctx = (bridge_context_t *)calloc(1, sizeof(bridge_context_t));
@@ -169,6 +185,7 @@ struct Stream *ipfs_transport_stream_bridge_new(libp2p_stream_t *lstream, const 
         return NULL;
     }
     ctx->lstream = lstream;
+    ctx->stream_mutex = out->socket_mutex;
     ctx->last_comm_epoch = 0;
     out->stream_context = ctx;
 

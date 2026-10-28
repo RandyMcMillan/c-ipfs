@@ -45,6 +45,7 @@
 #include "transport/test_dnsaddr_resolver.h"
 #include "transport/test_swarm_dialer_v2_bridge.h"
 #include "core/test_yamux_v2.h"
+#include "identify/test_identify_v2.h"
 #include "repo/test_repo_lock.h"
 #include "nostr/test_nostr_ipfs_kinds.h"
 #include "blocks/test_blockstore_shard.h"
@@ -279,6 +280,7 @@ int build_test_collection() {
 	add_test("test_yamux_v2_ping", test_yamux_v2_ping, 1);
 	add_test("test_yamux_v2_goaway", test_yamux_v2_goaway, 1);
 	add_test("test_yamux_v2_window_update", test_yamux_v2_window_update, 1);
+	add_test("test_identify_v2_roundtrip", test_identify_v2_roundtrip, 1);
 	add_test("test_repo_lock_create_free", test_repo_lock_create_free, 1);
 	add_test("test_repo_lock_unlock_cycle", test_repo_lock_unlock_cycle, 1);
 	add_test("test_blockstore_shard_put_get", test_blockstore_shard_put_get, 1);

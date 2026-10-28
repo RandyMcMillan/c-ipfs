@@ -28,7 +28,7 @@ endif
 LFLAGS += -lcurl -lz -lssl -lcrypto ../nostril/libsecp256k1.a
 endif
 DEPS = cmd/ipfs/test_init.h repo/test_repo_bootstrap_peers.h repo/test_repo_config.h repo/test_repo_identity.h cid/test_cid.h transport/test_transport.h
-OBJS = testit.o test_helper.o \
+OBJS = testit.o test_helper.o identify/test_identify_v2.o \
 	../blocks/block.o ../blocks/blockstore.o ../blocks/blockstore_shard.o \
 	../cid/cid.o ../cid/set.o ../cid/cid_v1.o \
 	../cmd/cli.o \
@@ -81,6 +81,12 @@ OBJS = testit.o test_helper.o \
 	../c-libp2p/c-protobuf/protobuf.o ../c-libp2p/c-protobuf/varint.o
 
 V2_OBJS = ../c-libp2p/v2/src/conn/noise.o ../c-libp2p/v2/src/conn/noise_callbacks.o ../c-libp2p/v2/src/conn/multistream.o ../c-libp2p/v2/src/conn/yamux.o ../c-libp2p/v2/src/conn/connection.o ../c-libp2p/v2/src/net/tcp_dial.o ../c-libp2p/v2/src/identify/identify_v2.o ../c-libp2p/v2/src/identify/identify_v2_ipfs.o ../c-libp2p/v2/src/peer/peerstore.o ../c-libp2p/v2/src/swarm/swarm.o ../c-libp2p/v2/src/net/multiaddr.o ../c-libp2p/v2/src/utils/logger.o
+
+# Compiled with v2 includes first so it sees the v2 peerstore/multiaddr definitions.
+identify/test_identify_v2.o: identify/test_identify_v2.c
+	$(CC) -c -o $@ $< $(CFLAGS_V2)
+
+CFLAGS_V2 = -O0 -I../c-libp2p/v2/include -I../c-libp2p/include -I../include -I../c-libp2p/c-multihash/include -I../c-libp2p/c-multiaddr/include -I../c-libp2p/c-protobuf -I../lmdb/libraries/liblmdb -I../nostril -I../nostril/deps/secp256k1/include -I../c-libnostr/include -I../c-libnostr/build/include -g3 -Wall -std=gnu99
 
 $(V2_OBJS):
 	$(MAKE) -C ../c-libp2p/v2
