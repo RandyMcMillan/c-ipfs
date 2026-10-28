@@ -83,9 +83,13 @@ libwebsockets:
 	fi
 
 boringssl:
-	@if [ ! -f boringssl/build-c-ipfs/libssl.a ]; then \
+	@BORINGSSL_CXX_FLAGS=""; \
+	if [ "$$(uname -s)" = "Linux" ]; then \
+		BORINGSSL_CXX_FLAGS="-Wno-stringop-overflow"; \
+	fi; \
+	if [ ! -f boringssl/build-c-ipfs/libssl.a ]; then \
 		cmake -B boringssl/build-c-ipfs -S boringssl -DCMAKE_BUILD_TYPE=Release \
-			-DCMAKE_C_FLAGS=-Wno-error -DCMAKE_CXX_FLAGS=-Wno-error && \
+			-DCMAKE_CXX_FLAGS="$$BORINGSSL_CXX_FLAGS" && \
 		cmake --build boringssl/build-c-ipfs -j$(shell sysctl -n hw.ncpu 2>/dev/null || echo 4); \
 	fi
 
