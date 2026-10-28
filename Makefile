@@ -84,7 +84,8 @@ libwebsockets:
 
 boringssl:
 	@if [ ! -f boringssl/build-c-ipfs/libssl.a ]; then \
-		cmake -B boringssl/build-c-ipfs -S boringssl -DCMAKE_BUILD_TYPE=Release && \
+		cmake -B boringssl/build-c-ipfs -S boringssl -DCMAKE_BUILD_TYPE=Release \
+			-DCMAKE_C_FLAGS=-Wno-error -DCMAKE_CXX_FLAGS=-Wno-error && \
 		cmake --build boringssl/build-c-ipfs -j$(shell sysctl -n hw.ncpu 2>/dev/null || echo 4); \
 	fi
 
