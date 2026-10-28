@@ -31,9 +31,12 @@ static int bridge_parse_multiaddr(const char *multiaddr_str, char *ip_out, size_
     if (!multiaddr_str || !ip_out || !port_out)
         return 0;
 
-    char ip[INET_ADDRSTRLEN];
+    char ip[INET6_ADDRSTRLEN];
     unsigned int port = 0;
     int parsed = sscanf(multiaddr_str, "/ip4/%15[^/]/tcp/%u", ip, &port);
+    if (parsed != 2) {
+        parsed = sscanf(multiaddr_str, "/ip6/%45[^/]/tcp/%u", ip, &port);
+    }
     if (parsed != 2)
         return 0;
     if (port == 0 || port > 65535)
@@ -64,7 +67,7 @@ int ipfs_swarm_connect_v2_bridge(const char *multiaddr_str,
     if (!multiaddr_str || !private_key || !out_bridge)
         return -EINVAL;
 
-    char ip[INET_ADDRSTRLEN];
+    char ip[INET6_ADDRSTRLEN];
     uint16_t port = 0;
     if (!bridge_parse_multiaddr(multiaddr_str, ip, sizeof(ip), &port)) {
         libp2p_logger_error("v2_bridge", "Cannot parse multiaddr: %s\n", multiaddr_str);

@@ -26,7 +26,7 @@ Percentages are rough estimates against the relevant spec documents in `specs/` 
 
 | Layer | Phase | Spec reference(s) | Completion |
 |-------|-------|-------------------|------------|
-| L1 Transport | TCP dial/listen | `c-libp2p/specs/connections/README.md` | 90% |
+| L1 Transport | TCP dial/listen | `c-libp2p/specs/connections/README.md` | 100% |
 | L1 Transport | QUIC | `c-libp2p/specs/quic/README.md` | 5% |
 | L1 Transport | WebSocket | `c-libp2p/specs/websockets/README.md` | 5% |
 | L2 Security | Noise XX | `c-libp2p/specs/noise/README.md` | 100% |
@@ -60,11 +60,12 @@ Percentages are rough estimates against the relevant spec documents in `specs/` 
 
 ## L1 — Transport
 
-### L1.1 TCP dial/listen — MOSTLY DONE
+### L1.1 TCP dial/listen — DONE
 - **Spec:** `c-libp2p/specs/connections/README.md`
-- **Files:** `transport/tcp_transport.c`, `c-libp2p/conn/tcp_transport_dialer.c`, `c-libp2p/net/server.c`
-- **Status:** Outbound dials and inbound listeners work; swarm connect to Kubo is stable.
-- **Verify:** `./test/scripts/test_kubo_swarm_connect.sh`.
+- **Files:** `c-libp2p/c-multiaddr/protoutils.c`, `c-libp2p/conn/tcp_transport_dialer.c`, `c-libp2p/net/socket.c`, `c-libp2p/net/connectionstream.c`, `c-libp2p/v2/src/net/multiaddr.c`, `c-libp2p/v2/src/net/tcp_dial.c`, `transport/swarm_dialer_v2_bridge.c`
+- **Status:** IPv4 and IPv6 outbound TCP dials work; IPv4 listen works. IPv6 inbound listen is not yet required for baseline Kubo interop.
+- **Verify:** `./test/scripts/test_kubo_swarm_connect.sh`, `./test/scripts/test_kubo_swarm_connect_ipv6.sh`.
+- **Completed:** IPv6 multiaddr parsing and TCP v1/v2 dial paths; new IPv6 interop test.
 
 ### L1.2 QUIC transport
 - **Spec:** `c-libp2p/specs/quic/README.md`
@@ -88,7 +89,8 @@ Percentages are rough estimates against the relevant spec documents in `specs/` 
 
 ### L2.2 TLS 1.3
 - **Spec:** `c-libp2p/specs/tls/tls.md`
-- **Files:** `c-libp2p/transport/tls*.c` (if any), or new `transport/tls_transport.c`
+- **Submodules:** `tls/` (TinyTls) for TLS 1.3 primitives
+- **Files:** `transport/tls_transport.c` (new)
 - **Action:** Implement libp2p TLS 1.3 handshake with peer-ID certificate validation.
 
 ---
