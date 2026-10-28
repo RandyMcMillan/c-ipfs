@@ -18,10 +18,32 @@
 - **Identify v2 roundtrip test** `test_identify_v2_roundtrip` passes.
 - **Debug prints** are kept and gated by `DEBUG=1`.
 - **CI** runs `test_kubo_noise_handshake.sh` and the new `test_kubo_swarm_connect.sh` in `.github/workflows/kubo-interop.yml`.
+- **Bitswap 1.2.0 Kubo retrieval** passes end-to-end via `./test/scripts/test_kubo_bitswap_retrieve_debug.sh` (tagged `phase-B2-complete`).
+
+## Completion tracking
+
+Percentages are rough estimates against the relevant spec documents in `specs/` and `c-libp2p/specs/`.
+
+| Phase | Spec reference(s) | Completion |
+|-------|-------------------|------------|
+| A1 Noise XX daemon path | `c-libp2p/specs/noise/README.md`, `c-libp2p/specs/connections/README.md` | 100% |
+| A2 Identify v1/v2 | `c-libp2p/specs/identify/README.md` | 90% (v1 roundtrip stable, v2 wired, signed peer records pending) |
+| A3 Bridge stream fix | — | 100% |
+| A4 Yamux/Noise post-connect | `c-libp2p/specs/yamux/README.md` | 75% (streams, window update, data flow work; PING/GO_AWAY partial) |
+| **B2 Bitswap 1.2.0** | `specs/src/bitswap-protocol.md` | **65%** (single-block Kubo retrieval works; HAVE/DONT_HAVE routing, Cancel, sessions, CIDv1 edge cases remain) |
+| B1 Kademlia | `specs/src/routing/kad-dht.md`, `c-libp2p/specs/kad-dht/README.md` | 20% (basic DHT scaffold, not Kubo-tested) |
+| B3 Yamux window/ping/goaway | `c-libp2p/specs/yamux/README.md` | 30% |
+| B4 DNSADDR bootstrap | — | 10% |
+| B5 IPNS records v2 | `specs/src/ipns/ipns-record.md` | 10% |
+| B6 DAG-CBOR | `specs/src/ipns/ipns-record.md` (referenced) | 10% |
+| C QUIC transport | `c-libp2p/specs/quic/README.md` | 5% |
+| C WebSocket transport | `c-libp2p/specs/websockets/README.md` | 5% |
+| C GossipSub | `c-libp2p/specs/pubsub/gossipsub/gossipsub-v1.0.md` | 5% |
+| C HTTP Gateway | `specs/http-gateways/` | 30% (basic gateway paths, range/DNSLink pending) |
 
 ## Known rough edges
 
-- Bitswap retrieval from Kubo hangs after the initial `swarm connect`; B2 work below addresses protocol negotiation (`/ipfs/bitswap/1.1.0` vs `1.2.0`), CID encoding, and message parsing.
+- Bitswap `Cancel`, `HAVE`/`DONT_HAVE` routing, multi-peer sessions, and CIDv1 wantlist entries need more work.
 
 ## Phase A — Finish P0 interop blockers
 
