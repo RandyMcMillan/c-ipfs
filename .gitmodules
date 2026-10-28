@@ -24,3 +24,6 @@
 [submodule "specs"]
 	path = specs
 	url = https://github.com/ipfs/specs.git
+[submodule "c-multicodec"]
+	path = c-multicodec
+	url = git@github.com:RandyMcMillan/c-multicodec.git
