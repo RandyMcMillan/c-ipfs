@@ -50,7 +50,7 @@ static int ipfs_cid_codec_supported(int version, int codec) {
 	return 0;
 }
 
-static int ipfs_cid_from_bytes(const unsigned char* incoming, size_t incoming_size, struct Cid** cid) {
+int ipfs_cid_from_bytes(const unsigned char* incoming, size_t incoming_size, struct Cid** cid) {
 	if (incoming == NULL || incoming_size == 0)
 		return 0;
 

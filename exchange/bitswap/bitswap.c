@@ -22,11 +22,24 @@
 #include "ipfs/exchange/bitswap/want_manager.h"
 
 int ipfs_bitswap_can_handle(const struct StreamMessage* msg) {
+	fprintf(stderr, "[BITSWAP_CAN_HANDLE] data_size=%zu first=%02x\n", msg ? msg->data_size : 0, (msg && msg->data_size > 0) ? msg->data[0] : 0);
 	if (msg == NULL || msg->data == NULL || msg->data_size == 0)
 		return 0;
 	char* result = strnstr((char*)msg->data, "/ipfs/bitswap", msg->data_size);
-	if(result == NULL || result != (char*)msg->data)
+	if(result == NULL || result != (char*)msg->data) {
+		// Temporary debug: log non-matching messages that might be raw Bitswap protobufs.
+		if (msg->data_size > 0 && msg->data[0] != '/' && msg->data_size < 128) {
+			char hex[256];
+			hex[0] = '\0';
+			for (size_t i = 0; i < msg->data_size && i < sizeof(hex)/3 - 1; i++) {
+				char tmp[4];
+				snprintf(tmp, sizeof(tmp), "%02x ", msg->data[i]);
+				strncat(hex, tmp, sizeof(hex) - strlen(hex) - 1);
+			}
+			fprintf(stderr, "[bitswap_can_handle] non-protocol msg (%zu bytes): %s\n", msg->data_size, hex);
+		}
 		return 0;
+	}
 	return 1;
 }
 
@@ -43,6 +56,7 @@ int ipfs_bitswap_shutdown_handler(void* context) {
  * @returns 0 if the caller should not continue looping, <0 on error, >0 on success
  */
 int ipfs_bitswap_handle_message(const struct StreamMessage* msg, struct Stream* stream, void* protocol_context) {
+	fprintf(stderr, "[BITSWAP_HANDLE_MESSAGE] data_size=%zu first=%c\n", msg ? msg->data_size : 0, (msg && msg->data_size > 0) ? msg->data[0] : '?');
 	struct IpfsNode* local_node = (struct IpfsNode*)protocol_context;
 	struct SessionContext* session_context = libp2p_net_connection_get_session_context(stream);
 	if (session_context == NULL)

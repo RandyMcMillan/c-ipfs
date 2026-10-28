@@ -1,4 +1,6 @@
 #include <stdlib.h>
+#include <string.h>
+#include "libp2p/crypto/sha256.h"
 #include "protobuf.h"
 #include "varint.h"
 #include "libp2p/utils/vector.h"
@@ -6,6 +8,110 @@
 #include "ipfs/cid/cid.h"
 #include "ipfs/exchange/bitswap/message.h"
 #include "ipfs/exchange/bitswap/peer_request_queue.h"
+
+/**
+ * Convert a Block to a Bitswap 1.2.0 payload Block (CID prefix + data).
+ */
+struct BitswapBlock* ipfs_block_to_bitswap_block(const struct Block* block) {
+	if (block == NULL || block->cid == NULL)
+		return NULL;
+	struct BitswapBlock* bb = ipfs_bitswap_block_new();
+	if (bb == NULL)
+		return NULL;
+	size_t cid_size = ipfs_cid_to_bytes_size(block->cid);
+	unsigned char* cid_bytes = (unsigned char*) malloc(cid_size);
+	if (cid_bytes == NULL)
+		goto err;
+	size_t written = 0;
+	if (!ipfs_cid_to_bytes(block->cid, cid_bytes, cid_size, &written))
+		goto err;
+	bb->prefix_size = written - block->cid->hash_length;
+	bb->prefix = (uint8_t*) malloc(bb->prefix_size);
+	if (bb->prefix == NULL)
+		goto err;
+	memcpy(bb->prefix, cid_bytes, bb->prefix_size);
+	bb->bytes_size = block->data_length;
+	if (bb->bytes_size > 0) {
+		bb->bytes = (uint8_t*) malloc(bb->bytes_size);
+		if (bb->bytes == NULL)
+			goto err;
+		memcpy(bb->bytes, block->data, bb->bytes_size);
+	}
+	free(cid_bytes);
+	return bb;
+err:
+	free(cid_bytes);
+	ipfs_bitswap_block_free(bb);
+	return NULL;
+}
+
+/**
+ * Convert a Bitswap 1.2.0 payload Block back to a Block (prefix + data -> CID + data).
+ */
+struct Block* ipfs_bitswap_block_to_ipfs_block(const struct BitswapBlock* bb) {
+	fprintf(stderr, "[BITSWAP_BLOCK_TO_IPFS] prefix_size=%zu bytes_size=%zu\n", bb ? bb->prefix_size : 0, bb ? bb->bytes_size : 0);
+	if (bb == NULL || bb->prefix == NULL || bb->prefix_size == 0)
+		return NULL;
+
+	// Bitswap 1.2.0 Block { prefix, data }. The prefix describes the CID
+	// format; we must hash the block data and append the digest to rebuild
+	// the full CID that identifies the block.
+	unsigned char* cid_bytes = NULL;
+	size_t cid_size = 0;
+
+	if (bb->prefix_size == 2 && bb->prefix[0] == 0x12 && bb->prefix[1] == 0x20) {
+		// CIDv0: prefix is the sha2-256 multihash type/length, append digest.
+		cid_size = 2 + 32;
+		cid_bytes = (unsigned char*) malloc(cid_size);
+		if (cid_bytes == NULL)
+			return NULL;
+		memcpy(cid_bytes, bb->prefix, 2);
+		if (!libp2p_crypto_hashing_sha256(bb->bytes, bb->bytes_size, cid_bytes + 2)) {
+			free(cid_bytes);
+			return NULL;
+		}
+	} else if (bb->prefix_size == 4 && bb->prefix[0] == 0x00 && bb->prefix[1] == 0x70 && bb->prefix[2] == 0x12 && bb->prefix[3] == 0x20) {
+		// CIDv0 equivalent sent as full prefix (version=0, codec=dag-pb, hashType=sha2-256, hashLength=32).
+		cid_size = 2 + 32;
+		cid_bytes = (unsigned char*) malloc(cid_size);
+		if (cid_bytes == NULL)
+			return NULL;
+		cid_bytes[0] = 0x12;
+		cid_bytes[1] = 0x20;
+		if (!libp2p_crypto_hashing_sha256(bb->bytes, bb->bytes_size, cid_bytes + 2)) {
+			free(cid_bytes);
+			return NULL;
+		}
+	} else {
+		fprintf(stderr, "[BITSWAP_BLOCK_TO_IPFS] unsupported prefix, returning NULL\n");
+		// TODO: CIDv1 reconstruction from prefix + hash(data).
+		return NULL;
+	}
+
+	struct Cid* cid = NULL;
+	if (!ipfs_cid_from_bytes(cid_bytes, cid_size, &cid)) {
+		free(cid_bytes);
+		return NULL;
+	}
+	free(cid_bytes);
+
+	struct Block* block = ipfs_block_new();
+	if (block == NULL) {
+		ipfs_cid_free(cid);
+		return NULL;
+	}
+	block->cid = cid;
+	if (bb->bytes_size > 0) {
+		block->data = (unsigned char*) malloc(bb->bytes_size);
+		if (block->data == NULL) {
+			ipfs_block_free(block);
+			return NULL;
+		}
+		memcpy(block->data, bb->bytes, bb->bytes_size);
+	}
+	block->data_length = bb->bytes_size;
+	return block;
+}
 
 /***
  * Allocate memory for a struct BitswapBlock
@@ -105,10 +211,12 @@ int ipfs_bitswap_message_block_protobuf_decode(uint8_t* buffer, size_t buffer_le
 			case (1):
 				if (!protobuf_decode_length_delimited(&buffer[pos], buffer_length - pos, (char**)&block->prefix, &block->prefix_size, &bytes_read))
 					goto exit;
+				pos += bytes_read;
 				break;
 			case (2):
 				if (!protobuf_decode_length_delimited(&buffer[pos], buffer_length - pos, (char**)&block->bytes, &block->bytes_size, &bytes_read))
 					goto exit;
+				pos += bytes_read;
 				break;
 		}
 	}
@@ -318,11 +426,11 @@ int ipfs_bitswap_wantlist_entry_protobuf_decode(unsigned char* buffer, size_t bu
 				pos += bytes_read;
 				break;
 			case (2):
-				entry->cancel = varint_decode(&buffer[pos], buffer_length - pos, &bytes_read);
+				entry->priority = varint_decode(&buffer[pos], buffer_length - pos, &bytes_read);
 				pos += bytes_read;
 				break;
 			case (3):
-				entry->priority = varint_decode(&buffer[pos], buffer_length - pos, &bytes_read);
+				entry->cancel = varint_decode(&buffer[pos], buffer_length - pos, &bytes_read);
 				pos += bytes_read;
 				break;
 			case (4):
@@ -554,8 +662,8 @@ int ipfs_bitswap_message_free(struct BitswapMessage* message) {
 		if (message->payload != NULL) {
 			for(int i = 0; i < message->payload->total; i++) {
 				// free each item in the vector
-				struct Block* entry = (struct Block*) libp2p_utils_vector_get(message->payload, i);
-				ipfs_block_free(entry);
+				struct BitswapBlock* entry = (struct BitswapBlock*) libp2p_utils_vector_get(message->payload, i);
+				ipfs_bitswap_block_free(entry);
 			}
 			libp2p_utils_vector_free(message->payload);
 		}
@@ -590,8 +698,8 @@ size_t ipfs_bitswap_message_protobuf_encode_size(const struct BitswapMessage* me
 		}
 		if (message->payload != NULL) {
 			for(int i = 0; i < message->payload->total; i++) {
-				struct Block* entry = (struct Block*) libp2p_utils_vector_get(message->payload, i);
-				total += 11 + ipfs_blocks_block_protobuf_encode_size(entry);
+				struct BitswapBlock* entry = (struct BitswapBlock*) libp2p_utils_vector_get(message->payload, i);
+				total += 11 + ipfs_bitswap_message_block_protobuf_size(entry);
 			}
 		}
 		if (message->wantlist != NULL) {
@@ -621,42 +729,7 @@ int ipfs_bitswap_message_protobuf_encode(const struct BitswapMessage* message, u
 	*bytes_written = 0;
 
 	if (message != NULL) {
-		// the vector of blocks that are actually to be turned back into byte arrays
-		if (message->blocks != NULL) {
-			for(int i = 0; i < message->blocks->total; i++) {
-				struct Block* entry = (struct Block*) libp2p_utils_vector_get(message->blocks, i);
-				// blocks are just variable length byte streams
-				if (!protobuf_encode_length_delimited(1, WIRETYPE_LENGTH_DELIMITED, (char*)entry->data, entry->data_length, &buffer[*bytes_written], buffer_length - (*bytes_written), &bytes_used)) {
-					return 0;
-				}
-				*bytes_written += bytes_used;
-			}
-		}
-		// the vector of Blocks that are actually blocks
-		if (message->payload != NULL) {
-			for(int i = 0; i < message->payload->total; i++) {
-				struct Block* entry = (struct Block*) libp2p_utils_vector_get(message->payload, i);
-				// protobuf it
-				size_t temp_size = ipfs_blocks_block_protobuf_encode_size(entry);
-				uint8_t* temp = (uint8_t*) malloc(temp_size);
-				if (temp == NULL) {
-					// memory issues
-					return 0;
-				}
-				if (!ipfs_blocks_block_protobuf_encode(entry, temp, temp_size, &temp_size)) {
-					free(temp);
-					return 0;
-				}
-				// put it in the buffer
-				if (!protobuf_encode_length_delimited(2, WIRETYPE_LENGTH_DELIMITED, (char*)temp, temp_size, &buffer[*bytes_written], buffer_length - (*bytes_written), &bytes_used)) {
-					free(temp);
-					return 0;
-				}
-				*bytes_written += bytes_used;
-				free(temp);
-			}
-		}
-		// the WantList
+		// the WantList (Bitswap 1.2.0 field 1)
 		if (message->wantlist != NULL) {
 			size_t temp_size = ipfs_bitswap_wantlist_protobuf_encode_size(message->wantlist);
 			uint8_t* temp = (uint8_t*) malloc(temp_size);
@@ -667,14 +740,38 @@ int ipfs_bitswap_message_protobuf_encode(const struct BitswapMessage* message, u
 				free(temp);
 				return 0;
 			}
-			if (!protobuf_encode_length_delimited(3, WIRETYPE_LENGTH_DELIMITED, (char*)temp, temp_size, &buffer[*bytes_written], buffer_length - (*bytes_written), &bytes_used)) {
+			if (!protobuf_encode_length_delimited(1, WIRETYPE_LENGTH_DELIMITED, (char*)temp, temp_size, &buffer[*bytes_written], buffer_length - (*bytes_written), &bytes_used)) {
 				free(temp);
 				return 0;
 			}
 			*bytes_written += bytes_used;
 			free(temp);
 		}
-		// block presences (bitswap 1.2.0)
+		// the vector of Blocks that are actually blocks (Bitswap 1.2.0 field 3)
+		if (message->payload != NULL) {
+			for(int i = 0; i < message->payload->total; i++) {
+				struct BitswapBlock* entry = (struct BitswapBlock*) libp2p_utils_vector_get(message->payload, i);
+				// protobuf it
+				size_t temp_size = ipfs_bitswap_message_block_protobuf_size(entry);
+				uint8_t* temp = (uint8_t*) malloc(temp_size);
+				if (temp == NULL) {
+					// memory issues
+					return 0;
+				}
+				if (!ipfs_bitswap_message_block_protobuf_encode(entry, temp, temp_size, &temp_size)) {
+					free(temp);
+					return 0;
+				}
+				// put it in the buffer
+				if (!protobuf_encode_length_delimited(3, WIRETYPE_LENGTH_DELIMITED, (char*)temp, temp_size, &buffer[*bytes_written], buffer_length - (*bytes_written), &bytes_used)) {
+					free(temp);
+					return 0;
+				}
+				*bytes_written += bytes_used;
+				free(temp);
+			}
+		}
+		// block presences (bitswap 1.2.0 field 4)
 		if (message->block_presences != NULL) {
 			for(int i = 0; i < message->block_presences->total; i++) {
 				struct BitswapBlockPresence* entry = (struct BitswapBlockPresence*) libp2p_utils_vector_get(message->block_presences, i);
@@ -737,28 +834,40 @@ int ipfs_bitswap_message_protobuf_decode(const uint8_t* buffer, size_t buffer_le
 		pos += bytes_read;
 		switch(field_no) {
 			case (1): {
-				// a Blocks entry that is just an array of bytes
-				struct Block* temp = ipfs_block_new();
-				if (!protobuf_decode_length_delimited(&buffer[pos], buffer_length - pos, (char**)&temp->data, &temp->data_length, &bytes_read)) {
-					return 0;
-				}
-				if (message->blocks == NULL) {
-					message->blocks = libp2p_utils_vector_new(1);
-				}
-				libp2p_utils_vector_add(message->blocks, (void*)temp);
-				pos += bytes_read;
-				break;
-			}
-			case (2): {
-				// a block entry that is a real block struct
+				// a Wantlist (Bitswap 1.2.0 field 1)
 				size_t temp_size = 0;
 				uint8_t* temp = NULL;
 				if (!protobuf_decode_length_delimited(&buffer[pos], buffer_length - pos, (char**)&temp, &temp_size, &bytes_read)) {
 					return 0;
 				}
-				// we have the bytes, turn it into a Block struct
-				struct Block* block = NULL;
-				if (!ipfs_blocks_block_protobuf_decode(temp, temp_size, &block)) {
+				if (!ipfs_bitswap_wantlist_protobuf_decode(temp, temp_size, &message->wantlist)) {
+					free(temp);
+					return 0;
+				}
+				free(temp);
+				pos += bytes_read;
+				break;
+			}
+			case (2): {
+				// Bitswap 1.0.0 raw blocks field; ignore in 1.2.0
+				size_t temp_size = 0;
+				uint8_t* temp = NULL;
+				if (!protobuf_decode_length_delimited(&buffer[pos], buffer_length - pos, (char**)&temp, &temp_size, &bytes_read)) {
+					return 0;
+				}
+				free(temp);
+				pos += bytes_read;
+				break;
+			}
+			case(3): {
+				// a Bitswap 1.2.0 payload Block (prefix + data)
+				size_t temp_size = 0;
+				uint8_t* temp = NULL;
+				if (!protobuf_decode_length_delimited(&buffer[pos], buffer_length - pos, (char**)&temp, &temp_size, &bytes_read)) {
+					return 0;
+				}
+				struct BitswapBlock* bitswap_block = NULL;
+				if (!ipfs_bitswap_message_block_protobuf_decode(temp, temp_size, &bitswap_block)) {
 					free(temp);
 					return 0;
 				}
@@ -766,23 +875,7 @@ int ipfs_bitswap_message_protobuf_decode(const uint8_t* buffer, size_t buffer_le
 				if (message->payload == NULL) {
 					message->payload = libp2p_utils_vector_new(1);
 				}
-				libp2p_utils_vector_add(message->payload, (void*)block);
-				pos += bytes_read;
-				break;
-			}
-			case(3): {
-				// a Wantlist
-				size_t temp_size = 0;
-				uint8_t* temp = NULL;
-				if (!protobuf_decode_length_delimited(&buffer[pos], buffer_length - pos, (char**)&temp, &temp_size, &bytes_read)) {
-					return 0;
-				}
-				// we have the protobuf'd wantlist, now turn it into a Wantlist struct.
-				if (!ipfs_bitswap_wantlist_protobuf_decode(temp, temp_size, &message->wantlist)) {
-					free(temp);
-					return 0;
-				}
-				free(temp);
+				libp2p_utils_vector_add(message->payload, (void*)bitswap_block);
 				pos += bytes_read;
 				break;
 			}
@@ -829,6 +922,7 @@ int ipfs_bitswap_message_add_wantlist_items(struct BitswapMessage* message, stru
 		message->wantlist = ipfs_bitswap_wantlist_new();
 		if (message->wantlist == NULL)
 			return 0;
+		message->wantlist->full = 1;
 	}
 	if (message->wantlist->entries == NULL) {
 		message->wantlist->entries = libp2p_utils_vector_new(1);
@@ -891,7 +985,7 @@ int ipfs_bitswap_message_cancel_cid(struct Libp2pVector* vector, struct Cid* inc
  * @returns true(1) on success, false(0) otherwise
  */
 int ipfs_bitswap_message_add_blocks(struct BitswapMessage* message, struct Libp2pVector* blocks, struct Libp2pVector* cids_they_want) {
-	// bitswap 1.0 uses blocks, bitswap 1.1 uses payload
+	// bitswap 1.2.0 uses payload (CID prefix + block data)
 
 	if (message == NULL)
 		return 0;
@@ -905,7 +999,10 @@ int ipfs_bitswap_message_add_blocks(struct BitswapMessage* message, struct Libp2
 	int tot_blocks = blocks->total;
 	for(int i = 0; i < tot_blocks; i++) {
 		const struct Block* current = (const struct Block*) libp2p_utils_vector_get(blocks, i);
-		libp2p_utils_vector_add(message->payload, current);
+		struct BitswapBlock* bitswap_block = ipfs_block_to_bitswap_block(current);
+		if (bitswap_block == NULL)
+			return 0;
+		libp2p_utils_vector_add(message->payload, bitswap_block);
 		ipfs_bitswap_message_cancel_cid(cids_they_want, current->cid);
 	}
 

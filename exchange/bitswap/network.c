@@ -148,18 +148,22 @@ int ipfs_bitswap_network_handle_block_presence(struct PeerRequest* peer_request,
  * @returns true(1) on success, false(0) otherwise.
  */
 int ipfs_bitswap_network_handle_message(const struct IpfsNode* node, const struct SessionContext* sessionContext, const uint8_t* bytes, size_t bytes_length) {
+	fprintf(stderr, "[BITSWAP_NETWORK_HANDLE_MESSAGE] bytes_length=%zu first=%02x\n", bytes_length, bytes_length > 0 ? bytes[0] : 0);
 	struct BitswapContext* bitswapContext = (struct BitswapContext*)node->exchange->exchangeContext;
 	// un-protobuf the message
 	struct BitswapMessage* message = NULL;
 	if (!ipfs_bitswap_message_protobuf_decode(bytes, bytes_length, &message))
 		return 0;
 	// process the message
-	// payload - what we want
+	// payload - what we want (Bitswap 1.2.0 prefix+data)
 	if (message->payload != NULL) {
 		for(int i = 0; i < message->payload->total; i++) {
-			struct Block* blk = (struct Block*)libp2p_utils_vector_get(message->payload, i);
-			// we need a copy of the block so it survives the destruction of the message
-			node->exchange->HasBlock(node->exchange, ipfs_block_copy(blk));
+			struct BitswapBlock* bitswap_block = (struct BitswapBlock*)libp2p_utils_vector_get(message->payload, i);
+			struct Block* blk = ipfs_bitswap_block_to_ipfs_block(bitswap_block);
+			if (blk != NULL) {
+				// we need a copy of the block so it survives the destruction of the message
+				node->exchange->HasBlock(node->exchange, blk);
+			}
 		}
 	}
 	// block presences - what peers can serve (Bitswap 1.2.0)

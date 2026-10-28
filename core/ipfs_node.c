@@ -53,7 +53,7 @@ struct Libp2pVector* ipfs_node_online_build_protocol_handlers(struct IpfsNode* n
 		// multistream
 		libp2p_utils_vector_add(retVal, libp2p_net_multistream_build_protocol_handler(retVal));
 		// yamux
-		libp2p_utils_vector_add(retVal, libp2p_yamux_build_protocol_handler());
+		libp2p_utils_vector_add(retVal, libp2p_yamux_build_protocol_handler(retVal));
 		// mplex scaffold
 		libp2p_utils_vector_add(retVal, libp2p_mplex_build_protocol_handler(retVal));
 		// identify: build protobuf-encoded RSA public key and listen addrs

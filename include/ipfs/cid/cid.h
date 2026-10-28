@@ -132,6 +132,15 @@ int ipfs_cid_hash_to_base58(const unsigned char* hash, size_t hash_length, unsig
 char* ipfs_cid_to_string(const struct Cid* cid, char **result);
 
 /***
+ * Create a CID from raw CID bytes.
+ * @param incoming the raw CID bytes
+ * @param incoming_size the size of the array
+ * @param cid a pointer to the newly allocated Cid struct
+ * @returns true(1) on success
+ */
+int ipfs_cid_from_bytes(const unsigned char* incoming, size_t incoming_size, struct Cid** cid);
+
+/***
  * Turn a multibase decoded string of bytes into a Cid struct
  * @param incoming the multibase decoded array
  * @param incoming_size the size of the array

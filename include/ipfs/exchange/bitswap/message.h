@@ -104,6 +104,16 @@ int ipfs_bitswap_message_block_protobuf_encode(struct BitswapBlock* incoming, ui
  */
 int ipfs_bitswap_message_block_protobuf_decode(uint8_t* buffer, size_t buffer_length, struct BitswapBlock** output);
 
+/**
+ * Convert an internal Block to a Bitswap 1.2.0 payload Block.
+ */
+struct BitswapBlock* ipfs_block_to_bitswap_block(const struct Block* block);
+
+/**
+ * Convert a Bitswap 1.2.0 payload Block to an internal Block.
+ */
+struct Block* ipfs_bitswap_block_to_ipfs_block(const struct BitswapBlock* bitswap_block);
+
 /***
  * Allocate memory for a new WantlistEntry
  * @returns the newly allocated WantlistEntry
