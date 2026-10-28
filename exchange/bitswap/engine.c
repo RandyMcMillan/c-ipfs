@@ -39,20 +39,29 @@ int ipfs_bitswap_engine_free(struct BitswapEngine* engine) {
  */
 void* ipfs_bitswap_engine_wantlist_processor_start(void* ctx) {
 	struct BitswapContext* context = (struct BitswapContext*)ctx;
+	struct WantListSession engine_session;
+	engine_session.type = WANTLIST_SESSION_TYPE_ENGINE;
+	engine_session.context = NULL;
+
 	// the loop
 	while (!context->bitswap_engine->shutting_down) {
 		struct WantListQueueEntry* item = ipfs_bitswap_wantlist_queue_pop(context->localWantlist);
 		if (item != NULL) {
-			if (item->attempts > 10) {
+			if (item->sessionsRequesting == NULL) {
+				// corrupted entry; drop it without freeing the broken pointer
+				item->processing = 0;
+			} else if (item->attempts > 10) {
 				// we have tried too many times
-				for (int i = 0; i < item->sessionsRequesting->total; i++) {
+				for (size_t i = 0; i < item->sessionsRequesting->total; i++) {
 					struct WantListSession* curr_session = (struct WantListSession*) libp2p_utils_vector_get(item->sessionsRequesting, i);
-					ipfs_bitswap_wantlist_queue_remove(context->localWantlist, item->cid, curr_session);
+					if (curr_session->type != WANTLIST_SESSION_TYPE_ENGINE)
+						ipfs_bitswap_wantlist_queue_remove(context->localWantlist, item->cid, curr_session);
 				}
-
+				ipfs_bitswap_wantlist_queue_remove(context->localWantlist, item->cid, &engine_session);
 			} else {
 				// if there is something on the queue process it.
 				ipfs_bitswap_wantlist_process_entry(context, item);
+				ipfs_bitswap_wantlist_queue_remove(context->localWantlist, item->cid, &engine_session);
 			}
 		} else {
 			// if there is nothing on the queue, wait...
@@ -92,39 +101,41 @@ void* ipfs_bitswap_engine_peer_request_processor_start(void* ctx) {
 			libp2p_logger_error("bitswap_engine", "Peerstore has an item that is a null peer.\n");
 			break;
 		}
-		if (current_peer_entry->connection_type == CONNECTION_TYPE_CONNECTED) {
-			if (current_peer_entry->sessionContext == NULL || current_peer_entry->sessionContext->default_stream == NULL) {
-				current_peer_entry->connection_type = CONNECTION_TYPE_NOT_CONNECTED;
-			} else {
-				// check the network to see if there is anything waiting for us (if the stream is idle)
-				if (libp2p_stream_try_lock(current_peer_entry->sessionContext->default_stream)) {
-					int retVal = current_peer_entry->sessionContext->default_stream->peek(current_peer_entry->sessionContext);
-					if (retVal < 0) {
-						libp2p_logger_debug("bitswap_engine", "We thought we were connected, but Peek reported an error.\n");
-						libp2p_peer_handle_connection_error(current_peer_entry);
-					} else if (retVal > 0) {
-						libp2p_logger_debug("bitswap_engine", "%d bytes waiting on network for peer %s.\n", retVal, libp2p_peer_id_to_string(current_peer_entry));
-						struct StreamMessage* buffer = NULL;
-						if (current_peer_entry->sessionContext->default_stream->read(current_peer_entry->sessionContext, &buffer, 1)) {
-							// handle it
-							libp2p_logger_debug("bitswap_engine", "%lu bytes read, result: [%s].\n", buffer->data_size, buffer->data);
-							int retVal = libp2p_protocol_marshal(buffer, current_peer_entry->sessionContext->default_stream, context->ipfsNode->protocol_handlers);
-							libp2p_stream_message_free(buffer);
-							did_some_processing = 1;
-							if (retVal == -1) {
-								libp2p_logger_error("bitswap_engine", "protocol_marshal tried to handle the network traffic, but failed.\n");
-								// there was a problem. Clean up
+			if (current_peer_entry->connection_type == CONNECTION_TYPE_CONNECTED) {
+				struct SessionContext* sc = current_peer_entry->sessionContext;
+				if (sc == NULL || sc->default_stream == NULL) {
+					current_peer_entry->connection_type = CONNECTION_TYPE_NOT_CONNECTED;
+				} else {
+					struct Stream* stream = sc->default_stream;
+					// check the network to see if there is anything waiting for us (if the stream is idle)
+					if (libp2p_stream_try_lock(stream)) {
+						int retVal = stream->peek(sc);
+						if (retVal < 0) {
+							libp2p_logger_debug("bitswap_engine", "We thought we were connected, but Peek reported an error.\n");
+							libp2p_peer_handle_connection_error(current_peer_entry);
+						} else if (retVal > 0) {
+							libp2p_logger_debug("bitswap_engine", "%d bytes waiting on network for peer %s.\n", retVal, libp2p_peer_id_to_string(current_peer_entry));
+							struct StreamMessage* buffer = NULL;
+							if (stream->read(sc, &buffer, 1)) {
+								// handle it
+								libp2p_logger_debug("bitswap_engine", "%lu bytes read, result: [%s].\n", buffer->data_size, buffer->data);
+								int retVal = libp2p_protocol_marshal(buffer, stream, context->ipfsNode->protocol_handlers);
+								libp2p_stream_message_free(buffer);
+								did_some_processing = 1;
+								if (retVal == -1) {
+									libp2p_logger_error("bitswap_engine", "protocol_marshal tried to handle the network traffic, but failed.\n");
+									// there was a problem. Clean up
+									libp2p_peer_handle_connection_error(current_peer_entry);
+								}
+							} else {
+								libp2p_logger_error("bitswap_engine", "It was said that there was %d bytes to read, but there wasn't. Cleaning up connection.\n");
 								libp2p_peer_handle_connection_error(current_peer_entry);
 							}
-						} else {
-							libp2p_logger_error("bitswap_engine", "It was said that there was %d bytes to read, but there wasn't. Cleaning up connection.\n");
-							libp2p_peer_handle_connection_error(current_peer_entry);
 						}
+						libp2p_stream_unlock(stream);
 					}
-					libp2p_stream_unlock(current_peer_entry->sessionContext->default_stream);
 				}
-			}
-		} else {
+			} else {
 			if (current_peer_entry->is_local) {
 				//libp2p_logger_debug("bitswap_engine", "Local peer %s. Skipping.\n", current_peer_entry->id);
 			} else {

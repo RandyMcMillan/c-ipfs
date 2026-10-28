@@ -11,7 +11,7 @@
 #include "ipfs/exchange/bitswap/bitswap.h"
 #include "ipfs/exchange/bitswap/future.h"
 
-enum WantListSessionType { WANTLIST_SESSION_TYPE_LOCAL, WANTLIST_SESSION_TYPE_REMOTE };
+enum WantListSessionType { WANTLIST_SESSION_TYPE_LOCAL, WANTLIST_SESSION_TYPE_REMOTE, WANTLIST_SESSION_TYPE_ENGINE };
 
 struct WantListSession {
 	enum WantListSessionType type;
@@ -26,6 +26,8 @@ struct WantListQueueEntry {
 	struct Block* block;
 	int asked_network;
 	int attempts;
+	int processing;   // engine is currently working on this entry
+	int should_free;  // a session removed while processing; free when done
 	struct WantListQueueEntry* next;
 	pthread_mutex_t block_mutex;
 	pthread_cond_t block_cond;
@@ -87,6 +89,12 @@ int ipfs_bitswap_wantlist_queue_remove(struct WantListQueue* wantlist, const str
  * @returns the WantListQueueEntry
  */
 struct WantListQueueEntry* ipfs_bitswap_wantlist_queue_find(struct WantListQueue* wantlist, const struct Cid* cid);
+
+/***
+ * Lock / unlock the wantlist queue for callers that need to walk it directly.
+ */
+void ipfs_bitswap_wantlist_queue_lock(struct WantListQueue* wantlist);
+void ipfs_bitswap_wantlist_queue_unlock(struct WantListQueue* wantlist);
 
 /***
  * compare 2 sessions for equality

@@ -32,30 +32,62 @@ int ipfs_exporter_get_node(struct IpfsNode* local_node, const unsigned char* has
 	size_t buffer_size = 0;
 	int retVal = 0;
 	struct KademliaMessage* msg = NULL;
+	struct Block* block = NULL;
+	struct Cid* cid = NULL;
 
-	if (!local_node->routing->GetValue(local_node->routing, hash, hash_size, (void**)&buffer, &buffer_size)) {
-		libp2p_logger_debug("exporter", "get_node got no value. Returning false.\n");
-		goto exit;
+	if (result == NULL)
+		return 0;
+	*result = NULL;
+
+	// 1. Try the local blockstore / datastore first.
+	if (ipfs_merkledag_get(hash, hash_size, result, local_node->repo)) {
+		return 1;
 	}
 
-	// unprotobuf
-	if (!ipfs_hashtable_node_protobuf_decode(buffer, buffer_size, result)) {
-		libp2p_logger_error("exporter", "Conversion to HashtableNode not successful\n");
-		goto exit;
+	// 2. If we are online, ask the network via the Bitswap exchange.
+	if (local_node->mode != MODE_OFFLINE && local_node->exchange != NULL && local_node->exchange->GetBlock != NULL) {
+		cid = ipfs_cid_new(0, hash, hash_size, CID_DAG_PROTOBUF);
+		if (cid != NULL && local_node->exchange->GetBlock(local_node->exchange, cid, &block) && block != NULL) {
+			if (ipfs_hashtable_node_protobuf_decode(block->data, block->data_length, result)) {
+				(*result)->hash_size = hash_size;
+				(*result)->hash = (unsigned char*)malloc(hash_size);
+				if ((*result)->hash != NULL) {
+					memcpy((*result)->hash, hash, hash_size);
+					retVal = 1;
+				} else {
+					ipfs_hashtable_node_free(*result);
+					*result = NULL;
+				}
+			}
+		}
 	}
 
-	// copy in the hash
-	(*result)->hash_size = hash_size;
-	(*result)->hash = malloc(hash_size);
-	if ( (*result)->hash == NULL) {
-		// memory issue
-		libp2p_logger_error("exporter", "get_node: Unable to allocate memory.\n");
-		goto exit;
+	// 3. Fall back to the legacy routing/DHT value path (used for IPNS names, etc.).
+	if (!retVal && local_node->routing != NULL && local_node->routing->GetValue != NULL) {
+		if (local_node->routing->GetValue(local_node->routing, hash, hash_size, (void**)&buffer, &buffer_size)) {
+			if (ipfs_hashtable_node_protobuf_decode(buffer, buffer_size, result)) {
+				(*result)->hash_size = hash_size;
+				(*result)->hash = (unsigned char*)malloc(hash_size);
+				if ((*result)->hash != NULL) {
+					memcpy((*result)->hash, hash, hash_size);
+					retVal = 1;
+				} else {
+					ipfs_hashtable_node_free(*result);
+					*result = NULL;
+				}
+			}
+		}
 	}
-	memcpy((*result)->hash, hash, hash_size);
 
-	retVal = 1;
+	if (!retVal) {
+		libp2p_logger_debug("exporter", "get_node could not retrieve hash locally or from network.\n");
+	}
+
 	exit:
+	if (cid != NULL)
+		ipfs_cid_free(cid);
+	if (block != NULL)
+		ipfs_block_free(block);
 	if (buffer != NULL)
 		free(buffer);
 	if (msg != NULL)

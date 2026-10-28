@@ -41,6 +41,16 @@ struct WantListQueue* ipfs_bitswap_wantlist_queue_new() {
 	return wantlist;
 }
 
+void ipfs_bitswap_wantlist_queue_lock(struct WantListQueue* wantlist) {
+	if (wantlist != NULL)
+		pthread_mutex_lock(&wantlist->wantlist_mutex);
+}
+
+void ipfs_bitswap_wantlist_queue_unlock(struct WantListQueue* wantlist) {
+	if (wantlist != NULL)
+		pthread_mutex_unlock(&wantlist->wantlist_mutex);
+}
+
 /***
  * Deallocate resources of a WantList
  * @param wantlist the WantList
@@ -101,16 +111,21 @@ int ipfs_bitswap_wantlist_queue_remove(struct WantListQueue* wantlist, const str
 		if (entry != NULL) {
 			ipfs_bitswap_wantlist_queue_entry_decrement(entry, session);
 			if (entry->sessionsRequesting->total == 0) {
-				struct WantListQueueEntry** curr = &wantlist->head;
-				while (*curr != NULL) {
-					if (*curr == entry) {
-						*curr = entry->next;
-						wantlist->size--;
-						break;
+				if (entry->processing) {
+					// The engine owns the pointer right now; let it free when done.
+					entry->should_free = 1;
+				} else {
+					struct WantListQueueEntry** curr = &wantlist->head;
+					while (*curr != NULL) {
+						if (*curr == entry) {
+							*curr = entry->next;
+							wantlist->size--;
+							break;
+						}
+						curr = &(*curr)->next;
 					}
-					curr = &(*curr)->next;
+					ipfs_bitswap_wantlist_queue_entry_free(entry);
 				}
-				ipfs_bitswap_wantlist_queue_entry_free(entry);
 			}
 			pthread_mutex_unlock(&wantlist->wantlist_mutex);
 			return 1;
@@ -156,8 +171,19 @@ struct WantListQueueEntry* ipfs_bitswap_wantlist_queue_pop(struct WantListQueue*
 	pthread_mutex_lock(&wantlist->wantlist_mutex);
 	struct WantListQueueEntry* curr = wantlist->head;
 	while (curr != NULL) {
-		if (curr->block == NULL && !curr->asked_network) {
+		if (curr->block == NULL && !curr->asked_network && !curr->processing) {
 			entry = curr;
+			entry->processing = 1;
+			// Hold a reference for the engine so the entry cannot be freed
+			// while we are processing it.
+			static struct WantListSession engine_session;
+			static int engine_session_initialized = 0;
+			if (!engine_session_initialized) {
+				engine_session.type = WANTLIST_SESSION_TYPE_ENGINE;
+				engine_session.context = NULL;
+				engine_session_initialized = 1;
+			}
+			libp2p_utils_vector_add(entry->sessionsRequesting, &engine_session);
 			break;
 		}
 		curr = curr->next;
@@ -183,6 +209,8 @@ struct WantListQueueEntry* ipfs_bitswap_wantlist_queue_entry_new() {
 		entry->priority = 0;
 		entry->attempts = 0;
 		entry->asked_network = 0;
+		entry->processing = 0;
+		entry->should_free = 0;
 		entry->next = NULL;
 		entry->future = NULL;
 		pthread_mutex_init(&entry->block_mutex, NULL);
@@ -234,11 +262,14 @@ int ipfs_bitswap_wantlist_session_compare(const struct WantListSession* a, const
 	if (a->type == WANTLIST_SESSION_TYPE_LOCAL) {
 		// it's local, there should be only 1
 		return 0;
-	} else {
-		struct Libp2pPeer* contextA = (struct Libp2pPeer*)a->context;
-		struct Libp2pPeer* contextB = (struct Libp2pPeer*)b->context;
-		return libp2p_peer_compare(contextA, contextB);
 	}
+	if (a->type == WANTLIST_SESSION_TYPE_ENGINE) {
+		// all engine references are equivalent
+		return 0;
+	}
+	struct Libp2pPeer* contextA = (struct Libp2pPeer*)a->context;
+	struct Libp2pPeer* contextB = (struct Libp2pPeer*)b->context;
+	return libp2p_peer_compare(contextA, contextB);
 }
 
 /**
@@ -294,25 +325,56 @@ int ipfs_bitswap_wantlist_get_block_locally(struct BitswapContext* context, stru
  * @param cid the id of the file
  * @returns true(1) if we found some providers to ask, false(0) otherwise
  */
+/**
+ * Add a CID to a specific peer's Bitswap request queue and attempt to send it.
+ */
+static int ipfs_bitswap_wantlist_send_cid_to_peer(struct BitswapContext* context, struct Libp2pPeer* peer, struct Cid* cid) {
+	struct PeerRequest* queueEntry = ipfs_peer_request_queue_find_peer(context->peerRequestQueue, peer);
+	if (queueEntry == NULL)
+		return 0;
+	struct CidEntry* entry = ipfs_bitswap_peer_request_cid_entry_new();
+	if (entry == NULL)
+		return 0;
+	entry->cid = ipfs_cid_copy(cid);
+	libp2p_utils_vector_add(queueEntry->cids_we_want, entry);
+	return ipfs_bitswap_peer_request_process_entry(context, queueEntry);
+}
+
 int ipfs_bitswap_wantlist_get_block_remote(struct BitswapContext* context, struct Cid* cid) {
-	// find out who may have the file
-	struct Libp2pVector* providers = NULL;
-	if (context->ipfsNode->routing->FindProviders(context->ipfsNode->routing, cid->hash, cid->hash_length, &providers)) {
-		for(int i = 0; i < providers->total; i++) {
-			struct Libp2pPeer* current = (struct Libp2pPeer*) libp2p_utils_vector_get(providers, i);
-			// add this to their queue
-			struct PeerRequest* queueEntry = ipfs_peer_request_queue_find_peer(context->peerRequestQueue, current);
-			struct CidEntry* entry = ipfs_bitswap_peer_request_cid_entry_new();
-			entry->cid = ipfs_cid_copy(cid);
-			libp2p_utils_vector_add(queueEntry->cids_we_want, entry);
-			// process this queue via bitswap protocol
-			ipfs_bitswap_peer_request_process_entry(context, queueEntry);
-			//libp2p_peer_free(current);
+	int sent = 0;
+
+	// First, broadcast to all already-connected peers. In the common case where
+	// the caller knows a peer (e.g. after swarm connect) this avoids a costly
+	// DHT lookup and matches Bitswap 1.2.0's "send wants to all connected peers"
+	// behavior.
+	struct Libp2pLinkedList* current_entry = context->ipfsNode->peerstore->head_entry;
+	while (current_entry != NULL) {
+		struct PeerEntry* peerEntry = (struct PeerEntry*)current_entry->item;
+		if (peerEntry != NULL && peerEntry->peer != NULL && !peerEntry->peer->is_local
+			&& peerEntry->peer->connection_type == CONNECTION_TYPE_CONNECTED) {
+			if (ipfs_bitswap_wantlist_send_cid_to_peer(context, peerEntry->peer, cid))
+				sent = 1;
 		}
-		libp2p_utils_vector_free(providers);
-		return 1;
+		current_entry = current_entry->next;
 	}
-	return 0;
+
+	// If we have no connected peers, try to discover providers via the DHT.
+	if (!sent) {
+		struct Libp2pVector* providers = NULL;
+		if (context->ipfsNode->routing != NULL && context->ipfsNode->routing->FindProviders != NULL
+		    && context->ipfsNode->routing->FindProviders(context->ipfsNode->routing, cid->hash, cid->hash_length, &providers)) {
+			for(int i = 0; i < providers->total; i++) {
+				struct Libp2pPeer* current = (struct Libp2pPeer*) libp2p_utils_vector_get(providers, i);
+				if (current != NULL) {
+					if (ipfs_bitswap_wantlist_send_cid_to_peer(context, current, cid))
+						sent = 1;
+				}
+			}
+			libp2p_utils_vector_free(providers);
+		}
+	}
+
+	return sent;
 }
 
 /**

@@ -22,12 +22,12 @@ struct WantListQueueEntry* ipfs_bitswap_want_manager_add(const struct BitswapCon
  */
 int ipfs_bitswap_want_manager_received(const struct BitswapContext* context, const struct Cid* cid) {
 	// find the entry
+	ipfs_bitswap_wantlist_queue_lock(context->localWantlist);
 	struct WantListQueueEntry* entry = ipfs_bitswap_wantlist_queue_find(context->localWantlist, cid);
 	// check the status
-	if (entry != NULL && entry->block != NULL) {
-		return 1;
-	}
-	return 0;
+	int retVal = (entry != NULL && entry->block != NULL);
+	ipfs_bitswap_wantlist_queue_unlock(context->localWantlist);
+	return retVal;
 }
 
 /***
@@ -38,15 +38,18 @@ int ipfs_bitswap_want_manager_received(const struct BitswapContext* context, con
  * @returns true(1) on success, false(0) otherwise
  */
 int ipfs_bitswap_want_manager_get_block(const struct BitswapContext* context, const struct Cid* cid, struct Block** block) {
+	ipfs_bitswap_wantlist_queue_lock(context->localWantlist);
 	struct WantListQueueEntry* entry = ipfs_bitswap_wantlist_queue_find(context->localWantlist, cid);
+	int retVal = 0;
 	if (entry != NULL && entry->block != NULL) {
 		// return a copy of the block
 		*block = ipfs_block_copy(entry->block);
-		if ( (*block) != NULL) {
-			return 1;
+		if (*block != NULL) {
+			retVal = 1;
 		}
 	}
-	return 0;
+	ipfs_bitswap_wantlist_queue_unlock(context->localWantlist);
+	return retVal;
 }
 
 /***

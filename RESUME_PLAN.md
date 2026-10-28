@@ -8,7 +8,7 @@
 
 ## Current state — what just landed
 
-- **Outbound `swarm connect` to Kubo works.** `ipfs swarm connect /ip4/127.0.0.1/tcp/<port>/p2p/<kubo-peer>` exits 0 against Kubo v0.43.1.
+- **Outbound `swarm connect` to Kubo is stable.** `ipfs swarm connect /ip4/127.0.0.1/tcp/<port>/p2p/<kubo-peer>` exits 0 against Kubo v0.43.1; the post-connect Yamux/Noise race is resolved.
 - **Noise XX handshake** completes in both directions (outbound dialer and inbound listener).
 - **Yamux** now opens streams correctly with `WINDOW_UPDATE+SYN` and stores inbound streams in session slots.
 - **Bridge streams** are classified as `STREAM_TYPE_BRIDGE` so the swarm thread does not misread their context.
@@ -21,8 +21,7 @@
 
 ## Known rough edges
 
-- After `swarm connect` succeeds, the daemon log still shows non-fatal Yamux read/write errors (`[Error][yamux] Unable to get correct session stream.`, `yamux_decode returned error.`, `[Error][swarm] Unable to read from network ...`). These occur while the dialer is finishing the outbound Identify exchange and the swarm listener thread is already reading Yamux frames. The mutex work quieted some races, but the fundamental overlap remains.
-- Moving `libp2p_swarm_add_peer` after Identify was attempted and reverted: the legacy multistream-over-yamux handshake currently relies on the swarm thread to process inbound Yamux frames and update the multistream status. A clean fix requires making the dialer drive the multistream+Identify exchange synchronously before handing the peer to the swarm.
+- Bitswap retrieval from Kubo hangs after the initial `swarm connect`; B2 work below addresses protocol negotiation (`/ipfs/bitswap/1.1.0` vs `1.2.0`), CID encoding, and message parsing.
 
 ## Phase A — Finish P0 interop blockers
 
@@ -45,18 +44,21 @@
 - **Status:** `STREAM_TYPE_BRIDGE` is recognized; multistream acks over Noise are processed correctly.
 - **Verify:** `./test/scripts/test_kubo_noise_handshake.sh` passes.
 
-### A4. Clean up post-connect Yamux noise — PARTIAL
+### A4. Clean up post-connect Yamux noise — DONE
 - **Spec:** `c-libp2p/specs/connections/README.md`, `c-libp2p/specs/yamux/README.md`, `c-libp2p/specs/identify/README.md`, `c-libp2p/specs/noise/README.md`.
-- **Files:** `transport/noise_v2_bridge.c`, `transport/stream_bridge.c`, `c-libp2p/yamux/yamux.c`, `c-libp2p/conn/dialer.c`, `c-libp2p/net/multistream.c`
+- **Files:** `transport/noise_v2_bridge.c`, `transport/stream_bridge.c`, `c-libp2p/yamux/yamux.c`, `c-libp2p/yamux/session.c`, `c-libp2p/conn/dialer.c`, `c-libp2p/net/multistream.c`
 - **Done:**
   - Added v2 Noise stream `rw_mutex`.
   - Made `transport/stream_bridge.c` mutex recursive and locked read/write paths.
-- **Remaining:**
-  - The swarm listener is added before the outbound Identify exchange completes, so both threads read from the Yamux/Noise bridge simultaneously. The current legacy multistream implementation waits for the swarm thread to update the multistream status, which prevents simply moving `libp2p_swarm_add_peer` after Identify.
-  - **Recommended fix:** make the outbound dialer drive the multistream-over-yamux handshake and the Identify response inline, then hand the peer to the swarm only after the exchange is complete. This touches `c-libp2p/net/multistream.c` (read the multistream ack synchronously from the yamux channel) and `c-libp2p/conn/dialer.c` (move `libp2p_swarm_add_peer` after Identify).
-- **Verify:** Run `./test/scripts/test_kubo_swarm_connect.sh` with `DEBUG=1`; log should be free of repeated `[Error][yamux]`/`[Error][swarm]` messages after `join_swarm returning success`.
+  - Made the outbound dialer drive the multistream-over-yamux handshake and Identify exchange synchronously, then hand the peer to the swarm only after `Identify` completes.
+  - Fixed `yamux_get_session_stream` to key off the canonical yamux stream id so inbound stream upgrades (multistream -> identify) resolve the correct session slot after the child `Stream` is replaced.
+  - Sent Identify v1 protocol id and protobuf as separate multistream-select messages, matching Kubo's expectation.
+  - Inbound yamux streams now reply with the multistream ack (`theyRequested=1`) instead of re-initiating.
+- **Verify:** `./test/scripts/test_kubo_swarm_connect.sh` passes (stable across 3 consecutive runs).
 
 ## Phase B — P1 production-grade
+
+**Current priority: B2 Bitswap 1.2.0 end-to-end Kubo interop.** The remaining B1/B3-B6 items are listed in dependency order after B2.
 
 Use the official specs in both `specs/` (IPFS-layer) and `c-libp2p/specs/` (libp2p-layer) to drive each item. Key references:
 - IPFS: `specs/src/routing/kad-dht.md`, `specs/src/bitswap-protocol.md`, `specs/src/ipns/ipns-record.md`, `specs/UNIXFS.md`, `specs/MERKLE_DAG.md`, `specs/http-gateways/`
@@ -74,7 +76,7 @@ Use the official specs in both `specs/` (IPFS-layer) and `c-libp2p/specs/` (libp
   - Routing table refresh every ~10 minutes; ping unresponsive nodes and remove them.
 - **Tests:** `test_routing_iterative_find_peer` against a local Kubo peer.
 
-### B2. Bitswap 1.2.0 sessions/presence
+### B2. Bitswap 1.2.0 sessions/presence — IN PROGRESS
 - **Spec:** `specs/src/bitswap-protocol.md` (Bitswap 1.2.0).
 - **Files:** `exchange/bitswap/want_manager.c`, `wantlist_queue.c`, `engine.c`, `message.c`, `network.c`
 - **Action:**
@@ -83,7 +85,10 @@ Use the official specs in both `specs/` (IPFS-layer) and `c-libp2p/specs/` (libp
   - `HAVE`/`DONT_HAVE` presence responses (Bitswap 1.2.0).
   - Support CIDv1 in wantlist entries.
   - 2 MiB per-block limit.
-- **Tests:** `test_bitswap_message_120` against Kubo.
+- **Current state:**
+  - `test/scripts/test_kubo_bitswap_retrieve.sh` is in place; content retrieval now routes through `exchange->GetBlock` and the wantlist queue broadcasts to connected peers before falling back to DHT provider lookup.
+  - The retrieval test currently hangs after `swarm connect`; next steps are protocol version negotiation (`/ipfs/bitswap/1.1.0` vs `1.2.0`), `HAVE`/`DONT_HAVE` handling, and CID encoding in the wantlist.
+- **Tests:** `test/scripts/test_kubo_bitswap_retrieve.sh` against Kubo.
 
 ### B3. Yamux window/ping/goaway
 - **Spec:** `c-libp2p/specs/yamux/README.md`.
