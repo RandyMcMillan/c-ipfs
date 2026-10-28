@@ -21,3 +21,6 @@
 [submodule "c-libnostr"]
 	path = c-libnostr
 	url = git@github.com:RandyMcMillan/c-libnostr.git
+[submodule "specs"]
+	path = specs
+	url = https://github.com/ipfs/specs.git
