@@ -80,7 +80,7 @@ OBJS = testit.o test_helper.o identify/test_identify_v2.o \
 	../nostril/sha256.o \
 	../c-libp2p/c-protobuf/protobuf.o ../c-libp2p/c-protobuf/varint.o
 
-V2_OBJS = ../c-libp2p/v2/src/conn/noise.o ../c-libp2p/v2/src/conn/noise_callbacks.o ../c-libp2p/v2/src/conn/multistream.o ../c-libp2p/v2/src/conn/yamux.o ../c-libp2p/v2/src/conn/connection.o ../c-libp2p/v2/src/crypto/verify.o ../c-libp2p/v2/src/net/tcp_dial.o ../c-libp2p/v2/src/identify/identify_v2.o ../c-libp2p/v2/src/identify/identify_v2_ipfs.o ../c-libp2p/v2/src/peer/peerstore.o ../c-libp2p/v2/src/swarm/swarm.o ../c-libp2p/v2/src/net/multiaddr.o ../c-libp2p/v2/src/utils/logger.o
+V2_OBJS = ../c-libp2p/v2/src/conn/noise.o ../c-libp2p/v2/src/conn/noise_callbacks.o ../c-libp2p/v2/src/conn/multistream.o ../c-libp2p/v2/src/conn/yamux.o ../c-libp2p/v2/src/conn/connection.o ../c-libp2p/v2/src/crypto/verify.o ../c-libp2p/v2/src/net/tcp_dial.o ../c-libp2p/v2/src/net/ws_dial.o ../c-libp2p/v2/src/identify/identify_v2.o ../c-libp2p/v2/src/identify/identify_v2_ipfs.o ../c-libp2p/v2/src/peer/peerstore.o ../c-libp2p/v2/src/swarm/swarm.o ../c-libp2p/v2/src/net/multiaddr.o ../c-libp2p/v2/src/utils/logger.o
 
 # Compiled with v2 includes first so it sees the v2 peerstore/multiaddr definitions.
 identify/test_identify_v2.o: identify/test_identify_v2.c
@@ -96,6 +96,12 @@ $(V2_OBJS):
 
 test_ipfs: $(OBJS) $(V2_OBJS)
 	$(CC) -o $@ $(OBJS) $(LFLAGS) $(V2_OBJS) ../lmdb/libraries/liblmdb/liblmdb.a
+
+# Standalone v2-stack dialer used by Kubo interop tests (avoids testit.o main).
+test_v2_kubo_OBJS = $(filter-out testit.o test_helper.o identify/test_identify_v2.o,$(OBJS)) test_v2_kubo.o
+
+test_v2_kubo: $(test_v2_kubo_OBJS) $(V2_OBJS)
+	$(CC) -o $@ $(test_v2_kubo_OBJS) $(LFLAGS) $(V2_OBJS) ../lmdb/libraries/liblmdb/liblmdb.a
 
 # c-libnostr standalone smoke test (separate binary to avoid symbol collisions
 # with the legacy internal nostr/event.o symbols: nostr_event_sign, etc.)
