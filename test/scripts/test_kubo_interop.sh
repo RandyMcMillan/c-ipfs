@@ -38,6 +38,10 @@ if [ "${VERBOSE}" = "true" ]; then
     set -x
 fi
 
+pick_port() {
+    python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1]); s.close()'
+}
+
 c_ipfs_pid=""
 kubo_pid=""
 
@@ -182,9 +186,28 @@ echo "=== Initializing test repositories ==="
 IPFS_PATH="${C_REPO}" "${C_IPFS_BIN}" init
 IPFS_PATH="${K_REPO}" "${KUBO_BIN}" init --profile=test
 
-IPFS_PATH="${K_REPO}" "${KUBO_BIN}" config Addresses.Swarm --json '["/ip4/127.0.0.1/tcp/4011"]'
-IPFS_PATH="${K_REPO}" "${KUBO_BIN}" config Addresses.API "/ip4/127.0.0.1/tcp/5011"
-IPFS_PATH="${K_REPO}" "${KUBO_BIN}" config Addresses.Gateway "/ip4/127.0.0.1/tcp/8081"
+C_API_PORT=$(pick_port)
+C_SWARM_PORT=$(pick_port)
+C_GW_PORT=$(pick_port)
+python3 - "${C_REPO}" "${C_API_PORT}" "${C_GW_PORT}" "${C_SWARM_PORT}" <<'PY'
+import json, os, sys
+cfg_path = os.path.join(sys.argv[1], 'config')
+with open(cfg_path, 'r') as f:
+    cfg = json.load(f)
+cfg['Addresses']['API'] = f'/ip4/127.0.0.1/tcp/{sys.argv[2]}'
+cfg['Addresses']['Gateway'] = f'/ip4/127.0.0.1/tcp/{sys.argv[3]}'
+cfg['Addresses']['Swarm'] = [f'/ip4/127.0.0.1/tcp/{sys.argv[4]}']
+cfg['Bootstrap'] = []
+with open(cfg_path, 'w') as f:
+    json.dump(cfg, f, indent=1)
+PY
+
+K_API_PORT=$(pick_port)
+K_SWARM_PORT=$(pick_port)
+K_GW_PORT=$(pick_port)
+IPFS_PATH="${K_REPO}" "${KUBO_BIN}" config Addresses.Swarm --json "[\"/ip4/127.0.0.1/tcp/${K_SWARM_PORT}\"]"
+IPFS_PATH="${K_REPO}" "${KUBO_BIN}" config Addresses.API "/ip4/127.0.0.1/tcp/${K_API_PORT}"
+IPFS_PATH="${K_REPO}" "${KUBO_BIN}" config Addresses.Gateway "/ip4/127.0.0.1/tcp/${K_GW_PORT}"
 IPFS_PATH="${K_REPO}" "${KUBO_BIN}" config --json Discovery.MDNS.Enabled false
 IPFS_PATH="${K_REPO}" "${KUBO_BIN}" config --json Bootstrap '[]'
 
@@ -192,31 +215,31 @@ echo "=== Starting c-ipfs daemon ==="
 IPFS_PATH="${C_REPO}" "${C_IPFS_BIN}" daemon > "${TMP_DIR}/c_ipfs.log" 2>&1 &
 c_ipfs_pid=$!
 
-echo "Waiting for c-ipfs daemon API..."
-wait_for_api "${c_ipfs_pid}" 5001 "c-ipfs" "${TMP_DIR}/c_ipfs.log" || exit 1
-wait_for_port 4001 "c-ipfs swarm" || exit 1
+echo "Waiting for c-ipfs daemon API on ${C_API_PORT}..."
+wait_for_api "${c_ipfs_pid}" "${C_API_PORT}" "c-ipfs" "${TMP_DIR}/c_ipfs.log" || exit 1
+wait_for_port "${C_SWARM_PORT}" "c-ipfs swarm" || exit 1
 
 C_ID=$(IPFS_PATH="${C_REPO}" "${C_IPFS_BIN}" id | awk '/^ID/ {print $2; exit}')
 if [ -z "${C_ID}" ]; then
     echo "Failed to read c-ipfs peer ID"
     exit 1
 fi
-C_PEER_ADDR="/ip4/127.0.0.1/tcp/4001/p2p/${C_ID}"
+C_PEER_ADDR="/ip4/127.0.0.1/tcp/${C_SWARM_PORT}/p2p/${C_ID}"
 
 echo "=== Starting Kubo daemon ==="
 IPFS_PATH="${K_REPO}" "${KUBO_BIN}" daemon > "${TMP_DIR}/kubo.log" 2>&1 &
 kubo_pid=$!
 
-echo "Waiting for Kubo daemon API..."
-wait_for_api "${kubo_pid}" 5011 "Kubo" "${TMP_DIR}/kubo.log" || exit 1
-if ! wait_for_port 4011 "Kubo swarm"; then
+echo "Waiting for Kubo daemon API on ${K_API_PORT}..."
+wait_for_api "${kubo_pid}" "${K_API_PORT}" "Kubo" "${TMP_DIR}/kubo.log" || exit 1
+if ! wait_for_port "${K_SWARM_PORT}" "Kubo swarm"; then
     echo "===== Kubo log tail ====="
     tail -n 80 "${TMP_DIR}/kubo.log" || true
     exit 1
 fi
 KUBO_ID=$(IPFS_PATH="${K_REPO}" "${KUBO_BIN}" id -f="<id>")
 # c-libp2p's multiaddress parser uses the legacy "ipfs" protocol name.
-KUBO_ADDR="/ip4/127.0.0.1/tcp/4011/ipfs/${KUBO_ID}"
+KUBO_ADDR="/ip4/127.0.0.1/tcp/${K_SWARM_PORT}/ipfs/${KUBO_ID}"
 echo "Kubo Multiaddr: ${KUBO_ADDR}"
 echo "=== Test 1: Swarm connect c-ipfs <-> Kubo ==="
 if [ "${VERBOSE}" = "true" ]; then
