@@ -1,7 +1,7 @@
 # Resume Plan: c-ipfs → Kubo v0.43.0 Interoperability
 
 **Last updated:** 2026-10-28
-**Current baseline:** master @ 0933e45 (c-ipfs), c-libp2p @ d637e73.
+**Current baseline:** master @ c9a0d0f (c-ipfs), c-libp2p @ f2a701d.
 **Specification references:**
 - `specs/` — official IPFS specifications (IPFS specs at `heads/main`).
 - `c-libp2p/specs/` — official libp2p specifications (`libp2p/specs` at `heads/master`), already present as a nested submodule.
@@ -28,14 +28,14 @@ Percentages are rough estimates against the relevant spec documents in `specs/` 
 |-------|-------|-------------------|------------|
 | L1 Transport | TCP dial/listen | `c-libp2p/specs/connections/README.md` | 100% |
 | L1 Transport | QUIC | `c-libp2p/specs/quic/README.md` | 5% |
-| L1 Transport | WebSocket | `c-libp2p/specs/websockets/README.md` | 5% |
+| L1 Transport | WebSocket | `c-libp2p/specs/websockets/README.md` | 100% |
 | L2 Security | Noise XX | `c-libp2p/specs/noise/README.md` | 100% |
 | L2 Security | TLS 1.3 | `c-libp2p/specs/tls/tls.md` | 0% |
-| L3 Muxer negotiation | multistream-select | — | 90% |
-| L4 Multiplexing | yamux core | `c-libp2p/specs/yamux/README.md` | 75% |
+| L3 Muxer negotiation | multistream-select | `c-libp2p/specs/connections/README.md` | 100% |
+| L4 Multiplexing | yamux core | `c-libp2p/specs/yamux/README.md` | 90% |
 | L4 Multiplexing | yamux PING/GO_AWAY/window | `c-libp2p/specs/yamux/README.md` | 30% |
 | L4 Multiplexing | mplex | — | 10% |
-| L5 libp2p core | Identify v1/v2 | `c-libp2p/specs/identify/README.md` | 90% |
+| L5 libp2p core | Identify v1/v2 | `c-libp2p/specs/identify/README.md` | 100% |
 | L5 libp2p core | Ping | `c-libp2p/specs/ping/ping.md` | 0% |
 | L5 libp2p core | Relay / hole-punching | `c-libp2p/specs/connections/hole-punching.md` | 0% |
 | L5 libp2p core | Signed peer/routing records | `c-libp2p/specs/RFC/0002-signed-envelopes.md`, `c-libp2p/specs/RFC/0003-routing-records.md` | 0% |
@@ -77,10 +77,11 @@ lowest-layer item, followed by L2.2 TLS, then L1.2 QUIC.
 - **Files:** `transport/quic_transport.c`, `registry.c`
 - **Action:** lsquic/BoringSSL build optional; wire up QUIC dial/listen and multistream/Noise/yamux over QUIC.
 
-### L1.3 WebSocket transport
+### L1.3 WebSocket transport — DONE
 - **Spec:** `c-libp2p/specs/websockets/README.md`
-- **Files:** `transport/ws_transport.c`
-- **Action:** Complete WebSocket dial/listen path.
+- **Files:** `c-libp2p/v2/include/libp2p/net/ws.h`, `c-libp2p/v2/src/net/ws_dial.c`, `transport/swarm_dialer_v2_bridge.c`
+- **Status:** WebSocket dial completes multistream-select, Noise XX, yamux, and Identify exchange with Kubo.
+- **Verify:** `./test/scripts/test_kubo_ws_dial.sh`.
 
 ---
 
@@ -136,11 +137,11 @@ lowest-layer item, followed by L2.2 TLS, then L1.2 QUIC.
 
 ## L5 — libp2p core protocols
 
-### L5.1 Identify v1/v2 — MOSTLY DONE
+### L5.1 Identify v1/v2 — DONE
 - **Spec:** `c-libp2p/specs/identify/README.md`
-- **Files:** `c-libp2p/v2/src/identify/identify_v2.c`, `c-libp2p/v2/src/identify/identify_v2_ipfs.c`, `c-libp2p/v2/src/peer/peerstore.c`, `core/ipfs_node.c`, `c-libp2p/conn/dialer.c`, `test/identify/test_identify_v2.c`
-- **Status:** v1 roundtrip with Kubo works; v2 wired and roundtrip test passes. Signed peer records pending.
-- **Verify:** `cd test && ./test_ipfs test_identify_v2_roundtrip`; `./test/scripts/test_kubo_swarm_connect.sh`.
+- **Files:** `c-libp2p/v2/src/identify/identify_v2.c`, `c-libp2p/v2/src/identify/identify_v2_ipfs.c`, `c-libp2p/v2/src/peer/peerstore.c`, `core/ipfs_node.c`, `c-libp2p/conn/dialer.c`, `transport/swarm_dialer_v2_bridge.c`, `test/identify/test_identify_v2.c`
+- **Status:** v1 and v2 roundtrips with Kubo work over TCP and WebSocket. Signed peer records remain future work (L5.4).
+- **Verify:** `cd test && ./test_ipfs test_identify_v2_roundtrip`; `./test/scripts/test_kubo_swarm_connect.sh`; `./test/scripts/test_kubo_ws_dial.sh`.
 
 ### L5.2 Ping
 - **Spec:** `c-libp2p/specs/ping/ping.md`
