@@ -218,15 +218,17 @@ void ipfs_v2_quic_listen_handler(struct Libp2pQuicListener *listener, struct Ipf
             continue;
         }
 
-        v2_listen_send_identify(inbound, local_node);
-        inbound->close(inbound);
-
-        /* Open an outbound Identify stream so we can read the peer's Identify. */
+        /* Open the outbound Identify stream before closing the inbound one;
+         * the accepted stream context is needed to locate the QUIC connection. */
         struct Libp2pV2Stream *outbound = libp2p_net_quic_conn_open_stream(inbound);
         if (!outbound) {
             libp2p_logger_error("v2_quic_listen", "Failed to open outbound QUIC Identify stream\n");
+            inbound->close(inbound);
             continue;
         }
+
+        v2_listen_send_identify(inbound, local_node);
+        inbound->close(inbound);
 
         if (!v2_quic_negotiate_outbound_identify(outbound)) {
             libp2p_logger_error("v2_quic_listen", "Outbound QUIC Identify negotiation failed\n");
