@@ -87,7 +87,7 @@ $(V2_OBJS):
 	$(CC) -c -o $@ $< $(CFLAGS)
 
 ipfs: $(OBJS) $(SECP256K1_AR) $(V2_OBJS) $(NOSTR_LIB)
-	$(CC) -o $@ $(OBJS) $(SECP256K1_AR) $(LFLAGS) $(V2_OBJS) $(NOSTR_LIB) ../lmdb/libraries/liblmdb/liblmdb.a
+	$(CC) -o $@ $(OBJS) $(SECP256K1_AR) $(V2_OBJS) $(LFLAGS) $(NOSTR_LIB) ../lmdb/libraries/liblmdb/liblmdb.a
 
 all: ipfs
 
