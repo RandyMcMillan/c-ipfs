@@ -1,0 +1,24 @@
+name: Run c-ipfs test suite
+
+description: |
+  Run the main test binary with an optional timeout and optional list of
+  specific tests.
+
+inputs:
+  timeout:
+    description: Timeout in seconds
+    required: false
+    default: '180'
+  tests:
+    description: Specific tests to run (empty = default suite)
+    required: false
+    default: ''
+
+runs:
+  using: composite
+  steps:
+    - name: Run test binary
+      shell: bash
+      working-directory: test
+      run: |
+        timeout ${{ inputs.timeout }} ./test_ipfs ${{ inputs.tests }}

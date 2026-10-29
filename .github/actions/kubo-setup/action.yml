@@ -1,0 +1,75 @@
+name: Set up Kubo
+
+description: |
+  Make a Kubo binary available for interop tests.  This action prepares the
+  cache key and Go toolchain; the actual download or source build is handled
+  by the interop test scripts using the exported KUBO_* environment
+  variables.
+
+inputs:
+  kubo-version:
+    description: Kubo release version
+    required: false
+    default: v0.43.0
+  kubo-source:
+    description: "'release' or 'source'"
+    required: false
+    default: release
+  kubo-ref:
+    description: Git ref to build when kubo_source=source
+    required: false
+    default: ''
+  bin-cache:
+    description: Directory where the Kubo binary should be cached
+    required: false
+    default: ${{ runner.temp }}/kubo-ipfs
+
+outputs:
+  kubo-bin:
+    description: Path to the Kubo ipfs binary
+    value: ${{ steps.resolve.outputs.kubo-bin }}
+  cache-ref:
+    description: Resolved cache reference string
+    value: ${{ steps.resolve.outputs.cache-ref }}
+
+runs:
+  using: composite
+  steps:
+    - name: Resolve Kubo cache ref
+      id: resolve
+      shell: bash
+      run: |
+        REF="${{ inputs.kubo-ref }}"
+        if [ -z "$REF" ]; then
+          REF="${{ inputs.kubo-version }}"
+        fi
+        if [ "${{ inputs.kubo-source }}" != "source" ]; then
+          REF="release-${REF}"
+        fi
+        echo "ref=$REF" >> "$GITHUB_OUTPUT"
+        echo "kubo-bin=${{ inputs.bin-cache }}/ipfs" >> "$GITHUB_OUTPUT"
+
+    - name: Cache Go modules and build cache (source builds)
+      if: inputs.kubo-source == 'source'
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/go/pkg/mod
+          ~/.cache/go-build
+        key: go-${{ runner.os }}-${{ runner.arch }}-${{ steps.resolve.outputs.cache-ref }}
+        restore-keys: |
+          go-${{ runner.os }}-${{ runner.arch }}-
+
+    - name: Cache Kubo binary
+      id: kubo-bin-cache
+      uses: actions/cache@v4
+      with:
+        path: ${{ inputs.bin-cache }}
+        key: kubo-bin-${{ steps.resolve.outputs.cache-ref }}-${{ runner.os }}-${{ runner.arch }}
+
+    - name: Setup Go
+      if: inputs.kubo-source == 'source'
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.22'
+        cache: false

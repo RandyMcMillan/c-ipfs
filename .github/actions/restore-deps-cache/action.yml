@@ -1,0 +1,40 @@
+name: Restore shared dependency cache
+
+description: |
+  Restore the shared build cache for boringssl, lsquic, libwebsockets,
+  c-libnostr, and nostril.  Wraps the repository's custom cache-restore
+  JavaScript action.
+
+inputs:
+  key:
+    description: Exact cache key
+    required: false
+    default: ${{ runner.os }}-shared-cache-${{ github.sha }}
+  restore-keys:
+    description: Cache restore key prefix list
+    required: false
+    default: |
+      ${{ runner.os }}-shared-cache-
+
+outputs:
+  cache-hit:
+    description: Whether the cache was restored
+    value: ${{ steps.restore.outputs.cache-hit }}
+
+runs:
+  using: composite
+  steps:
+    - name: Restore shared cache
+      id: restore
+      uses: ./.github/actions/cache-restore
+      with:
+        path: |
+          boringssl/build-c-ipfs
+          lsquic/build-c-ipfs
+          libwebsockets/build-c-ipfs
+          c-libnostr/build
+          nostril/deps/secp256k1
+          nostril/libsecp256k1.a
+          nostril/config.h
+        key: ${{ inputs.key }}
+        restore-keys: ${{ inputs.restore-keys }}

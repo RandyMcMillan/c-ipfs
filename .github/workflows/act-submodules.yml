@@ -24,23 +24,10 @@ jobs:
           - c-libp2p/c-protobuf
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-          fetch-depth: 0
-
-      - name: Sync and update submodules
-        run: |
-          git submodule sync --recursive
-          git submodule update --init --recursive
-
-      - name: Install build dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            build-essential cmake libtool autoconf automake pkg-config
+      - uses: ./.github/actions/prepare-repo
 
       - name: Install act
+        shell: bash
         run: |
           curl -fsSL https://raw.githubusercontent.com/nektos/act/master/install.sh | bash
           if [ ! -x ./bin/act ]; then
@@ -52,4 +39,5 @@ jobs:
 
       - name: Run local CI with act
         working-directory: ${{ matrix.module }}
+        shell: bash
         run: make act-build ACT_QUIET=true

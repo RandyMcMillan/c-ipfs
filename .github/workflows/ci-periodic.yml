@@ -29,66 +29,38 @@ jobs:
     steps:
       - name: Compute shared cache keys
         id: keys
+        shell: bash
         run: |
           echo "ubuntu=Linux-shared-cache-${{ github.sha }}" >> "$GITHUB_OUTPUT"
           echo "macos=macOS-shared-cache-${{ github.sha }}" >> "$GITHUB_OUTPUT"
 
-      - name: Dispatch Cache Factory
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh workflow run cache-factory.yml \
-            --repo ${{ github.repository }} \
-            --ref ${{ github.ref_name }} \
-            -f clean_build=false
-          echo "dispatched_at=$(date +%s)" >> "$GITHUB_ENV"
-          sleep 15
-          RUN_ID=$(gh run list \
-            --repo ${{ github.repository }} \
-            --workflow cache-factory.yml \
-            --branch ${{ github.ref_name }} \
-            --event workflow_dispatch \
-            --limit 1 \
-            --json databaseId --jq '.[0].databaseId')
-          echo "Cache Factory run id: $RUN_ID"
-          echo "run_id=$RUN_ID" >> "$GITHUB_ENV"
-
-      - name: Wait for Cache Factory run
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh run watch "$run_id" \
-            --repo ${{ github.repository }} \
-            --exit-status \
-            --interval 30
+      - uses: ./.github/actions/trigger-workflow
+        with:
+          workflow: cache-factory.yml
+          wait: true
+          flags: -f clean_build=false
 
   trigger-macos-ci:
     needs: cache-factory
     runs-on: ubuntu-latest
     steps:
-      - name: Trigger CI with macOS build
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh workflow run ci.yml \
-            --repo ${{ github.repository }} \
-            --ref ${{ github.ref_name }} \
-            -f macos_build=true \
-            -f clang_build=false \
+      - uses: ./.github/actions/trigger-workflow
+        with:
+          workflow: ci.yml
+          flags: >-
+            -f macos_build=true
+            -f clang_build=false
             -f cache_key=${{ needs.cache-factory.outputs.cache_key_ubuntu }}
 
   trigger-kubo-interop:
     needs: cache-factory
     runs-on: ubuntu-latest
     steps:
-      - name: Trigger Kubo Interoperability
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh workflow run kubo-interop.yml \
-            --repo ${{ github.repository }} \
-            --ref ${{ github.ref_name }} \
-            -f interop_mode=ci \
-            -f verbose=false \
-            -f kubo_version=${{ inputs.kubo_version || 'v0.43.0' }} \
+      - uses: ./.github/actions/trigger-workflow
+        with:
+          workflow: kubo-interop.yml
+          flags: >-
+            -f interop_mode=ci
+            -f verbose=false
+            -f kubo_version=${{ inputs.kubo_version || 'v0.43.0' }}
             -f cache_key=${{ needs.cache-factory.outputs.cache_key_ubuntu }}

@@ -80,7 +80,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+      - uses: ./.github/actions/prepare-repo
 
       - name: Poll for shared cache from Cache Factory
         if: inputs.cache_key != ''
@@ -104,99 +104,28 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
-        with:
-          submodules: recursive
-          fetch-depth: 0
-
-      - name: Sync submodule URLs
-        run: git submodule sync --recursive
-
-      - name: Update submodules
-        run: git submodule update --init --recursive
+      - uses: ./.github/actions/prepare-repo
 
       - name: Restore shared cache
         id: shared-cache
-        uses: ./.github/actions/cache-restore
+        uses: ./.github/actions/restore-deps-cache
         with:
-          path: |
-            boringssl/build-c-ipfs
-            lsquic/build-c-ipfs
-            libwebsockets/build-c-ipfs
-            c-libnostr/build
-            nostril/deps/secp256k1
-            nostril/libsecp256k1.a
-            nostril/config.h
           key: Linux-shared-cache-${{ github.sha }}
-          restore-keys: |
-            Linux-shared-cache-
 
-      - name: Install build dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential cmake libcurl4-openssl-dev autoconf automake libtool git
+      - uses: ./.github/actions/install-build-deps
 
-      - name: Resolve Kubo cache ref
-        id: kubo-cache-ref
-        run: |
-          REF="${{ inputs.kubo_ref }}"
-          if [ -z "$REF" ]; then
-            REF="${{ inputs.kubo_version }}"
-          fi
-          if [ "${{ inputs.kubo_source }}" != "source" ]; then
-            REF="release-${REF}"
-          fi
-          echo "ref=$REF" >> "$GITHUB_OUTPUT"
-
-      - name: Cache Go modules and build cache (source builds)
-        if: inputs.kubo_source == 'source'
-        uses: actions/cache@v4
+      - uses: ./.github/actions/build-c-ipfs
         with:
-          path: |
-            ~/go/pkg/mod
-            ~/.cache/go-build
-          key: go-${{ runner.os }}-${{ runner.arch }}-${{ steps.kubo-cache-ref.outputs.ref }}
-          restore-keys: |
-            go-${{ runner.os }}-${{ runner.arch }}-
+          has-shared-cache: ${{ steps.shared-cache.outputs.cache-hit }}
+          build-tests: false
 
-      - name: Cache Kubo binary
-        id: kubo-bin-cache
-        uses: actions/cache@v4
+      - name: Set up Kubo
+        id: kubo
+        uses: ./.github/actions/kubo-setup
         with:
-          path: ${{ runner.temp }}/kubo-ipfs
-          key: kubo-bin-${{ steps.kubo-cache-ref.outputs.ref }}-${{ runner.os }}-${{ runner.arch }}
-
-      - name: Setup Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.22'
-          cache: false
-      - name: Build secp256k1
-        if: steps.shared-cache.outputs.cache-hit != 'true'
-        run: |
-          cd nostril/deps/secp256k1
-          if [ ! -x ./configure ]; then
-            ./autogen.sh
-          fi
-          ./configure --disable-shared --enable-module-ecdh --enable-module-schnorrsig --enable-module-extrakeys
-          make -j$(nproc) libsecp256k1.la
-          cp .libs/libsecp256k1.a ../../libsecp256k1.a || true
-
-      - name: Build c-libp2p
-        run: cd c-libp2p && make all
-
-      - name: Build LMDB
-        run: cd lmdb/libraries/liblmdb && make all
-
-      - name: Build c-ipfs
-        run: |
-          if [ "${HAS_SHARED_CACHE:-false}" = "true" ]; then
-            make all
-          else
-            make clean all
-          fi
-        env:
-          HAS_SHARED_CACHE: ${{ steps.shared-cache.outputs.cache-hit }}
+          kubo-version: ${{ inputs.kubo_version || 'v0.43.0' }}
+          kubo-source: ${{ inputs.kubo_source || 'release' }}
+          kubo-ref: ${{ inputs.kubo_ref || '' }}
 
       - name: Run Kubo Interoperability Harness
         env:
@@ -206,7 +135,8 @@ jobs:
           KUBO_SOURCE: ${{ inputs.kubo_source || 'release' }}
           KUBO_REF: ${{ inputs.kubo_ref || '' }}
           KUBO_BIN_CACHE: ${{ runner.temp }}/kubo-ipfs
-          KUBO_BIN: ${{ runner.temp }}/kubo-ipfs/ipfs
+          KUBO_BIN: ${{ steps.kubo.outputs.kubo-bin }}
+        shell: bash
         run: |
           chmod +x test/scripts/test_kubo_interop.sh test/scripts/test_kubo_ipns_pubsub.sh test/scripts/test_kubo_noise_handshake.sh test/scripts/test_kubo_swarm_connect.sh
           ./test/scripts/test_kubo_noise_handshake.sh

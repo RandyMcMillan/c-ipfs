@@ -1,0 +1,156 @@
+name: Smoke test ipfs CLI
+
+description: |
+  Run the standard CLI smoke tests: init, id, add/cat/get, and the Nostr
+  command surface.
+
+inputs:
+  ipfs-path:
+    description: IPFS_PATH directory to use for the smoke tests
+    required: false
+    default: /tmp/ipfs_test
+
+runs:
+  using: composite
+  steps:
+    - name: Smoke test — ipfs init + id
+      shell: bash
+      env:
+        IPFS_PATH: ${{ inputs.ipfs-path }}
+      working-directory: main
+      run: |
+        ./ipfs init
+        ./ipfs id
+
+    - name: Smoke test — ipfs add / cat / get sync loop
+      shell: bash
+      env:
+        IPFS_PATH: ${{ inputs.ipfs-path }}
+      working-directory: main
+      run: |
+        mkdir -p /tmp/ipfs_sync_dir/sub
+        echo "hello ipfs ci" > /tmp/ipfs_sync_dir/hello.txt
+        echo "nested content" > /tmp/ipfs_sync_dir/sub/nested.txt
+        ADD_OUTPUT=$(./ipfs add -r /tmp/ipfs_sync_dir)
+        echo "$ADD_OUTPUT"
+        printf '%s\n' "$ADD_OUTPUT" | grep -q "ipfs_sync_dir/hello.txt"
+        printf '%s\n' "$ADD_OUTPUT" | grep -q "ipfs_sync_dir/sub/nested.txt"
+        HELLO_CID=$(printf '%s\n' "$ADD_OUTPUT" | awk '$3 == "ipfs_sync_dir/hello.txt" { print $2; exit }')
+        NESTED_CID=$(printf '%s\n' "$ADD_OUTPUT" | awk '$3 == "ipfs_sync_dir/sub/nested.txt" { print $2; exit }')
+        test -n "$HELLO_CID"
+        test -n "$NESTED_CID"
+        ./ipfs cat "$HELLO_CID" | grep -q "hello ipfs ci"
+        ./ipfs cat "$NESTED_CID" | grep -q "nested content"
+        echo "Sync loop verified"
+
+    - name: Smoke test — nostr publish
+      shell: bash
+      working-directory: main
+      run: ./ipfs nostr publish --cid QmSmokeTest --content "CI smoke test"
+
+    - name: Smoke test — nostr repo + patch + issue + state + grasp
+      shell: bash
+      working-directory: main
+      run: |
+        ./ipfs nostr repo --id ci-repo --name "CI Repo" --cid QmRepoCID --maintainer 0000000000000000000000000000000000000000000000000000000000000001 --topic ipfs --topic c
+        ./ipfs nostr patch --repo 0000000000000000000000000000000000000000000000000000000000000000:ci-repo --subject "ci patch" --body "patch body" --participant 0000000000000000000000000000000000000000000000000000000000000002
+        ./ipfs nostr issue --repo 0000000000000000000000000000000000000000000000000000000000000000:ci-repo --subject "ci issue" --body "issue body" --participant 0000000000000000000000000000000000000000000000000000000000000003
+        printf 'refs/heads/main abcdef1234567890abcdef1234567890abcdef12\nrefs/heads/dev 1234567890abcdef1234567890abcdef12345678\n' > /tmp/ci_refs.txt
+        ./ipfs nostr state --repo 0000000000000000000000000000000000000000000000000000000000000000:ci-repo --refs /tmp/ci_refs.txt
+        ./ipfs nostr grasp --relay wss://relay.damus.io --relay wss://relay.nostr.info
+
+    - name: Smoke test — nostr seckey reuse
+      shell: bash
+      working-directory: main
+      run: |
+        ./ipfs nostr publish --cid QmSeckeyTest --content "signed with fixed key" --seckey 0000000000000000000000000000000000000000000000000000000000000001
+
+    - name: Smoke test — nostr verify signature
+      shell: bash
+      working-directory: main
+      run: |
+        EVENT='{"id":"17015d6f0de59ec364b88a52f40f9719933a6cf00f5b0184404d635d7efa615b","pubkey":"50b5819ffe86a19b25203532653c64dc44cfdfdd1212a37fe54c92fdcd2364f3","created_at":1788206885,"kind":1064,"tags":[["ipfs","QmbDxg7kwRh5mxqCKy1ZjcbiNRH9qfcFj1vzkxPgubQN5j"]],"content":"c-ipfs source archive self-hosted","sig":"a161087ea9095369e581198f13ce619a26e777a672d70e3a18b4f1f61497665f21dbbafc1b31590e42cab0be2103746dee039932e3dab05dd2c66d0278c68661"}'
+        ./ipfs nostr verify --event "$EVENT" | grep -q "signature valid"
+
+    - name: Smoke test — nostr status
+      shell: bash
+      working-directory: main
+      run: |
+        ./ipfs nostr status --event 0000000000000000000000000000000000000000000000000000000000000000 --status open
+        ./ipfs nostr status --event 0000000000000000000000000000000000000000000000000000000000000000 --status merged
+        ./ipfs nostr status --event 0000000000000000000000000000000000000000000000000000000000000000 --status closed
+        ./ipfs nostr status --event 0000000000000000000000000000000000000000000000000000000000000000 --status draft
+
+    - name: Smoke test — nostr note (kind 1)
+      shell: bash
+      working-directory: main
+      run: ./ipfs nostr note --content "hello from ci"
+
+    - name: Smoke test — nostr manifest + attest (PIP)
+      shell: bash
+      working-directory: main
+      env:
+        IPFS_PATH: ${{ inputs.ipfs-path }}
+      run: |
+        echo "pip payload" > /tmp/pip_payload.txt
+        CID=$(./ipfs add /tmp/pip_payload.txt 2>&1 | awk '{print $2}')
+        SHA256=$(shasum -a 256 /tmp/pip_payload.txt | awk '{print $1}')
+        SIZE=$(stat -c%s /tmp/pip_payload.txt 2>/dev/null || stat -f%z /tmp/pip_payload.txt)
+        MANIFEST=$(./ipfs nostr manifest --cid "$CID" --sha256 "$SHA256" --size "$SIZE" --path "pip_payload.txt" --encoding "raw")
+        echo "$MANIFEST"
+        ./ipfs nostr attest --manifest "0000000000000000000000000000000000000000000000000000000000000000" --sha256 "$SHA256" --cid "$CID"
+
+    - name: Smoke test — nostr sync (download + verify)
+      shell: bash
+      working-directory: main
+      run: |
+        mkdir -p ../tmp
+        echo "sync payload" > ../tmp/sync_payload.txt
+        IPFS_PATH=../tmp/ipfs_test ./ipfs init
+        CID=$(IPFS_PATH=../tmp/ipfs_test ./ipfs add -q ../tmp/sync_payload.txt 2>/dev/null | awk 'NR==1 { if ($1 == "added") { print $2 } else { print $1 } }')
+        if [ -z "$CID" ]; then
+          echo "Failed to capture CID"
+          exit 1
+        fi
+        SHA256=$(shasum -a 256 ../tmp/sync_payload.txt | awk '{print $1}')
+        GATEWAY_ROOT=../tmp/ipfs_sync_gateway
+        rm -rf "$GATEWAY_ROOT"
+        mkdir -p "$GATEWAY_ROOT/ipfs"
+        cp ../tmp/sync_payload.txt "$GATEWAY_ROOT/ipfs/$CID"
+        python3 -m http.server 8080 --bind 127.0.0.1 --directory "$GATEWAY_ROOT" > ../tmp/ipfs_sync_gateway.log 2>&1 &
+        GATEWAY_PID=$!
+        cleanup() {
+          kill "$GATEWAY_PID" 2>/dev/null || true
+        }
+        trap cleanup EXIT
+        READY=0
+        for _ in $(seq 1 60); do
+          if curl -fsS "http://127.0.0.1:8080/ipfs/$CID" >/dev/null 2>&1; then
+            READY=1
+            break
+          fi
+          sleep 0.5
+        done
+        if [ "$READY" -ne 1 ]; then
+          echo "Local gateway did not serve /ipfs/$CID"
+          tail -n 50 ../tmp/ipfs_sync_gateway.log || true
+          exit 1
+        fi
+        ./ipfs nostr sync --cid "$CID" --sha256 "$SHA256" --gateway "http://127.0.0.1:8080" --output ../tmp/sync_got.txt
+        if [ ! -f ../tmp/sync_got.txt ]; then
+          echo "Sync output file missing"
+          exit 1
+        fi
+        GOT_SHA256=$(shasum -a 256 ../tmp/sync_got.txt | awk '{print $1}')
+        if [ "$GOT_SHA256" != "$SHA256" ]; then
+          echo "SHA-256 mismatch: expected $SHA256, got $GOT_SHA256"
+          exit 1
+        fi
+        echo "Sync verified: $CID"
+        kill "$GATEWAY_PID" 2>/dev/null || true
+        trap - EXIT
+
+    - name: Smoke test — nostr self-test
+      shell: bash
+      working-directory: main
+      run: ./ipfs nostr test

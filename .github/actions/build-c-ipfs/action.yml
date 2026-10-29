@@ -1,0 +1,41 @@
+name: Build c-ipfs
+
+description: |
+  Build the c-ipfs project and optionally the test binaries.  Respects the
+  shared-cache flag to decide between a clean build and an incremental one.
+
+inputs:
+  has-shared-cache:
+    description: Whether the shared dependency cache was restored
+    required: false
+    default: 'false'
+  build-tests:
+    description: Also build the test binaries
+    required: false
+    default: 'false'
+
+runs:
+  using: composite
+  steps:
+    - name: Build c-ipfs
+      shell: bash
+      env:
+        HAS_SHARED_CACHE: ${{ inputs.has-shared-cache }}
+      run: |
+        if [ "${HAS_SHARED_CACHE:-false}" = "true" ]; then
+          make all
+        else
+          make clean all
+        fi
+
+    - name: Build tests
+      if: inputs.build-tests == 'true'
+      shell: bash
+      env:
+        HAS_SHARED_CACHE: ${{ inputs.has-shared-cache }}
+      run: |
+        if [ "${HAS_SHARED_CACHE:-false}" = "true" ]; then
+          cd test && make all
+        else
+          cd test && make clean all
+        fi

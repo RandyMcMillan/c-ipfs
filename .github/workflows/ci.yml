@@ -9,10 +9,15 @@ on:
         required: false
         default: false
       macos_build:
-        description: Also run macOS build
+        description: Also run a macOS build
         type: boolean
         required: false
         default: false
+      cache_key:
+        description: Exact shared cache key produced by the Cache Factory to wait for
+        type: string
+        required: false
+        default: ''
   workflow_call:
     inputs:
       clang_build:
@@ -21,7 +26,7 @@ on:
         required: false
         default: false
       macos_build:
-        description: Also run macOS build
+        description: Also run a macOS build
         type: boolean
         required: false
         default: false
@@ -53,17 +58,7 @@ jobs:
     outputs:
       cache-hit: ${{ steps.shared-cache.outputs.cache-hit }}
     steps:
-      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
-        with:
-          submodules: recursive
-          fetch-depth: 0
-
-      - name: Resolve shared cache key
-        id: cache-key
-        run: |
-          KEY="${{ runner.os }}-shared-cache-$(git rev-parse HEAD)"
-          echo "key=$KEY" >> "$GITHUB_OUTPUT"
-          echo "Shared cache key: $KEY"
+      - uses: ./.github/actions/prepare-repo
 
       - name: Poll for shared cache from Cache Factory
         if: inputs.cache_key != ''
@@ -84,19 +79,9 @@ jobs:
 
       - name: Restore shared cache
         id: shared-cache
-        uses: ./.github/actions/cache-restore
+        uses: ./.github/actions/restore-deps-cache
         with:
-          path: |
-            boringssl/build-c-ipfs
-            lsquic/build-c-ipfs
-            libwebsockets/build-c-ipfs
-            c-libnostr/build
-            nostril/deps/secp256k1
-            nostril/libsecp256k1.a
-            nostril/config.h
-          key: ${{ steps.cache-key.outputs.key }}
-          restore-keys: |
-            ${{ runner.os }}-shared-cache-
+          key: ${{ runner.os }}-shared-cache-${{ github.sha }}
 
   build:
     needs: wait-for-cache
@@ -110,231 +95,53 @@ jobs:
         os: ${{ fromJSON((github.event_name != 'push' && github.event_name != 'pull_request' && inputs.macos_build == true && '["ubuntu-latest", "macos-latest"]') || '["ubuntu-latest"]') }}
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
-        with:
-          submodules: recursive
-          fetch-depth: 0
-
-      - name: Sync submodule URLs
-        run: git submodule sync --recursive
-
-      - name: Update submodules
-        run: git submodule update --init --recursive
+      - uses: ./.github/actions/prepare-repo
 
       - name: Restore shared cache
         id: shared-cache
-        uses: ./.github/actions/cache-restore
+        uses: ./.github/actions/restore-deps-cache
         with:
-          path: |
-            boringssl/build-c-ipfs
-            lsquic/build-c-ipfs
-            libwebsockets/build-c-ipfs
-            c-libnostr/build
-            nostril/deps/secp256k1
-            nostril/libsecp256k1.a
-            nostril/config.h
           key: ${{ runner.os }}-shared-cache-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-shared-cache-
 
-      - name: Install dependencies (macOS)
-        if: runner.os == 'macOS'
-        run: |
-          brew install libtool autoconf automake
-          echo "/opt/homebrew/opt/libtool/libexec/gnubin" >> "$GITHUB_PATH"
+      - uses: ./.github/actions/install-build-deps
 
-      - name: Install dependencies (Ubuntu)
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential cmake libcurl4-openssl-dev autoconf automake libtool
+      - uses: ./.github/actions/build-c-ipfs
+        with:
+          has-shared-cache: ${{ steps.shared-cache.outputs.cache-hit }}
+          build-tests: true
 
-      - name: Build c-ipfs
-        run: |
-          if [ "${BIND:-${ACT_BIND:-false}}" = "true" ]; then
-            make all
-          elif [ "${REUSE:-${ACT_REUSE:-false}}" = "true" ] && [ -f .act-reuse-ready ]; then
-            make all
-          elif [ "${HAS_SHARED_CACHE:-false}" = "true" ]; then
-            # Cache Factory published the dependency build outputs; reuse them.
-            make all
-          else
-            make clean all
-          fi
-          if [ "${REUSE:-${ACT_REUSE:-false}}" = "true" ] || [ "${BIND:-${ACT_BIND:-false}}" = "true" ]; then
-            touch .act-reuse-ready
-          fi
-        env:
-          HAS_SHARED_CACHE: ${{ steps.shared-cache.outputs.cache-hit }}
+      - uses: ./.github/actions/smoke-test-ipfs
 
-      - name: Build tests
-        run: |
-          if [ "${BIND:-${ACT_BIND:-false}}" = "true" ]; then
-            cd test && make all
-          elif [ "${REUSE:-${ACT_REUSE:-false}}" = "true" ] && [ -f ../.act-reuse-ready ]; then
-            cd test && make all
-          elif [ "${HAS_SHARED_CACHE:-false}" = "true" ]; then
-            cd test && make all
-          else
-            cd test && make clean all
-          fi
-        env:
-          HAS_SHARED_CACHE: ${{ steps.shared-cache.outputs.cache-hit }}
+      - name: Smoke test — make selfhost
+        shell: bash
+        run: make selfhost
+
+      - uses: ./.github/actions/run-test-suite
+        with:
+          timeout: '180'
 
       - name: Optional build — clang
         if: env.CLANG_BUILD == 'true'
+        shell: bash
         run: |
           make clean all CC=clang
           cd test && make clean all CC=clang
 
-      - name: Smoke test — ipfs init + id
-        run: |
-          cd main
-          IPFS_PATH=/tmp/ipfs_test ./ipfs init
-          IPFS_PATH=/tmp/ipfs_test ./ipfs id
-
-      - name: Smoke test — ipfs add / cat / get sync loop
-        run: |
-          cd main
-          mkdir -p /tmp/ipfs_sync_dir/sub
-          echo "hello ipfs ci" > /tmp/ipfs_sync_dir/hello.txt
-          echo "nested content" > /tmp/ipfs_sync_dir/sub/nested.txt
-          ADD_OUTPUT=$(IPFS_PATH=/tmp/ipfs_test ./ipfs add -r /tmp/ipfs_sync_dir)
-          echo "$ADD_OUTPUT"
-          printf '%s\n' "$ADD_OUTPUT" | grep -q "ipfs_sync_dir/hello.txt"
-          printf '%s\n' "$ADD_OUTPUT" | grep -q "ipfs_sync_dir/sub/nested.txt"
-          HELLO_CID=$(printf '%s\n' "$ADD_OUTPUT" | awk '$3 == "ipfs_sync_dir/hello.txt" { print $2; exit }')
-          NESTED_CID=$(printf '%s\n' "$ADD_OUTPUT" | awk '$3 == "ipfs_sync_dir/sub/nested.txt" { print $2; exit }')
-          test -n "$HELLO_CID"
-          test -n "$NESTED_CID"
-          IPFS_PATH=/tmp/ipfs_test ./ipfs cat "$HELLO_CID" | grep -q "hello ipfs ci"
-          IPFS_PATH=/tmp/ipfs_test ./ipfs cat "$NESTED_CID" | grep -q "nested content"
-          echo "Sync loop verified"
-
-      - name: Smoke test — nostr publish
-        run: |
-          cd main
-          ./ipfs nostr publish --cid QmSmokeTest --content "CI smoke test"
-
-      - name: Smoke test — nostr repo + patch + issue + state + grasp
-        run: |
-          cd main
-          ./ipfs nostr repo --id ci-repo --name "CI Repo" --cid QmRepoCID --maintainer 0000000000000000000000000000000000000000000000000000000000000001 --topic ipfs --topic c
-          ./ipfs nostr patch --repo 0000000000000000000000000000000000000000000000000000000000000000:ci-repo --subject "ci patch" --body "patch body" --participant 0000000000000000000000000000000000000000000000000000000000000002
-          ./ipfs nostr issue --repo 0000000000000000000000000000000000000000000000000000000000000000:ci-repo --subject "ci issue" --body "issue body" --participant 0000000000000000000000000000000000000000000000000000000000000003
-          printf 'refs/heads/main abcdef1234567890abcdef1234567890abcdef12\nrefs/heads/dev 1234567890abcdef1234567890abcdef12345678\n' > /tmp/ci_refs.txt
-          ./ipfs nostr state --repo 0000000000000000000000000000000000000000000000000000000000000000:ci-repo --refs /tmp/ci_refs.txt
-          ./ipfs nostr grasp --relay wss://relay.damus.io --relay wss://relay.nostr.info
-
-      - name: Smoke test — nostr seckey reuse
-        run: |
-          cd main
-          ./ipfs nostr publish --cid QmSeckeyTest --content "signed with fixed key" --seckey 0000000000000000000000000000000000000000000000000000000000000001
-
-      - name: Smoke test — nostr verify signature
-        run: |
-          cd main
-          EVENT='{"id":"17015d6f0de59ec364b88a52f40f9719933a6cf00f5b0184404d635d7efa615b","pubkey":"50b5819ffe86a19b25203532653c64dc44cfdfdd1212a37fe54c92fdcd2364f3","created_at":1788206885,"kind":1064,"tags":[["ipfs","QmbDxg7kwRh5mxqCKy1ZjcbiNRH9qfcFj1vzkxPgubQN5j"]],"content":"c-ipfs source archive self-hosted","sig":"a161087ea9095369e581198f13ce619a26e777a672d70e3a18b4f1f61497665f21dbbafc1b31590e42cab0be2103746dee039932e3dab05dd2c66d0278c68661"}'
-          ./ipfs nostr verify --event "$EVENT" | grep -q "signature valid"
-
-      - name: Smoke test — nostr status
-        run: |
-          cd main
-          ./ipfs nostr status --event 0000000000000000000000000000000000000000000000000000000000000000 --status open
-          ./ipfs nostr status --event 0000000000000000000000000000000000000000000000000000000000000000 --status merged
-          ./ipfs nostr status --event 0000000000000000000000000000000000000000000000000000000000000000 --status closed
-          ./ipfs nostr status --event 0000000000000000000000000000000000000000000000000000000000000000 --status draft
-
-      - name: Smoke test — nostr note (kind 1)
-        run: |
-          cd main
-          ./ipfs nostr note --content "hello from ci"
-
-      - name: Smoke test — nostr manifest + attest (PIP)
-        run: |
-          cd main
-          echo "pip payload" > /tmp/pip_payload.txt
-          CID=$(IPFS_PATH=/tmp/ipfs_test ./ipfs add /tmp/pip_payload.txt 2>&1 | awk '{print $2}')
-          SHA256=$(shasum -a 256 /tmp/pip_payload.txt | awk '{print $1}')
-          SIZE=$(stat -c%s /tmp/pip_payload.txt 2>/dev/null || stat -f%z /tmp/pip_payload.txt)
-          MANIFEST=$(./ipfs nostr manifest --cid "$CID" --sha256 "$SHA256" --size "$SIZE" --path "pip_payload.txt" --encoding "raw")
-          echo "$MANIFEST"
-          ./ipfs nostr attest --manifest "0000000000000000000000000000000000000000000000000000000000000000" --sha256 "$SHA256" --cid "$CID"
-
-      - name: Smoke test — nostr sync (download + verify)
-        run: |
-          cd main
-          mkdir -p ../tmp
-          echo "sync payload" > ../tmp/sync_payload.txt
-          IPFS_PATH=../tmp/ipfs_test ./ipfs init
-          CID=$(IPFS_PATH=../tmp/ipfs_test ./ipfs add -q ../tmp/sync_payload.txt 2>/dev/null | awk 'NR==1 { if ($1 == "added") { print $2 } else { print $1 } }')
-          if [ -z "$CID" ]; then
-            echo "Failed to capture CID"
-            exit 1
-          fi
-          SHA256=$(shasum -a 256 ../tmp/sync_payload.txt | awk '{print $1}')
-          GATEWAY_ROOT=../tmp/ipfs_sync_gateway
-          rm -rf "$GATEWAY_ROOT"
-          mkdir -p "$GATEWAY_ROOT/ipfs"
-          cp ../tmp/sync_payload.txt "$GATEWAY_ROOT/ipfs/$CID"
-          python3 -m http.server 8080 --bind 127.0.0.1 --directory "$GATEWAY_ROOT" > ../tmp/ipfs_sync_gateway.log 2>&1 &
-          GATEWAY_PID=$!
-          cleanup() {
-            kill "$GATEWAY_PID" 2>/dev/null || true
-          }
-          trap cleanup EXIT
-          READY=0
-          for _ in $(seq 1 60); do
-            if curl -fsS "http://127.0.0.1:8080/ipfs/$CID" >/dev/null 2>&1; then
-              READY=1
-              break
-            fi
-            sleep 0.5
-          done
-          if [ "$READY" -ne 1 ]; then
-            echo "Local gateway did not serve /ipfs/$CID"
-            tail -n 50 ../tmp/ipfs_sync_gateway.log || true
-            exit 1
-          fi
-          ./ipfs nostr sync --cid "$CID" --sha256 "$SHA256" --gateway "http://127.0.0.1:8080" --output ../tmp/sync_got.txt
-          if [ ! -f ../tmp/sync_got.txt ]; then
-            echo "Sync output file missing"
-            exit 1
-          fi
-          GOT_SHA256=$(shasum -a 256 ../tmp/sync_got.txt | awk '{print $1}')
-          if [ "$GOT_SHA256" != "$SHA256" ]; then
-            echo "SHA-256 mismatch: expected $SHA256, got $GOT_SHA256"
-            exit 1
-          fi
-          echo "Sync verified: $CID"
-          kill "$GATEWAY_PID" 2>/dev/null || true
-          trap - EXIT
-
-      - name: Smoke test — nostr self-test
-        run: |
-          cd main
-          ./ipfs nostr test
-
-      - name: Smoke test — make selfhost
-        run: |
-          make selfhost
-
-      - name: Smoke test — test binary runs
-        run: |
-          cd test
-          timeout 180 ./test_ipfs
-
       - name: Build nostril for Nostr tests
+        shell: bash
         run: make nostril
 
       - name: Smoke test — nostril signed event generation
+        shell: bash
         run: bash test/scripts/test_nostril.sh
 
       - name: Smoke test — NIP-34 event generation
+        shell: bash
         run: bash test/scripts/test_nostril_nip34.sh
 
       - name: Publish real c-ipfs test report to Nostr
         if: github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+        shell: bash
         run: bash scripts/nostr_test_report.sh --publish
         continue-on-error: true
 
@@ -346,16 +153,19 @@ jobs:
           PR_TITLE: ${{ github.event.pull_request.title }}
           NOSTR_SECKEY: ${{ secrets.NOSTR_SECKEY }}
           NOSTR_RELAYS: "wss://relay.damus.io wss://relay.nostr.info"
+        shell: bash
         run: bash scripts/nostr_nip34_pr_patch.sh --publish
         continue-on-error: true
 
       - name: Smoke test — c-libnostr standalone
+        shell: bash
         run: |
           cd test
           make test_c_libnostr_standalone
           ./test_c_libnostr_standalone
 
       - name: Smoke test — git server push/pull
+        shell: bash
         run: |
           if [ "${ACT_CI:-}" = "true" ] || [ "${ACT:-}" = "true" ]; then
             echo "Skipping git server push/pull under act"

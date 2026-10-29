@@ -35,63 +35,34 @@ jobs:
         os: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+      - uses: ./.github/actions/prepare-repo
         with:
-          ref: ${{ inputs.tag || inputs.branch || github.ref }}
-          submodules: recursive
-          fetch-depth: 0
+          fetch-depth: '0'
 
-      - name: Sync submodule URLs
-        run: git submodule sync --recursive
-
-      - name: Update submodules
-        run: git submodule update --init --recursive
-
-      # Resolve the shared cache key on the same commit the matrix was
-      # started from so every OS job (and every consumer workflow) agrees
-      # on a single key for a given source snapshot.
       - name: Resolve shared cache key
         id: cache-key
+        shell: bash
         run: |
           KEY="${{ runner.os }}-shared-cache-$(git rev-parse HEAD)"
           echo "key=$KEY" >> "$GITHUB_OUTPUT"
           echo "Shared cache key: $KEY"
 
       - name: Restore shared cache
-        id: cache
-        uses: ./.github/actions/cache-restore
+        id: shared-cache
+        uses: ./.github/actions/restore-deps-cache
         with:
-          path: |
-            boringssl/build-c-ipfs
-            lsquic/build-c-ipfs
-            libwebsockets/build-c-ipfs
-            c-libnostr/build
-            nostril/deps/secp256k1
-            nostril/libsecp256k1.a
-            nostril/config.h
           key: ${{ steps.cache-key.outputs.key }}
-          restore-keys: |
-            ${{ runner.os }}-shared-cache-
 
-      - name: Install dependencies (macOS)
-        if: runner.os == 'macOS'
-        run: |
-          brew install libtool autoconf automake
-          echo "/opt/homebrew/opt/libtool/libexec/gnubin" >> "$GITHUB_PATH"
-
-      - name: Install dependencies (Ubuntu)
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential cmake libcurl4-openssl-dev autoconf automake libtool
+      - uses: ./.github/actions/install-build-deps
 
       - name: Clean build outputs
         if: inputs.clean_build == true
+        shell: bash
         run: make clean
 
       - name: Build shared dependencies
-        run: |
-          make nostril libwebsockets boringssl lsquic c-libnostr
+        shell: bash
+        run: make nostril libwebsockets boringssl lsquic c-libnostr
 
       - name: Save shared cache
         uses: ./.github/actions/cache-save

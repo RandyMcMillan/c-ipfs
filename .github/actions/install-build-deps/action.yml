@@ -1,0 +1,22 @@
+name: Install build dependencies
+
+description: |
+  Install the compiler toolchain and libraries required to build c-ipfs.
+  Handles both Ubuntu and macOS runners.
+
+runs:
+  using: composite
+  steps:
+    - name: Install dependencies (macOS)
+      if: runner.os == 'macOS'
+      shell: bash
+      run: |
+        brew install libtool autoconf automake
+        echo "/opt/homebrew/opt/libtool/libexec/gnubin" >> "$GITHUB_PATH"
+
+    - name: Install dependencies (Ubuntu)
+      if: runner.os == 'Linux'
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential cmake libcurl4-openssl-dev autoconf automake libtool
