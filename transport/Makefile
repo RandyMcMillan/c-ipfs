@@ -20,12 +20,14 @@ BORINGSSL_BUILD_DIR = ../boringssl/build-c-ipfs
 BORINGSSL_LIB = $(BORINGSSL_BUILD_DIR)/libssl.a $(BORINGSSL_BUILD_DIR)/libcrypto.a
 BORINGSSL_INC = -I../boringssl/include
 
-ifdef HAS_LSQUIC
+ifneq ($(wildcard $(LSQUIC_LIB)),)
+HAS_LSQUIC = 1
 CFLAGS += -DHAS_LSQUIC $(LSQUIC_INC) $(BORINGSSL_INC)
 LFLAGS += $(LSQUIC_LIB) $(BORINGSSL_LIB) -lz
 endif
 
-ifdef HAS_LIBWEBSOCKETS
+ifneq ($(wildcard $(LWS_LIB)),)
+HAS_LIBWEBSOCKETS = 1
 CFLAGS += -DHAS_LIBWEBSOCKETS $(LWS_INC)
 LFLAGS += $(LWS_LIB)
 endif

@@ -91,6 +91,7 @@ test/test_c_libnostr_standalone
 *.o
 .settings/language.settings.xml
 test/test_ipfs
+test/test_v2_kubo
 main/ipfs
 test/test1.txt
 test/test2.txt
