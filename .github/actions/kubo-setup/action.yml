@@ -67,6 +67,22 @@ runs:
         path: ${{ inputs.bin-cache }}
         key: kubo-bin-${{ steps.resolve.outputs.cache-ref }}-${{ runner.os }}-${{ runner.arch }}
 
+    - name: Download Kubo release binary
+      if: inputs.kubo-source != 'source' && steps.kubo-bin-cache.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        mkdir -p "${{ inputs.bin-cache }}"
+        ARCH="$(uname -m)"
+        OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
+        case "${ARCH}" in
+            x86_64) GOARCH="amd64" ;;
+            arm64|aarch64) GOARCH="arm64" ;;
+            *) echo "Unsupported architecture: ${ARCH}"; exit 1 ;;
+        esac
+        KUBO_TAR="kubo_${{ inputs.kubo-version }}_${OS}-${GOARCH}.tar.gz"
+        curl -fsSL "https://github.com/ipfs/kubo/releases/download/${{ inputs.kubo-version }}/${KUBO_TAR}" | tar -xz -C "${{ inputs.bin-cache }}" --strip-components=1
+        chmod +x "${{ inputs.bin-cache }}/ipfs"
+
     - name: Setup Go
       if: inputs.kubo-source == 'source'
       uses: actions/setup-go@v5
