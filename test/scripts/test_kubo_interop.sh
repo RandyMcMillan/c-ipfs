@@ -185,6 +185,8 @@ IPFS_PATH="${K_REPO}" "${KUBO_BIN}" init --profile=test
 IPFS_PATH="${K_REPO}" "${KUBO_BIN}" config Addresses.Swarm --json '["/ip4/127.0.0.1/tcp/4011"]'
 IPFS_PATH="${K_REPO}" "${KUBO_BIN}" config Addresses.API "/ip4/127.0.0.1/tcp/5011"
 IPFS_PATH="${K_REPO}" "${KUBO_BIN}" config Addresses.Gateway "/ip4/127.0.0.1/tcp/8081"
+IPFS_PATH="${K_REPO}" "${KUBO_BIN}" config --json Discovery.MDNS.Enabled false
+IPFS_PATH="${K_REPO}" "${KUBO_BIN}" config --json Bootstrap '[]'
 
 echo "=== Starting c-ipfs daemon ==="
 IPFS_PATH="${C_REPO}" "${C_IPFS_BIN}" daemon > "${TMP_DIR}/c_ipfs.log" 2>&1 &
@@ -207,7 +209,11 @@ kubo_pid=$!
 
 echo "Waiting for Kubo daemon API..."
 wait_for_api "${kubo_pid}" 5011 "Kubo" "${TMP_DIR}/kubo.log" || exit 1
-wait_for_port 4011 "Kubo swarm" || exit 1
+if ! wait_for_port 4011 "Kubo swarm"; then
+    echo "===== Kubo log tail ====="
+    tail -n 80 "${TMP_DIR}/kubo.log" || true
+    exit 1
+fi
 KUBO_ID=$(IPFS_PATH="${K_REPO}" "${KUBO_BIN}" id -f="<id>")
 # c-libp2p's multiaddress parser uses the legacy "ipfs" protocol name.
 KUBO_ADDR="/ip4/127.0.0.1/tcp/4011/ipfs/${KUBO_ID}"

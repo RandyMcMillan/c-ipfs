@@ -177,6 +177,8 @@ IPFS_PATH="${K_REPO}" "${KUBO_BIN}" init --profile=test
 IPFS_PATH="${K_REPO}" "${KUBO_BIN}" config Addresses.Swarm --json '["/ip4/127.0.0.1/tcp/4011"]'
 IPFS_PATH="${K_REPO}" "${KUBO_BIN}" config Addresses.API "/ip4/127.0.0.1/tcp/5011"
 IPFS_PATH="${K_REPO}" "${KUBO_BIN}" config Addresses.Gateway "/ip4/127.0.0.1/tcp/8081"
+IPFS_PATH="${K_REPO}" "${KUBO_BIN}" config --json Discovery.MDNS.Enabled false
+IPFS_PATH="${K_REPO}" "${KUBO_BIN}" config --json Bootstrap '[]'
 IPFS_PATH="${K_REPO}" "${KUBO_BIN}" config --json Pubsub.Enabled true
 
 echo "=== Starting c-ipfs daemon ==="
@@ -200,7 +202,11 @@ kubo_pid=$!
 
 echo "Waiting for Kubo daemon API..."
 wait_for_api "${kubo_pid}" 5011 "Kubo" "${TMP_DIR}/kubo.log" || exit 1
-wait_for_port 4011 "Kubo swarm" || exit 1
+if ! wait_for_port 4011 "Kubo swarm"; then
+    echo "===== Kubo log tail ====="
+    tail -n 80 "${TMP_DIR}/kubo.log" || true
+    exit 1
+fi
 KUBO_ID=$(IPFS_PATH="${K_REPO}" "${KUBO_BIN}" id -f="<id>")
 KUBO_ADDR="/ip4/127.0.0.1/tcp/4011/p2p/${KUBO_ID}"
 for _ in $(seq 1 20); do
