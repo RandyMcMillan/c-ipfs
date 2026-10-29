@@ -62,9 +62,35 @@ static lsquic_stream_ctx_t *on_new_stream(void *stream_if_ctx, lsquic_stream_t *
     return (lsquic_stream_ctx_t *)stream;
 }
 
+/* lsquic calls these unconditionally; a NULL callback would crash. */
+static void on_read(lsquic_stream_t *s, lsquic_stream_ctx_t *h) {
+    (void)h;
+    lsquic_stream_wantread(s, 0);
+}
+
+static void on_write(lsquic_stream_t *s, lsquic_stream_ctx_t *h) {
+    (void)h;
+    lsquic_stream_wantwrite(s, 0);
+}
+
+static void on_close(lsquic_stream_t *s, lsquic_stream_ctx_t *h) {
+    quic_stream_impl_t *impl = (quic_stream_impl_t *)h;
+    (void)s;
+    if (impl)
+        impl->ls_stream = NULL;
+}
+
+static void on_conn_closed(lsquic_conn_t *c) {
+    (void)c;
+}
+
 static const struct lsquic_stream_if quic_stream_if = {
     .on_new_conn = on_new_conn,
+    .on_conn_closed = on_conn_closed,
     .on_new_stream = on_new_stream,
+    .on_read = on_read,
+    .on_write = on_write,
+    .on_close = on_close,
 };
 
 static int quic_dial(libp2p_transport_t *self, const char *multiaddr, libp2p_stream_t **out_stream) {
