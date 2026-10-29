@@ -20,6 +20,7 @@
 #include "ipfs/pin/pin.h"
 #include "ipfs/thirdparty/ipfsaddr/ipfs_addr.h"
 #include "ipfs/routing/routing.h"
+#include "ipfs/transport/swarm_dialer_v2_bridge.h"
 
 #ifndef C_IPFS_VERSION
 #define C_IPFS_VERSION "0.0.0-dev"
@@ -475,12 +476,33 @@ int ipfs_core_http_process_swarm_connect(struct IpfsNode* local_node, struct Htt
 
 	struct Libp2pPeer* new_peer = libp2p_peer_new_from_multiaddress(ma);
 	if (!libp2p_peer_connect(local_node->dialer, new_peer, local_node->peerstore, local_node->repo->config->datastore, 30)) {
-		// Fallback: try transport registry for non-TCP transports (QUIC, WebSocket)
-		libp2p_stream_t *fallback_stream = NULL;
-		if (transport_registry_dial(&local_node->transport_registry, address, &fallback_stream) == 0 && fallback_stream != NULL) {
-			libp2p_logger_info("http_request", "swarm_connect: Connected via transport registry to %s.\n", address);
+		/* Fallback for transports not handled by the legacy dialer. */
+		int connected = 0;
+#ifdef HAS_LSQUIC
+		if (strstr(address, "/quic-v1") != NULL) {
+			ipfs_v2_stream_bridge_t *bridge = NULL;
+			if (ipfs_swarm_connect_v2_bridge(address, "/ipfs/id/1.0.0",
+			                                 &local_node->identity->private_key,
+			                                 &bridge) == 0) {
+				libp2p_logger_info("http_request", "swarm_connect: Connected via QUIC v2 bridge to %s.\n", address);
+				ipfs_v2_stream_free(bridge);
+				connected = 1;
+			} else {
+				libp2p_logger_error("http_request", "swarm_connect: QUIC v2 bridge failed for %s.\n", address);
+			}
+		}
+#endif
+		if (!connected) {
+			// Try transport registry for WebSocket and remaining transports.
+			libp2p_stream_t *fallback_stream = NULL;
+			if (transport_registry_dial(&local_node->transport_registry, address, &fallback_stream) == 0 && fallback_stream != NULL) {
+				libp2p_logger_info("http_request", "swarm_connect: Connected via transport registry to %s.\n", address);
+				fallback_stream->close(fallback_stream);
+				connected = 1;
+			}
+		}
+		if (connected) {
 			libp2p_peerstore_add_peer(local_node->peerstore, new_peer);
-			fallback_stream->close(fallback_stream);
 		} else {
 			libp2p_logger_error("http_request", "swarm_connect: Unable to connect to peer %s.\n", libp2p_peer_id_to_string(new_peer));
 			libp2p_peer_free(new_peer);

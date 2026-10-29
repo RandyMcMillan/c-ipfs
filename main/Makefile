@@ -80,7 +80,7 @@ OBJS = main.o \
 
 V2_OBJS = ../c-libp2p/v2/src/conn/noise.o ../c-libp2p/v2/src/conn/noise_callbacks.o ../c-libp2p/v2/src/conn/multistream.o ../c-libp2p/v2/src/conn/yamux.o ../c-libp2p/v2/src/conn/connection.o ../c-libp2p/v2/src/crypto/verify.o ../c-libp2p/v2/src/net/tcp_dial.o ../c-libp2p/v2/src/net/ws_dial.o ../c-libp2p/v2/src/identify/identify_v2.o ../c-libp2p/v2/src/identify/identify_v2_ipfs.o ../c-libp2p/v2/src/peer/peerstore.o ../c-libp2p/v2/src/swarm/swarm.o ../c-libp2p/v2/src/net/multiaddr.o ../c-libp2p/v2/src/utils/logger.o
 ifdef HAS_LSQUIC
-V2_OBJS += ../c-libp2p/v2/src/conn/tls.o ../c-libp2p/v2/src/net/quic_dial.o
+V2_OBJS += ../c-libp2p/v2/src/conn/tls.o ../c-libp2p/v2/src/net/quic_dial.o ../c-libp2p/v2/src/net/quic_listen.o
 endif
 
 $(V2_OBJS):

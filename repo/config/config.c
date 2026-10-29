@@ -139,10 +139,29 @@ int ipfs_repo_config_init(struct RepoConfig* config, unsigned int num_bits_for_k
 
 			sprintf(addr1, "/ip6/::/tcp/%d", swarm_port);
 			config->addresses->swarm_head->next = libp2p_utils_linked_list_new();
+			struct Libp2pLinkedList *quic_tail = NULL;
 			if (config->addresses->swarm_head->next != NULL) {
 				config->addresses->swarm_head->next->item = malloc(strlen(addr1) + 1);
 				if (config->addresses->swarm_head->next->item != NULL)
 					strcpy(config->addresses->swarm_head->next->item, addr1);
+				quic_tail = config->addresses->swarm_head->next;
+			}
+			if (quic_tail != NULL) {
+				sprintf(addr1, "/ip4/0.0.0.0/udp/%d/quic-v1", swarm_port);
+				quic_tail->next = libp2p_utils_linked_list_new();
+				if (quic_tail->next != NULL) {
+					quic_tail->next->item = malloc(strlen(addr1) + 1);
+					if (quic_tail->next->item != NULL)
+						strcpy(quic_tail->next->item, addr1);
+					quic_tail = quic_tail->next;
+				}
+				sprintf(addr1, "/ip6/::/udp/%d/quic-v1", swarm_port);
+				quic_tail->next = libp2p_utils_linked_list_new();
+				if (quic_tail->next != NULL) {
+					quic_tail->next->item = malloc(strlen(addr1) + 1);
+					if (quic_tail->next->item != NULL)
+						strcpy(quic_tail->next->item, addr1);
+				}
 			}
 		}
 		int port_adder = swarm_port - 4001;

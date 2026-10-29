@@ -23,6 +23,11 @@
 #include "ipfs/core/ipfs_node.h"
 #include "ipfs/core/v2_listen.h"
 #include "ipfs/exchange/bitswap/network.h"
+
+#ifdef HAS_LSQUIC
+#include "libp2p/net/quic.h"
+#include "libp2p/conn/noise.h"
+#endif
 #include "ipfs/journal/journal.h"
 #include "ipfs/merkledag/merkledag.h"
 #include "ipfs/merkledag/node.h"
@@ -147,6 +152,78 @@ int ipfs_null_do_maintenance(struct IpfsNode* local_node, struct Libp2pPeer* pee
 }
 
 
+#ifdef HAS_LSQUIC
+struct quic_listen_thread_arg {
+    char *ip;
+    uint16_t port;
+    struct IpfsNode *local_node;
+};
+
+static void* ipfs_null_listen_quic(void *arg)
+{
+    struct quic_listen_thread_arg *qa = (struct quic_listen_thread_arg *)arg;
+    if (!qa || !qa->local_node) {
+        free(qa);
+        return NULL;
+    }
+
+    libp2p_logger_info("null", "Starting QUIC listener on %s:%u\n", qa->ip, qa->port);
+
+    noise_identity_callbacks_t noise_cbs;
+    libp2p_noise_identity_callbacks_init(&noise_cbs);
+
+    struct Libp2pQuicListener *listener = libp2p_net_quic_listener_new(
+        qa->ip, qa->port, &qa->local_node->identity->private_key, &noise_cbs);
+    if (!listener) {
+        libp2p_logger_error("null", "Failed to create QUIC listener on %s:%u\n", qa->ip, qa->port);
+        free(qa->ip);
+        free(qa);
+        return NULL;
+    }
+
+    ipfs_v2_quic_listen_handler(listener, qa->local_node);
+
+    libp2p_net_quic_listener_free(listener);
+    free(qa->ip);
+    free(qa);
+    return NULL;
+}
+
+static int ipfs_null_listen_quic_start(const char *multiaddr, struct IpfsNode *local_node)
+{
+    if (!multiaddr || !local_node)
+        return 0;
+
+    char ip[INET6_ADDRSTRLEN];
+    unsigned int port = 0;
+    int parsed = sscanf(multiaddr, "/ip4/%15[^/]/udp/%u/quic-v1", ip, &port);
+    if (parsed != 2)
+        parsed = sscanf(multiaddr, "/ip6/%45[^/]/udp/%u/quic-v1", ip, &port);
+    if (parsed != 2 || port == 0 || port > 65535)
+        return 0;
+
+    struct quic_listen_thread_arg *qa = (struct quic_listen_thread_arg *)malloc(sizeof(*qa));
+    if (!qa)
+        return 0;
+    qa->ip = strdup(ip);
+    qa->port = (uint16_t)port;
+    qa->local_node = local_node;
+    if (!qa->ip) {
+        free(qa);
+        return 0;
+    }
+
+    pthread_t tid;
+    if (pthread_create(&tid, NULL, ipfs_null_listen_quic, qa) != 0) {
+        free(qa->ip);
+        free(qa);
+        return 0;
+    }
+    pthread_detach(tid);
+    return 1;
+}
+#endif
+
 /***
  * Called by the daemon to listen for connections
  * @param ptr a pointer to an IpfsNodeListenParams struct
@@ -167,6 +244,25 @@ void* ipfs_null_listen (void *ptr)
     }
 
     libp2p_logger_info("null", "Ipfs listening on %d\n", listen_param->port);
+
+#ifdef HAS_LSQUIC
+    /* Start a QUIC listener thread for each /quic-v1 swarm address in config. */
+    if (listen_param->local_node->repo && listen_param->local_node->repo->config &&
+        listen_param->local_node->repo->config->addresses &&
+        listen_param->local_node->repo->config->addresses->swarm_head) {
+        struct Libp2pLinkedList *cur = listen_param->local_node->repo->config->addresses->swarm_head;
+        while (cur) {
+            if (cur->item && strstr((char *)cur->item, "/quic-v1") != NULL) {
+                if (ipfs_null_listen_quic_start((char *)cur->item, listen_param->local_node)) {
+                    libp2p_logger_info("null", "Started QUIC listener for %s\n", (char *)cur->item);
+                } else {
+                    libp2p_logger_error("null", "Failed to start QUIC listener for %s\n", (char *)cur->item);
+                }
+            }
+            cur = cur->next;
+        }
+    }
+#endif
 
     // when we have nothing to do, check on the connections to see if we're still connected
     struct Libp2pLinkedList* current_peer_entry = NULL;

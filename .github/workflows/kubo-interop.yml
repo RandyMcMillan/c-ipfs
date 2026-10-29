@@ -148,8 +148,9 @@ jobs:
           KUBO_BIN: ${{ steps.kubo.outputs.kubo-bin }}
         shell: bash
         run: |
-          chmod +x test/scripts/test_kubo_interop.sh test/scripts/test_kubo_ipns_pubsub.sh test/scripts/test_kubo_noise_handshake.sh test/scripts/test_kubo_swarm_connect.sh
+          chmod +x test/scripts/test_kubo_interop.sh test/scripts/test_kubo_ipns_pubsub.sh test/scripts/test_kubo_noise_handshake.sh test/scripts/test_kubo_swarm_connect.sh test/scripts/test_kubo_quic_dial.sh
           ./test/scripts/test_kubo_noise_handshake.sh
           ./test/scripts/test_kubo_swarm_connect.sh
+          ./test/scripts/test_kubo_quic_dial.sh
           ./test/scripts/test_kubo_interop.sh
           ./test/scripts/test_kubo_ipns_pubsub.sh

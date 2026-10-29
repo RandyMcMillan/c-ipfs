@@ -115,6 +115,7 @@ int ipfs_swarm_connect_v2_bridge(const char *multiaddr_str,
      * QUIC path: TLS 1.3 + QUIC provides both security and multiplexing,
      * so we skip Noise and yamux entirely.
      * ------------------------------------------------------------------ */
+#ifdef HAS_LSQUIC
     if (strstr(multiaddr_str, "/quic-v1") != NULL) {
         char ip[INET6_ADDRSTRLEN];
         uint16_t port = 0;
@@ -270,6 +271,12 @@ int ipfs_swarm_connect_v2_bridge(const char *multiaddr_str,
         *out_bridge = bridge;
         return 0;
     }
+#else
+    if (strstr(multiaddr_str, "/quic-v1") != NULL) {
+        libp2p_logger_error("v2_bridge", "QUIC support not compiled in (HAS_LSQUIC missing)\n");
+        return -EPROTONOSUPPORT;
+    }
+#endif
 
     char ip[INET6_ADDRSTRLEN];
     uint16_t port = 0;

@@ -128,6 +128,125 @@ static void *ipfs_v2_listen_session_thread(void *arg)
     return NULL;
 }
 
+#ifdef HAS_LSQUIC
+
+#include "libp2p/net/quic.h"
+#include "varint.h"
+
+static int v2_quic_negotiate_outbound_identify(struct Libp2pV2Stream *stream)
+{
+    if (!stream)
+        return 0;
+    if (!libp2p_net_multistream_write_protocol(stream, "/multistream/1.0.0\n"))
+        return 0;
+    if (!libp2p_net_multistream_write_protocol(stream, "/ipfs/id/1.0.0\n"))
+        return 0;
+    char msg[256];
+    if (!libp2p_net_multistream_read_protocol(stream, msg, sizeof(msg)))
+        return 0;
+    if (strcmp(msg, "/ipfs/id/1.0.0\n") != 0)
+        return 0;
+    return 1;
+}
+
+static int v2_quic_read_identify_response(struct Libp2pV2Stream *stream, unsigned char *buf, size_t buf_size, size_t *out_len)
+{
+    if (!stream || !buf || !out_len)
+        return 0;
+
+    unsigned char prefix_buf[16];
+    size_t prefix_len = 0;
+    size_t payload_len = 0;
+    size_t prefix_consumed = 0;
+    while (prefix_len < sizeof(prefix_buf)) {
+        ssize_t n = stream->read(stream, prefix_buf + prefix_len, sizeof(prefix_buf) - prefix_len);
+        if (n <= 0)
+            break;
+        prefix_len += (size_t)n;
+        size_t decoded_bytes = 0;
+        unsigned long long v = varint_decode(prefix_buf, (int)prefix_len, &decoded_bytes);
+        if (decoded_bytes > 0 && decoded_bytes <= prefix_len) {
+            payload_len = (size_t)v;
+            prefix_consumed = decoded_bytes;
+            break;
+        }
+    }
+
+    size_t payload_in_prefix = 0;
+    if (prefix_consumed > 0 && prefix_len > prefix_consumed) {
+        payload_in_prefix = prefix_len - prefix_consumed;
+        if (payload_in_prefix > buf_size)
+            payload_in_prefix = buf_size;
+        memcpy(buf, prefix_buf + prefix_consumed, payload_in_prefix);
+    }
+
+    size_t total = payload_in_prefix;
+    while (payload_len > 0 && total < payload_len && total < buf_size) {
+        ssize_t n = stream->read(stream, buf + total, buf_size - total);
+        if (n <= 0)
+            break;
+        total += (size_t)n;
+    }
+    *out_len = total;
+    return 1;
+}
+
+void ipfs_v2_quic_listen_handler(struct Libp2pQuicListener *listener, struct IpfsNode *local_node)
+{
+    if (!listener || !local_node)
+        return;
+
+    libp2p_logger_info("v2_quic_listen", "QUIC listener handler started\n");
+
+    for (;;) {
+        struct Libp2pV2Stream *inbound = libp2p_net_quic_listener_accept(listener);
+        if (!inbound) {
+            libp2p_logger_debug("v2_quic_listen", "No inbound QUIC stream, retrying\n");
+            continue;
+        }
+
+        char protocol[128];
+        if (!v2_listen_read_protocol(inbound, protocol, sizeof(protocol))) {
+            libp2p_logger_error("v2_quic_listen", "Failed to read inbound protocol\n");
+            inbound->close(inbound);
+            continue;
+        }
+
+        if (strcmp(protocol, "/ipfs/id/1.0.0") != 0) {
+            libp2p_logger_info("v2_quic_listen", "No handler for protocol %s; closing stream\n", protocol);
+            inbound->close(inbound);
+            continue;
+        }
+
+        v2_listen_send_identify(inbound, local_node);
+        inbound->close(inbound);
+
+        /* Open an outbound Identify stream so we can read the peer's Identify. */
+        struct Libp2pV2Stream *outbound = libp2p_net_quic_conn_open_stream(inbound);
+        if (!outbound) {
+            libp2p_logger_error("v2_quic_listen", "Failed to open outbound QUIC Identify stream\n");
+            continue;
+        }
+
+        if (!v2_quic_negotiate_outbound_identify(outbound)) {
+            libp2p_logger_error("v2_quic_listen", "Outbound QUIC Identify negotiation failed\n");
+            outbound->close(outbound);
+            continue;
+        }
+
+        unsigned char identify_buf[4096];
+        size_t identify_len = 0;
+        if (!v2_quic_read_identify_response(outbound, identify_buf, sizeof(identify_buf), &identify_len)) {
+            libp2p_logger_error("v2_quic_listen", "Failed to read outbound QUIC Identify response\n");
+        } else {
+            libp2p_logger_info("v2_quic_listen", "Read %zu bytes of peer QUIC Identify response\n", identify_len);
+        }
+        outbound->close(outbound);
+    }
+}
+
+#endif /* HAS_LSQUIC */
+
 int ipfs_v2_listen_handler(int fd, struct IpfsNode *local_node)
 {
     if (fd < 0 || !local_node) {
