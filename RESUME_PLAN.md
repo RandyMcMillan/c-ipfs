@@ -1,7 +1,7 @@
 # Resume Plan: c-ipfs → Kubo v0.43.0 Interoperability
 
 **Last updated:** 2026-10-29
-**Current baseline:** master @ f4e08d3 (c-ipfs), c-libp2p @ 1fd59ec.
+**Current baseline:** master @ cabb8aa (c-ipfs), c-libp2p @ 3e8a27d.
 **Specification references:**
 - `specs/` — official IPFS specifications (IPFS specs at `heads/main`).
 - `c-libp2p/specs/` — official libp2p specifications (`libp2p/specs` at `heads/master`), already present as a nested submodule.
@@ -22,6 +22,12 @@ This plan is ordered **from the lowest protocol layer to the highest**, because 
 - **IPFS Bitswap 1.2.0:** single-block retrieval from Kubo passes end-to-end via `./test/scripts/test_kubo_bitswap_retrieve_debug.sh` (tagged `phase-B2-complete`).
 - **Debug prints:** kept and gated by `DEBUG=1` / `DEBUG_<SCOPE>=true` (`libp2p/utils/debug.h`); documented in `AGENTS.md`.
 - **CI:** `.github/workflows` refactored into reusable composite actions; `test_ffi_libp2p_host_connect_self` and the IPNS publish/resolve integration tests are disabled from the default suite because they hang or flake on macOS and `ubuntu-latest`.
+- **L1.2 QUIC / L2.2 TLS hardening:** incorporated the `fix/quic-stream-callbacks` improvements into c-libp2p (TLS SignedKey sign/verify without the Noise domain-separation prefix, lsquic stream callbacks, synchronous QUIC dialer teardown) and gated the c-ipfs QUIC bridge `TRACE` prints behind `DEBUG_SCOPE`.
+- **Kubo Interop test harness:** fixed `test/scripts/test_kubo_quic_dial.sh` so the `DEBUG=` environment assignment is exported before calling the `timeout` wrapper instead of being passed as a positional argument (which GNU `timeout` tries to execute).
+- **QUIC stream I/O:** set and re-enable `lsquic_stream_wantread` on bidirectional streams so synchronous `lsquic_stream_read` calls receive the peer's data instead of returning `-1`.
+- **Latest QUIC hardening (pending CI):** bumped c-libp2p to `3e8a27d` to (1) classify QUIC streams by `lsquic_stream_id()` parity, (2) disable lsquic's non-RFC TIMESTAMP extension frames that caused quic-go to close the connection with "unknown frame type", and (3) set explicit initial bidirectional stream limits and stream-data windows so Kubo can open and send on its Identify streams. c-ipfs `cabb8aa` adds always-on `libp2p_v2_logger_info` milestones in the QUIC bridge path and enables Kubo `net/identify`/`swarm2` debug logging in `test_kubo_quic_dial.sh` so CI failures show exactly where the exchange stops.
+- **QUIC Identify direction fix:** the Kubo Interop run at `cabb8aa` showed Kubo identifying us but then timing out reading our Identify because c-ipfs was sending it on Kubo's inbound stream instead of the stream c-ipfs itself opened. The dialer now sends our Identify on the outbound stream and reads Kubo's on the inbound stream; the listener reads Kubo's Identify on the inbound stream and sends ours on a newly-opened outbound stream. L1.2 QUIC will move to 100% once Kubo Interop is green.
+- **`origin/fix/quic-stream-callbacks` review:** the branch's useful fixes (TLS SignedKey sign/verify and cert validity check) were already in c-libp2p `master`; its removal of the ALPN select callback, read-interest calls, and bidi stream settings was not incorporated because those pieces are required for the current implementation.
 
 ## Completion tracking
 
@@ -30,7 +36,7 @@ Percentages are rough estimates against the relevant spec documents in `specs/` 
 | Layer | Phase | Spec reference(s) | Completion |
 |-------|-------|-------------------|------------|
 | L1 Transport | TCP dial/listen | `c-libp2p/specs/connections/README.md` | 100% |
-| L1 Transport | QUIC | `c-libp2p/specs/quic/README.md` | 100% |
+| L1 Transport | QUIC | `c-libp2p/specs/quic/README.md` | 95% |
 | L1 Transport | WebSocket | `c-libp2p/specs/websockets/README.md` | 100% |
 | L2 Security | Noise XX | `c-libp2p/specs/noise/README.md` | 100% |
 | L2 Security | TLS 1.3 | `c-libp2p/specs/tls/tls.md` | 100% |
@@ -57,7 +63,7 @@ Percentages are rough estimates against the relevant spec documents in `specs/` 
 
 - Yamux `PING`/`GO_AWAY` and proper flow-control window management need to be exercised under load.
 - A dedicated `/tls/1.0.0` over TCP interop test is optional; QUIC already validates the TLS 1.3 identity handshake end-to-end.
-- QUIC dialer stream teardown is deferred to the peer-connection lifetime to avoid an lsquic `send_ctl` cleanup hang/segfault when closing an active client connection.  A proper synchronous close will be revisited once lsquic's teardown path is root-caused.
+- QUIC dialer stream teardown is now synchronous; lsquic engine/connection cleanup is exercised by the Kubo interop scripts.
 - Bitswap `Cancel`, `HAVE`/`DONT_HAVE` routing, multi-peer sessions, and CIDv1 wantlist entries need more work.
 - DHT provider lookup is scaffolded but not Kubo-interop tested.
 - IPNS publish/resolve integration tests are disabled from the default suite pending a root-cause fix for non-deterministic signature verification failures.
@@ -75,7 +81,7 @@ Percentages are rough estimates against the relevant spec documents in `specs/` 
 - **Verify:** `./test/scripts/test_kubo_swarm_connect.sh`, `./test/scripts/test_kubo_swarm_connect_ipv6.sh`.
 - **Completed:** IPv6 multiaddr parsing and TCP v1/v2 dial paths; new IPv6 interop test.
 
-### L1.2 QUIC transport — DONE
+### L1.2 QUIC transport — MOSTLY DONE (pending Kubo Interop green)
 - **Spec:** `c-libp2p/specs/quic/README.md`
 - **Files:**
   - `c-libp2p/v2/include/libp2p/conn/tls.h`

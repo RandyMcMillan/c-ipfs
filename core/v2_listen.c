@@ -218,7 +218,18 @@ void ipfs_v2_quic_listen_handler(struct Libp2pQuicListener *listener, struct Ipf
             continue;
         }
 
-        /* Open the outbound Identify stream before closing the inbound one;
+        /* Inbound stream: Kubo initiated it to push its Identify.  Read its
+         * Identify first, then open our outbound stream and push ours. */
+        unsigned char identify_buf[4096];
+        size_t identify_len = 0;
+        if (!v2_quic_read_identify_response(inbound, identify_buf, sizeof(identify_buf), &identify_len)) {
+            libp2p_logger_error("v2_quic_listen", "Failed to read inbound QUIC Identify message\n");
+            inbound->close(inbound);
+            continue;
+        }
+        libp2p_logger_info("v2_quic_listen", "Read %zu bytes of peer QUIC Identify message\n", identify_len);
+
+        /* Open our outbound Identify stream before closing the inbound one;
          * the accepted stream context is needed to locate the QUIC connection. */
         struct Libp2pV2Stream *outbound = libp2p_net_quic_conn_open_stream(inbound);
         if (!outbound) {
@@ -227,23 +238,16 @@ void ipfs_v2_quic_listen_handler(struct Libp2pQuicListener *listener, struct Ipf
             continue;
         }
 
-        v2_listen_send_identify(inbound, local_node);
-        inbound->close(inbound);
-
         if (!v2_quic_negotiate_outbound_identify(outbound)) {
             libp2p_logger_error("v2_quic_listen", "Outbound QUIC Identify negotiation failed\n");
             outbound->close(outbound);
+            inbound->close(inbound);
             continue;
         }
 
-        unsigned char identify_buf[4096];
-        size_t identify_len = 0;
-        if (!v2_quic_read_identify_response(outbound, identify_buf, sizeof(identify_buf), &identify_len)) {
-            libp2p_logger_error("v2_quic_listen", "Failed to read outbound QUIC Identify response\n");
-        } else {
-            libp2p_logger_info("v2_quic_listen", "Read %zu bytes of peer QUIC Identify response\n", identify_len);
-        }
+        v2_listen_send_identify(outbound, local_node);
         outbound->close(outbound);
+        inbound->close(inbound);
     }
 }
 
