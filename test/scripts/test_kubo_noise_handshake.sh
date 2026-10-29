@@ -20,15 +20,28 @@ PORT=$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1", 0)); p
 TEST_REPO="$(mktemp -d)"
 export IPFS_PATH="$TEST_REPO"
 
+# Kill a child process without hanging if it ignores SIGTERM.
+safe_kill() {
+    local pid="${1:-}"
+    [ -n "$pid" ] || return 0
+    if kill -0 "$pid" 2>/dev/null; then
+        kill "$pid" 2>/dev/null || true
+        local n
+        for n in $(seq 1 50); do
+            kill -0 "$pid" 2>/dev/null || break
+            sleep 0.1
+        done
+    fi
+    if kill -0 "$pid" 2>/dev/null; then
+        kill -9 "$pid" 2>/dev/null || true
+        sleep 0.2
+    fi
+    wait "$pid" 2>/dev/null || true
+}
+
 cleanup() {
-    if [ -n "${DAEMON_PID:-}" ]; then
-        kill "$DAEMON_PID" 2>/dev/null || true
-        wait "$DAEMON_PID" 2>/dev/null || true
-    fi
-    if [ -n "${RESPONDER_PID:-}" ]; then
-        kill "$RESPONDER_PID" 2>/dev/null || true
-        wait "$RESPONDER_PID" 2>/dev/null || true
-    fi
+    safe_kill "${DAEMON_PID:-}"
+    safe_kill "${RESPONDER_PID:-}"
     rm -f "$RESPONDER_LOG" "${DAEMON_LOG:-}"
     rm -rf "$TEST_REPO"
 }
@@ -113,9 +126,6 @@ set -e
 # Give the responder a moment to log the connection outcome
 sleep 2
 
-# Stop the daemon
-kill "$DAEMON_PID" 2>/dev/null || true
-wait "$DAEMON_PID" 2>/dev/null || true
 echo "keeping $DAEMON_LOG"
 
 echo "Responder log:"

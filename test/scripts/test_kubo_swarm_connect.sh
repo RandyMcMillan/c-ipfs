@@ -4,6 +4,10 @@
 # Set DEBUG=1 to enable the protocol debug prints used during development.
 set -euo pipefail
 
+# Silence Kubo's one-time telemetry notice in CI and local harness runs.
+export IPFS_TELEMETRY="${IPFS_TELEMETRY:-off}"
+export DO_NOT_TRACK="${DO_NOT_TRACK:-1}"
+
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 
 # Allow CI to override the Kubo binary; fall back to a local build for dev runs.
@@ -22,15 +26,28 @@ CIPFS_REPO="$(mktemp -d)"
 KUBO_LOG="$(mktemp)"
 CIPFS_LOG="$(mktemp)"
 
+# Kill a child process without hanging if it ignores SIGTERM.
+safe_kill() {
+    local pid="${1:-}"
+    [ -n "$pid" ] || return 0
+    if kill -0 "$pid" 2>/dev/null; then
+        kill "$pid" 2>/dev/null || true
+        local n
+        for n in $(seq 1 50); do
+            kill -0 "$pid" 2>/dev/null || break
+            sleep 0.1
+        done
+    fi
+    if kill -0 "$pid" 2>/dev/null; then
+        kill -9 "$pid" 2>/dev/null || true
+        sleep 0.2
+    fi
+    wait "$pid" 2>/dev/null || true
+}
+
 cleanup() {
-    if [ -n "${KUBO_PID:-}" ]; then
-        kill "$KUBO_PID" 2>/dev/null || true
-        wait "$KUBO_PID" 2>/dev/null || true
-    fi
-    if [ -n "${CIPFS_PID:-}" ]; then
-        kill "$CIPFS_PID" 2>/dev/null || true
-        wait "$CIPFS_PID" 2>/dev/null || true
-    fi
+    safe_kill "${KUBO_PID:-}"
+    safe_kill "${CIPFS_PID:-}"
     rm -f "$KUBO_LOG" "$CIPFS_LOG"
     rm -rf "$KUBO_REPO" "$CIPFS_REPO"
 }
