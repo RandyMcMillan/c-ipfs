@@ -160,6 +160,8 @@ PY
 export DEBUG_V2_BRIDGE="${DEBUG_V2_BRIDGE:-true}"
 export DEBUG_QUIC="${DEBUG_QUIC:-true}"
 export DEBUG_MULTISTREAM="${DEBUG_MULTISTREAM:-true}"
+export DEBUG_TLS="${DEBUG_TLS:-true}"
+export DEBUG_TLS_VERIFY="${DEBUG_TLS_VERIFY:-true}"
 DEBUG="${DEBUG:-}" "$REPO_ROOT/main/ipfs" daemon > "$CIPFS_LOG" 2>&1 &
 CIPFS_PID=$!
 
