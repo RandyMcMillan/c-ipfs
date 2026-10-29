@@ -1,24 +1,27 @@
 # Resume Plan: c-ipfs → Kubo v0.43.0 Interoperability
 
-**Last updated:** 2026-10-28
-**Current baseline:** master @ c9a0d0f (c-ipfs), c-libp2p @ f2a701d.
+**Last updated:** 2026-10-29
+**Current baseline:** master @ c4e9a35 (c-ipfs), c-libp2p @ 50876d5.
 **Specification references:**
 - `specs/` — official IPFS specifications (IPFS specs at `heads/main`).
 - `c-libp2p/specs/` — official libp2p specifications (`libp2p/specs` at `heads/master`), already present as a nested submodule.
 
-This plan is ordered **from the lowest protocol layer to the highest**, because upper layers are only useful once the layers beneath them are solid.
+This plan is ordered **from the lowest protocol layer to the highest**, because upper layers are only useful once the layers beneath them are solid. Within a layer, items are worked until 100% before moving to the next layer, and each completed layer is committed and tagged.
 
 ## Current state — what just landed
 
 - **Transport (TCP):** outbound `ipfs swarm connect /ip4/...` to Kubo v0.43.1 is stable.
+- **Transport (WebSocket):** dial completes multistream-select, Noise XX, yamux, and Identify exchange with Kubo.
 - **Security (Noise XX):** handshake completes in both directions over the inbound listener and outbound dialer paths.
+- **Security (TLS 1.3):** libp2p TLS identity helper implemented in c-libp2p (ephemeral ECDSA P-256 cert, SignedKey extension, peer-ID verification) per `c-libp2p/specs/tls/tls.md`.
+- **Transport (QUIC):** outbound QUIC dial over RFC 9000 with libp2p TLS 1.3 and ALPN `libp2p` is implemented in c-libp2p and wired into the v2 bridge; listen/accept side is still open.
 - **Multistream-select:** works over Noise and yamux; inbound streams reply with the correct ack (`theyRequested=1`).
 - **Multiplexing (yamux):** streams open with `WINDOW_UPDATE+SYN`, inbound streams are stored in session slots, and child-stream data is now read by a persistent inbound reader for remote-opened streams.
 - **Bridge streams:** classified as `STREAM_TYPE_BRIDGE` so the swarm thread does not misread their context.
 - **libp2p Identify v1/v2:** v1 roundtrip with Kubo works; v2 is wired and has a passing roundtrip test.
 - **IPFS Bitswap 1.2.0:** single-block retrieval from Kubo passes end-to-end via `./test/scripts/test_kubo_bitswap_retrieve_debug.sh` (tagged `phase-B2-complete`).
-- **Debug prints:** kept and gated by `DEBUG=1`.
-- **CI:** runs `test_kubo_noise_handshake.sh`, `test_kubo_swarm_connect.sh`, and the new Kubo bitswap retrieval test in `.github/workflows/kubo-interop.yml`.
+- **Debug prints:** kept and gated by `DEBUG=1` / `DEBUG_<SCOPE>=true` (`libp2p/utils/debug.h`); documented in `AGENTS.md`.
+- **CI:** `.github/workflows` refactored into reusable composite actions; `test_ffi_libp2p_host_connect_self` disabled from the default suite because it hangs on both macOS and `ubuntu-latest`.
 
 ## Completion tracking
 
@@ -27,10 +30,10 @@ Percentages are rough estimates against the relevant spec documents in `specs/` 
 | Layer | Phase | Spec reference(s) | Completion |
 |-------|-------|-------------------|------------|
 | L1 Transport | TCP dial/listen | `c-libp2p/specs/connections/README.md` | 100% |
-| L1 Transport | QUIC | `c-libp2p/specs/quic/README.md` | 5% |
+| L1 Transport | QUIC | `c-libp2p/specs/quic/README.md` | 45% |
 | L1 Transport | WebSocket | `c-libp2p/specs/websockets/README.md` | 100% |
 | L2 Security | Noise XX | `c-libp2p/specs/noise/README.md` | 100% |
-| L2 Security | TLS 1.3 | `c-libp2p/specs/tls/tls.md` | 0% |
+| L2 Security | TLS 1.3 | `c-libp2p/specs/tls/tls.md` | 70% |
 | L3 Muxer negotiation | multistream-select | `c-libp2p/specs/connections/README.md` | 100% |
 | L4 Multiplexing | yamux core | `c-libp2p/specs/yamux/README.md` | 90% |
 | L4 Multiplexing | yamux PING/GO_AWAY/window | `c-libp2p/specs/yamux/README.md` | 30% |
@@ -40,7 +43,7 @@ Percentages are rough estimates against the relevant spec documents in `specs/` 
 | L5 libp2p core | Relay / hole-punching | `c-libp2p/specs/connections/hole-punching.md` | 0% |
 | L5 libp2p core | Signed peer/routing records | `c-libp2p/specs/RFC/0002-signed-envelopes.md`, `c-libp2p/specs/RFC/0003-routing-records.md` | 0% |
 | L6 Content routing/exchange | Kademlia DHT | `specs/src/routing/kad-dht.md`, `c-libp2p/specs/kad-dht/README.md` | 20% |
-| L6 Content routing/exchange | Bitswap 1.2.0 | `specs/src/bitswap-protocol.md` | 65% |
+| L6 Content routing/exchange | Bitswap 1.2.0 | `specs/src/bitswap-protocol.md` | 60% |
 | L7 Naming | DNSADDR / DNSLink | `specs/DWEB_ADDRESSING.md` | 10% |
 | L7 Naming | IPNS records v2 | `specs/src/ipns/ipns-record.md` | 10% |
 | L8 Data model/codecs | DAG-CBOR | referenced in `specs/src/ipns/ipns-record.md` | 10% |
@@ -52,6 +55,8 @@ Percentages are rough estimates against the relevant spec documents in `specs/` 
 
 ## Known rough edges
 
+- QUIC listen/accept path is not implemented; L1.2 cannot be 100% until it is.
+- TLS 1.3 has only been used inside the QUIC dial path; a dedicated Kubo interop test for `/tls/1.0.0` is still needed.
 - Yamux `PING`/`GO_AWAY` and proper flow-control window management are not implemented.
 - Bitswap `Cancel`, `HAVE`/`DONT_HAVE` routing, multi-peer sessions, and CIDv1 wantlist entries need more work.
 - DHT provider lookup is scaffolded but not Kubo-interop tested.
@@ -60,10 +65,7 @@ Percentages are rough estimates against the relevant spec documents in `specs/` 
 
 ## L1 — Transport
 
-**Sequencing note:** L1.2 QUIC cannot be completed until L2.2 TLS 1.3 is ready,
-because QUIC uses TLS 1.3 for peer authentication (`c-libp2p/specs/quic/README.md`).
-Therefore L1.3 WebSocket (which runs Noise + yamux over TCP) is the next
-lowest-layer item, followed by L2.2 TLS, then L1.2 QUIC.
+**Sequencing note:** QUIC requires TLS 1.3 for peer authentication (`c-libp2p/specs/quic/README.md`), so L2.2 TLS is being completed as part of the L1.2 work. The current order is: finish L1.2 QUIC to 100%, then move to the next incomplete layer.
 
 ### L1.1 TCP dial/listen — DONE
 - **Spec:** `c-libp2p/specs/connections/README.md`
@@ -72,10 +74,23 @@ lowest-layer item, followed by L2.2 TLS, then L1.2 QUIC.
 - **Verify:** `./test/scripts/test_kubo_swarm_connect.sh`, `./test/scripts/test_kubo_swarm_connect_ipv6.sh`.
 - **Completed:** IPv6 multiaddr parsing and TCP v1/v2 dial paths; new IPv6 interop test.
 
-### L1.2 QUIC transport
+### L1.2 QUIC transport — IN PROGRESS
 - **Spec:** `c-libp2p/specs/quic/README.md`
-- **Files:** `transport/quic_transport.c`, `registry.c`
-- **Action:** lsquic/BoringSSL build optional; wire up QUIC dial/listen and multistream/Noise/yamux over QUIC.
+- **Files:**
+  - `c-libp2p/v2/include/libp2p/conn/tls.h`
+  - `c-libp2p/v2/src/conn/tls.c`
+  - `c-libp2p/v2/include/libp2p/net/quic.h`
+  - `c-libp2p/v2/src/net/quic_dial.c`
+  - `transport/swarm_dialer_v2_bridge.c`
+- **Done:**
+  - libp2p TLS 1.3 identity helper (ephemeral ECDSA cert + SignedKey extension + peer verification) per `c-libp2p/specs/tls/tls.md`.
+  - QUIC client dial over RFC 9000 with ALPN `libp2p` and custom peer-cert verification using lsquic/BoringSSL.
+  - v2 bridge detects `/quic-v1`, dials, accepts the inbound Identify stream, runs multistream-select `/ipfs/id/1.0.0` on both streams, and buffers Kubo’s Identify response.
+- **Remaining to reach 100%:**
+  1. QUIC listener (`libp2p_net_quic_listen`) and inbound stream accept path.
+  2. End-to-end Kubo interop test: `./test/scripts/test_kubo_quic_dial.sh` (dial a Kubo `/quic-v1` listener and verify Identify).
+  3. Optional: `/quic` draft-29 multiaddr parsing (not required for Kubo v0.43.x interop; Kubo uses `/quic-v1`).
+- **Verify:** Kubo v0.43.x with a `/ip4/127.0.0.1/udp/<port>/quic-v1` listener; Identify response received successfully.
 
 ### L1.3 WebSocket transport — DONE
 - **Spec:** `c-libp2p/specs/websockets/README.md`
@@ -93,21 +108,21 @@ lowest-layer item, followed by L2.2 TLS, then L1.2 QUIC.
 - **Status:** Outbound and inbound Noise XX handshakes complete against Kubo.
 - **Verify:** `./test/scripts/test_kubo_noise_handshake.sh`, `./test/scripts/test_kubo_swarm_connect.sh`.
 
-### L2.2 TLS 1.3 — NEXT
+### L2.2 TLS 1.3 — IN PROGRESS
 - **Spec:** `c-libp2p/specs/tls/tls.md`
 - **Dependencies:** BoringSSL (already built for lsquic/QUIC); OpenSSL/BoringSSL X.509 APIs.
 - **Files:**
-  - `c-libp2p/v2/include/libp2p/conn/tls.h` (new)
-  - `c-libp2p/v2/src/conn/tls.c` (new)
-  - `transport/swarm_dialer_v2_bridge.c` (add `/tls/1.0.0` security path)
-- **Action:**
-  1. **Certificate + extension generation:** generate an ephemeral ECDSA P-256 cert key; create a self-signed X.509 cert valid ~100 years; include the libp2p Public Key Extension (OID `1.3.6.1.4.1.53594.1.1`) containing the host public key protobuf and a signature over `libp2p-tls-handshake:` || cert SubjectPublicKeyInfo DER.
-  2. **Peer certificate verification:** in a custom `VerifyPeerCertificate` callback, require exactly one certificate, find the libp2p extension, verify the cert self-signature, extract the host public key, verify the extension signature, and derive/validate the peer ID.
-  3. **TLS 1.3 handshake wrapper:** build an OpenSSL/BoringSSL `SSL_CTX` with `TLSv1.3`, client cert required, ALPN `libp2p`, and the custom verification callback; expose `libp2p_tls_secure_client/secure_server` that returns a `Libp2pV2Stream` over the raw transport.
-  4. **Integration:** in the v2 bridge, propose `/tls/1.0.0` before Noise when configured (or as an alternate security path); run TLS, then negotiate `/yamux/1.0.0` over the TLS connection, then perform Identify.
-  5. **Interop test:** add `./test/scripts/test_kubo_tls_handshake.sh` that dials Kubo with `/tls/1.0.0` and verifies the Identify response is received.
-- **Verify:** `./test/scripts/test_kubo_tls_handshake.sh` passes against Kubo v0.43.x.
-- **Reference implementation:** `go-libp2p/p2p/security/tls/` (module cache at `/Users/git/go/pkg/mod/github.com/libp2p/go-libp2p@v0.49.0/p2p/security/tls/`).
+  - `c-libp2p/v2/include/libp2p/conn/tls.h`
+  - `c-libp2p/v2/src/conn/tls.c`
+  - `transport/swarm_dialer_v2_bridge.c`
+- **Done:**
+  - Certificate + extension generation: ephemeral ECDSA P-256 cert key, self-signed X.509 cert valid ~100 years, libp2p Public Key Extension (OID `1.3.6.1.4.1.53594.1.1`) containing the host protobuf public key and a signature over `libp2p-tls-handshake:` || cert SubjectPublicKeyInfo DER.
+  - Peer certificate verification: require exactly one certificate, validate self-signature and validity, locate and parse the libp2p extension, verify the extension signature, derive/validate the peer ID.
+  - `SSL_CTX` configured for TLS 1.3 only, client auth required, ALPN `libp2p`.
+- **Remaining to reach 100%:**
+  - Verify the handshake succeeds against a real Kubo peer over QUIC.
+  - (Optional) Expose standalone TLS-secured `Libp2pV2Stream` wrappers for TCP/TLS use and a Kubo interop test for `/tls/1.0.0`.
+- **Reference implementation:** `go-libp2p/p2p/security/tls/`.
 
 ---
 
@@ -115,7 +130,7 @@ lowest-layer item, followed by L2.2 TLS, then L1.2 QUIC.
 
 ### L3.1 multistream-select — MOSTLY DONE
 - **Spec:** implicit in libp2p connection setup
-- **Files:** `c-libp2p/net/multistream.c`, `transport/stream_bridge.c`
+- **Files:** `c-libp2p/net/multistream.c`, `c-libp2p/v2/src/conn/multistream.c`, `transport/stream_bridge.c`
 - **Status:** Works over Noise and over yamux child streams; inbound streams reply with `theyRequested=1`.
 - **Verify:** `./test/scripts/test_kubo_swarm_connect.sh`.
 
@@ -125,7 +140,7 @@ lowest-layer item, followed by L2.2 TLS, then L1.2 QUIC.
 
 ### L4.1 Yamux core — MOSTLY DONE
 - **Spec:** `c-libp2p/specs/yamux/README.md`
-- **Files:** `c-libp2p/yamux/yamux.c`, `c-libp2p/yamux/session.c`, `c-libp2p/yamux/stream.c`, `c-libp2p/yamux/frame.h`
+- **Files:** `c-libp2p/yamux/yamux.c`, `c-libp2p/yamux/session.c`, `c-libp2p/yamux/stream.c`, `c-libp2p/yamux/frame.h`, `c-libp2p/v2/src/conn/yamux.c`
 - **Status:** Stream open/close, `WINDOW_UPDATE+SYN`, inbound stream slotting, and persistent inbound reader for remote-opened streams work.
 - **Verify:** `./test/scripts/test_kubo_swarm_connect.sh`, `./test/scripts/test_kubo_bitswap_retrieve_debug.sh`.
 
@@ -187,7 +202,7 @@ lowest-layer item, followed by L2.2 TLS, then L1.2 QUIC.
 ### L6.2 Bitswap 1.2.0 — IN PROGRESS / PARTIAL
 - **Spec:** `specs/src/bitswap-protocol.md`
 - **Files:** `exchange/bitswap/want_manager.c`, `wantlist_queue.c`, `engine.c`, `message.c`, `network.c`
-- **Done:** Single-block Kubo retrieval works; wantlist broadcast to connected peers.
+- **Done:** Single-block Kubo retrieval works; wantlist broadcast to connected peers; block-presence parsing tested.
 - **Remaining:**
   - Session deduplication across peers.
   - `Cancel` messages when a block is no longer wanted.
@@ -256,8 +271,10 @@ lowest-layer item, followed by L2.2 TLS, then L1.2 QUIC.
 ---
 
 ## Working rules
-1. One priority per commit series; run `make all` + focused `test_ipfs` before commit.
+1. One priority per commit series; run `HAS_LSQUIC=true make all` + focused `test_ipfs` before commit.
 2. Commit submodule changes first (push), then update pointer in c-ipfs.
 3. Do not mark a capability complete without a Kubo interop test.
 4. Keep disabled CI-crashing tests disabled until root cause fixed.
 5. Reference the relevant `specs/` or `c-libp2p/specs/` document in each commit message and test plan.
+6. Keep debug prints and gate them with `DEBUG_<SCOPE>=true`; document new scopes in `AGENTS.md`.
+7. Tag a layer only when its target percentage reaches 100% and CI is green.
