@@ -154,40 +154,91 @@ int ipfs_swarm_connect_v2_bridge(const char *multiaddr_str,
             libp2p_crypto_public_key_to_peer_id(&pubkey, &our_peer_id);
         }
 
-        /* Outbound stream: we opened it, so we are the multistream-select
-         * initiator.  Send the header, read the echo, propose /ipfs/id/1.0.0,
-         * read the confirmation, then read Kubo's Identify response.
+        /* Identify exchange over QUIC: libp2p Identify opens one stream in
+         * each direction, just like the yamux path above.
          *
-         * Do this BEFORE accepting the peer's inbound Identify stream: Kubo
-         * only opens its stream after it sees our outbound multistream-select
-         * request. */
-        DBG_SCOPE("v2_bridge", "QUIC outbound multistream handshake start\n");
-        if (!libp2p_net_multistream_write_protocol(outbound, "/multistream/1.0.0\n") ||
-            !libp2p_net_multistream_read_protocol(outbound, msg, sizeof(msg)) ||
-            strcmp(msg, "/multistream/1.0.0\n") != 0) {
-            libp2p_logger_error("v2_bridge", "Failed outbound QUIC multistream handshake: '%s'\n", msg);
+         *  - outbound stream: we opened it; send the multistream header so Kubo
+         *    wakes up and opens its outbound stream (our inbound).
+         *  - inbound stream: Kubo opens it; we accept it, echo the header, then
+         *    finish both handshakes.
+         *
+         * Crucially, send our Identify on the inbound stream BEFORE reading
+         * Kubo's Identify on the outbound stream. go-libp2p can defer its
+         * outbound Identify until it has seen ours; reading first creates a
+         * circular wait. */
+        if (!libp2p_net_multistream_write_protocol(outbound, "/multistream/1.0.0\n")) {
+            libp2p_logger_error("v2_bridge", "Failed to write outbound QUIC multistream header\n");
             if (our_peer_id) free(our_peer_id);
             outbound->close(outbound);
             return -EPROTO;
         }
-        if (!libp2p_net_multistream_write_protocol(outbound, "/ipfs/id/1.0.0\n") ||
+        DBG_SCOPE("v2_bridge", "QUIC outbound multistream header written\n");
+
+        struct Libp2pV2Stream *inbound = libp2p_net_quic_accept_stream(outbound);
+        if (!inbound) {
+            libp2p_logger_error("v2_bridge", "QUIC accept inbound identify stream failed\n");
+            if (our_peer_id) free(our_peer_id);
+            outbound->close(outbound);
+            return -ECONNABORTED;
+        }
+        DBG_SCOPE("v2_bridge", "QUIC inbound stream acquired\n");
+
+        /* Inbound stream: peer opened it, so we are the multistream-select
+         * responder. Read and echo its header. */
+        if (!libp2p_net_multistream_read_protocol(inbound, msg, sizeof(msg)) ||
+            strcmp(msg, "/multistream/1.0.0\n") != 0 ||
+            !libp2p_net_multistream_write_protocol(inbound, "/multistream/1.0.0\n")) {
+            libp2p_logger_error("v2_bridge", "Failed inbound QUIC multistream handshake: '%s'\n", msg);
+            if (our_peer_id) free(our_peer_id);
+            inbound->close(inbound);
+            outbound->close(outbound);
+            return -EPROTO;
+        }
+        DBG_SCOPE("v2_bridge", "QUIC inbound multistream header echoed\n");
+
+        /* Finish our outbound multistream handshake and propose Identify. */
+        if (!libp2p_net_multistream_read_protocol(outbound, msg, sizeof(msg)) ||
+            strcmp(msg, "/multistream/1.0.0\n") != 0 ||
+            !libp2p_net_multistream_write_protocol(outbound, "/ipfs/id/1.0.0\n") ||
             !libp2p_net_multistream_read_protocol(outbound, msg, sizeof(msg)) ||
             strcmp(msg, "/ipfs/id/1.0.0\n") != 0) {
             libp2p_logger_error("v2_bridge", "Outbound QUIC Identify protocol negotiation failed: '%s'\n", msg);
             if (our_peer_id) free(our_peer_id);
+            inbound->close(inbound);
             outbound->close(outbound);
             return -EPROTO;
         }
-        libp2p_logger_info("v2_bridge", "Outbound QUIC Identify negotiated; reading peer response\n");
-        DBG_SCOPE("v2_bridge", "QUIC outbound identify negotiated\n");
+        DBG_SCOPE("v2_bridge", "QUIC outbound Identify negotiated\n");
 
-        /* Read Kubo's length-delimited (msgio) Identify response from the
-         * outbound stream into a temporary bridge buffer before touching the
-         * inbound stream. This drains stream 0 and stops on_read spin while
-         * we handle the peer's inbound Identify stream. */
+        /* Read and confirm Kubo's inbound Identify protocol proposal. */
+        if (!libp2p_net_multistream_read_protocol(inbound, msg, sizeof(msg)) ||
+            strcmp(msg, "/ipfs/id/1.0.0\n") != 0 ||
+            !libp2p_net_multistream_write_protocol(inbound, "/ipfs/id/1.0.0\n")) {
+            libp2p_logger_error("v2_bridge", "Inbound QUIC Identify protocol negotiation failed: '%s'\n", msg);
+            if (our_peer_id) free(our_peer_id);
+            inbound->close(inbound);
+            outbound->close(outbound);
+            return -EPROTO;
+        }
+        DBG_SCOPE("v2_bridge", "QUIC inbound Identify negotiated; sending our response\n");
+
+        /* Send our Identify on the inbound stream first, so Kubo is unblocked
+         * to send its Identify on our outbound stream. */
+        if (!libp2p_identify_send_response_ipfs(inbound, our_peer_id, pubkey_der, pubkey_len, NULL, 0)) {
+            libp2p_logger_error("v2_bridge", "Failed to send QUIC Identify response on inbound stream\n");
+            if (our_peer_id) free(our_peer_id);
+            inbound->close(inbound);
+            outbound->close(outbound);
+            return -EPROTO;
+        }
+        DBG_SCOPE("v2_bridge", "QUIC Identify response sent on inbound stream\n");
+
+        /* Outbound stream: Kubo is the responder. Read its length-delimited
+         * Identify response into a temporary bridge buffer. */
         ipfs_v2_stream_bridge_t *bridge = (ipfs_v2_stream_bridge_t *)calloc(1, sizeof(*bridge));
         if (!bridge) {
             if (our_peer_id) free(our_peer_id);
+            inbound->close(inbound);
             outbound->close(outbound);
             return -ENOMEM;
         }
@@ -200,19 +251,16 @@ int ipfs_swarm_connect_v2_bridge(const char *multiaddr_str,
         while (prefix_len < sizeof(prefix_buf)) {
             ssize_t n = outbound->read(outbound, prefix_buf + prefix_len,
                                        sizeof(prefix_buf) - prefix_len);
-            libp2p_logger_info("v2_bridge", "QUIC outbound prefix read n=%zd prefix_len=%zu\n", n, prefix_len);
             DBG_SCOPE("v2_bridge", "QUIC outbound prefix read n=%zd prefix_len=%zu\n", n, prefix_len);
-            if (n <= 0) {
-                libp2p_logger_info("v2_bridge", "QUIC outbound prefix read returned %zd, stopping\n", n);
+            if (n <= 0)
                 break;
-            }
             prefix_len += (size_t)n;
             size_t decoded_bytes = 0;
             unsigned long long v = varint_decode(prefix_buf, (int)prefix_len, &decoded_bytes);
             if (decoded_bytes > 0 && decoded_bytes <= prefix_len) {
                 payload_len = (size_t)v;
                 prefix_consumed = decoded_bytes;
-                libp2p_logger_info("v2_bridge", "QUIC outbound identify payload_len=%zu\n", payload_len);
+                DBG_SCOPE("v2_bridge", "QUIC outbound identify payload_len=%zu\n", payload_len);
                 break;
             }
         }
@@ -227,75 +275,20 @@ int ipfs_swarm_connect_v2_bridge(const char *multiaddr_str,
         while (payload_len > 0 && total < payload_len && total < sizeof(bridge->identify_buf)) {
             ssize_t n = outbound->read(outbound, bridge->identify_buf + total,
                                        sizeof(bridge->identify_buf) - total);
-            libp2p_logger_info("v2_bridge", "QUIC outbound payload read n=%zd total=%zu/%zu\n", n, total, payload_len);
-            DBG_SCOPE("v2_bridge", "QUIC outbound payload read n=%zd total=%zu\n", n, total);
-            if (n <= 0) {
-                libp2p_logger_info("v2_bridge", "QUIC outbound payload read returned %zd, stopping\n", n);
+            DBG_SCOPE("v2_bridge", "QUIC outbound payload read n=%zd total=%zu/%zu\n", n, total, payload_len);
+            if (n <= 0)
                 break;
-            }
             total += (size_t)n;
         }
         bridge->identify_len = total;
-        libp2p_logger_info("v2_bridge", "Read %zu bytes of QUIC Identify response\n", total);
-        DBG_SCOPE("v2_bridge", "QUIC read %zu bytes outbound response\n", total);
-
-        /* Now that Kubo has seen our outbound request and stream 0 is drained,
-         * accept its inbound Identify stream. */
-        libp2p_logger_info("v2_bridge", "QUIC outbound identify drained, accepting inbound stream\n");
-        struct Libp2pV2Stream *inbound = libp2p_net_quic_accept_stream(outbound);
-        if (!inbound) {
-            libp2p_logger_error("v2_bridge", "QUIC accept inbound identify stream failed\n");
-            if (our_peer_id) free(our_peer_id);
-            free(bridge);
-            outbound->close(outbound);
-            return -ECONNABORTED;
-        }
-        libp2p_logger_info("v2_bridge", "QUIC inbound stream acquired\n");
-        DBG_SCOPE("v2_bridge", "QUIC inbound stream acquired\n");
-
-        /* Inbound stream: peer opened it, so we are the multistream-select
-         * responder.  Echo the header and protocol, then send our Identify
-         * response. */
-        if (!libp2p_net_multistream_read_protocol(inbound, msg, sizeof(msg)) ||
-            strcmp(msg, "/multistream/1.0.0\n") != 0 ||
-            !libp2p_net_multistream_write_protocol(inbound, "/multistream/1.0.0\n")) {
-            libp2p_logger_error("v2_bridge", "Failed inbound QUIC multistream handshake: '%s'\n", msg);
-            if (our_peer_id) free(our_peer_id);
-            free(bridge);
-            inbound->close(inbound);
-            outbound->close(outbound);
-            return -EPROTO;
-        }
-        if (!libp2p_net_multistream_read_protocol(inbound, msg, sizeof(msg)) ||
-            strcmp(msg, "/ipfs/id/1.0.0\n") != 0 ||
-            !libp2p_net_multistream_write_protocol(inbound, "/ipfs/id/1.0.0\n")) {
-            libp2p_logger_error("v2_bridge", "Inbound QUIC Identify protocol negotiation failed: '%s'\n", msg);
-            if (our_peer_id) free(our_peer_id);
-            free(bridge);
-            inbound->close(inbound);
-            outbound->close(outbound);
-            return -EPROTO;
-        }
-        libp2p_logger_info("v2_bridge", "Inbound QUIC Identify negotiated; sending our response\n");
-        DBG_SCOPE("v2_bridge", "QUIC inbound identify negotiated, sending response\n");
-        if (!libp2p_identify_send_response_ipfs(inbound, our_peer_id, pubkey_der, pubkey_len, NULL, 0)) {
-            libp2p_logger_error("v2_bridge", "Failed to send QUIC Identify response on inbound stream\n");
-            if (our_peer_id) free(our_peer_id);
-            free(bridge);
-            inbound->close(inbound);
-            outbound->close(outbound);
-            return -EPROTO;
-        }
-
-        DBG_SCOPE("v2_bridge", "QUIC identify response sent, closing streams\n");
+        DBG_SCOPE("v2_bridge", "QUIC read %zu bytes outbound Identify response\n", total);
 
         if (our_peer_id)
             free(our_peer_id);
-        DBG_SCOPE("v2_bridge", "QUIC about to close inbound\n");
         inbound->close(inbound);
-        DBG_SCOPE("v2_bridge", "QUIC about to close outbound\n");
+        DBG_SCOPE("v2_bridge", "QUIC inbound stream closed\n");
         outbound->close(outbound);
-        DBG_SCOPE("v2_bridge", "QUIC streams closed, returning bridge\n");
+        DBG_SCOPE("v2_bridge", "QUIC outbound stream closed, returning bridge\n");
 
         *out_bridge = bridge;
         DBG_SCOPE("v2_bridge", "QUIC returning 0\n");
