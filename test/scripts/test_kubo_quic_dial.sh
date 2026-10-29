@@ -60,10 +60,11 @@ dump_logs() {
 }
 
 # Wrap long-blocking CLI commands so a hang yields logs instead of a job timeout.
+# The CI image may lack a working `timeout` binary, so fall back to Python.
 TIMEOUT_BIN=""
-if command -v timeout >/dev/null 2>&1; then
+if command -v timeout >/dev/null 2>&1 && timeout 0 true >/dev/null 2>&1; then
     TIMEOUT_BIN="timeout"
-elif command -v gtimeout >/dev/null 2>&1; then
+elif command -v gtimeout >/dev/null 2>&1 && gtimeout 0 true >/dev/null 2>&1; then
     TIMEOUT_BIN="gtimeout"
 fi
 
@@ -72,9 +73,22 @@ run_with_timeout() {
     shift
     if [ -n "$TIMEOUT_BIN" ]; then
         "$TIMEOUT_BIN" "$seconds" "$@"
-    else
-        "$@"
+        return $?
     fi
+
+    # Python fallback: run the command with a timeout and propagate exit code.
+    python3 - "$seconds" "$@" <<'PY'
+import sys, subprocess, signal
+timeout = int(sys.argv[1])
+cmd = sys.argv[2:]
+env = {k: v for k, v in subprocess.os.environ.items()}
+try:
+    proc = subprocess.run(cmd, timeout=timeout, env=env)
+    sys.exit(proc.returncode)
+except subprocess.TimeoutExpired:
+    print(f"TIMEOUT after {timeout}s: {' '.join(cmd)}", file=sys.stderr)
+    sys.exit(124)
+PY
 }
 
 pick_port() {
