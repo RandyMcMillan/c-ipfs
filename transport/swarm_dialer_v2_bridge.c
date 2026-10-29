@@ -20,6 +20,12 @@
 #include "libp2p/utils/debug.h"
 #include "varint.h"
 
+/* The c-ipfs build uses the legacy libp2p logger header, so the v2 logger
+ * functions are not declared there.  Declare them explicitly so we can emit
+ * always-on INFO logs for the QUIC bridge path in CI. */
+extern void libp2p_v2_logger_info(const char *subsystem, const char *format, ...);
+extern void libp2p_v2_logger_error(const char *subsystem, const char *format, ...);
+
 /* NOTE: keep debug prints. They are gated by DEBUG_SCOPE / DEBUG env vars
  * (see libp2p/utils/debug.h). Do not strip them when a phase is "done". */
 
@@ -134,7 +140,7 @@ int ipfs_swarm_connect_v2_bridge(const char *multiaddr_str,
             libp2p_logger_error("v2_bridge", "QUIC dial to %s:%u failed\n", ip, port);
             return -ECONNREFUSED;
         }
-        DBG_SCOPE("v2_bridge", "QUIC outbound stream acquired\n");
+        libp2p_v2_logger_info("v2_bridge", "QUIC outbound stream acquired for %s:%u\n", ip, port);
 
         char msg[256];
 
@@ -167,7 +173,7 @@ int ipfs_swarm_connect_v2_bridge(const char *multiaddr_str,
          * Kubo's Identify on the outbound stream. go-libp2p can defer its
          * outbound Identify until it has seen ours; reading first creates a
          * circular wait. */
-        DBG_SCOPE("v2_bridge", "QUIC outbound multistream handshake start\n");
+        libp2p_v2_logger_info("v2_bridge", "QUIC outbound multistream handshake start\n");
         if (!libp2p_net_multistream_write_protocol(outbound, "/multistream/1.0.0\n") ||
             !libp2p_net_multistream_read_protocol(outbound, msg, sizeof(msg)) ||
             strcmp(msg, "/multistream/1.0.0\n") != 0 ||
@@ -179,18 +185,19 @@ int ipfs_swarm_connect_v2_bridge(const char *multiaddr_str,
             outbound->close(outbound);
             return -EPROTO;
         }
-        DBG_SCOPE("v2_bridge", "QUIC outbound Identify negotiated\n");
+        libp2p_v2_logger_info("v2_bridge", "QUIC outbound Identify negotiated\n");
 
         /* Now that Kubo has seen our complete Identify request, accept its
          * inbound Identify stream. */
+        libp2p_v2_logger_info("v2_bridge", "QUIC waiting for inbound Identify stream\n");
         struct Libp2pV2Stream *inbound = libp2p_net_quic_accept_stream(outbound);
         if (!inbound) {
-            libp2p_logger_error("v2_bridge", "QUIC accept inbound identify stream failed\n");
+            libp2p_v2_logger_error("v2_bridge", "QUIC accept inbound identify stream failed\n");
             if (our_peer_id) free(our_peer_id);
             outbound->close(outbound);
             return -ECONNABORTED;
         }
-        DBG_SCOPE("v2_bridge", "QUIC inbound stream acquired\n");
+        libp2p_v2_logger_info("v2_bridge", "QUIC inbound stream acquired\n");
 
         /* Inbound stream: peer opened it, so we are the multistream-select
          * responder. Read and echo its header, then read and confirm its
@@ -207,7 +214,8 @@ int ipfs_swarm_connect_v2_bridge(const char *multiaddr_str,
             outbound->close(outbound);
             return -EPROTO;
         }
-        DBG_SCOPE("v2_bridge", "QUIC inbound Identify negotiated; sending our response\n");
+        libp2p_v2_logger_info("v2_bridge", "QUIC inbound Identify negotiated; sending our response (peer_id=%s)\n",
+                              our_peer_id ? our_peer_id : "?");
 
         /* Send our Identify on the inbound stream first, so Kubo is unblocked
          * to send its Identify on our outbound stream. */
@@ -218,7 +226,7 @@ int ipfs_swarm_connect_v2_bridge(const char *multiaddr_str,
             outbound->close(outbound);
             return -EPROTO;
         }
-        DBG_SCOPE("v2_bridge", "QUIC Identify response sent on inbound stream\n");
+        libp2p_v2_logger_info("v2_bridge", "QUIC Identify response sent on inbound stream\n");
 
         /* Outbound stream: Kubo is the responder. Read its length-delimited
          * Identify response into a temporary bridge buffer. */
@@ -278,7 +286,7 @@ int ipfs_swarm_connect_v2_bridge(const char *multiaddr_str,
         DBG_SCOPE("v2_bridge", "QUIC outbound stream closed, returning bridge\n");
 
         *out_bridge = bridge;
-        DBG_SCOPE("v2_bridge", "QUIC returning 0\n");
+        libp2p_v2_logger_info("v2_bridge", "QUIC identify exchange complete, returning bridge\n");
         return 0;
     }
 #else

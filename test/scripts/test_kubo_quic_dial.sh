@@ -104,7 +104,9 @@ CIPFS_SWARM_TCP=$(pick_port)
 CIPFS_SWARM_QUIC=$(pick_port)
 CIPFS_GW=$(pick_port)
 
-# Start Kubo with a QUIC listener.
+# Start Kubo with a QUIC listener.  Enable identify/swarm debug so CI logs show
+# whether Kubo opens its outbound Identify stream during the QUIC dial test.
+export GOLOG_LOG_LEVEL="${GOLOG_LOG_LEVEL:-net/identify=debug,swarm2=debug}"
 export IPFS_PATH="$KUBO_REPO"
 "$KUBO_BIN" init --profile=test >/dev/null 2>&1
 "$KUBO_BIN" config Addresses.API "/ip4/127.0.0.1/tcp/$KUBO_API"
