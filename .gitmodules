@@ -30,6 +30,3 @@
 [submodule "c-ipld"]
 	path = c-ipld
 	url = git@github.com:RandyMcMillan/c-ipld.git
-[submodule "tls"]
-	path = tls
-	url = git@github.com:RandyMcMillan/TinyTls.git

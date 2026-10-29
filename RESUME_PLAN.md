@@ -94,9 +94,9 @@ lowest-layer item, followed by L2.2 TLS, then L1.2 QUIC.
 
 ### L2.2 TLS 1.3
 - **Spec:** `c-libp2p/specs/tls/tls.md`
-- **Submodules:** `tls/` (TinyTls) for TLS 1.3 primitives
+- **Dependencies:** BoringSSL (already built for lsquic/QUIC)
 - **Files:** `transport/tls_transport.c` (new)
-- **Action:** Implement libp2p TLS 1.3 handshake with peer-ID certificate validation.
+- **Action:** Implement libp2p TLS 1.3 handshake with peer-ID certificate validation over TCP. QUIC uses lsquic's built-in BoringSSL TLS.
 
 ---
 
