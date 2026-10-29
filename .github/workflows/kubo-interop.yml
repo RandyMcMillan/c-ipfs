@@ -139,6 +139,9 @@ jobs:
           kubo-source: ${{ inputs.kubo_source || 'release' }}
           kubo-ref: ${{ inputs.kubo_ref || '' }}
 
+      - name: Install gdb
+        run: sudo apt-get install -y gdb >/dev/null
+
       - name: Run Kubo Interoperability Harness
         env:
           INTEROP_MODE: ${{ inputs.interop_mode || 'ci' }}

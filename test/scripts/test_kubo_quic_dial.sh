@@ -116,7 +116,11 @@ with open(cfg_path, 'w') as f:
     json.dump(cfg, f, indent=1)
 PY
 
+if command -v gdb >/dev/null 2>&1; then
+    DEBUG="${DEBUG:-}" gdb -batch -ex "handle SIGPIPE nostop noprint pass" -ex run -ex "bt 30" -ex "thread apply all bt 12" --args "$REPO_ROOT/main/ipfs" daemon > "$CIPFS_LOG" 2>&1 &
+else
 DEBUG="${DEBUG:-}" "$REPO_ROOT/main/ipfs" daemon > "$CIPFS_LOG" 2>&1 &
+fi
 CIPFS_PID=$!
 
 CIPFS_ID=""
@@ -147,7 +151,8 @@ echo "c-ipfs ID:  $CIPFS_ID"
 if ! DEBUG="${DEBUG:-}" "$REPO_ROOT/main/ipfs" swarm connect "/ip4/127.0.0.1/udp/$KUBO_SWARM_QUIC/quic-v1/p2p/$KUBO_ID"; then
     echo "FAIL: c-ipfs outbound QUIC swarm connect failed"
     echo "===== c-ipfs log tail ====="
-    tail -100 "$CIPFS_LOG"
+    sleep 3
+    tail -150 "$CIPFS_LOG"
     echo "===== Kubo log tail ====="
     tail -60 "$KUBO_LOG"
     exit 1
