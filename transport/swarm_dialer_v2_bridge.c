@@ -200,15 +200,19 @@ int ipfs_swarm_connect_v2_bridge(const char *multiaddr_str,
         while (prefix_len < sizeof(prefix_buf)) {
             ssize_t n = outbound->read(outbound, prefix_buf + prefix_len,
                                        sizeof(prefix_buf) - prefix_len);
+            libp2p_logger_info("v2_bridge", "QUIC outbound prefix read n=%zd prefix_len=%zu\n", n, prefix_len);
             DBG_SCOPE("v2_bridge", "QUIC outbound prefix read n=%zd prefix_len=%zu\n", n, prefix_len);
-            if (n <= 0)
+            if (n <= 0) {
+                libp2p_logger_info("v2_bridge", "QUIC outbound prefix read returned %zd, stopping\n", n);
                 break;
+            }
             prefix_len += (size_t)n;
             size_t decoded_bytes = 0;
             unsigned long long v = varint_decode(prefix_buf, (int)prefix_len, &decoded_bytes);
             if (decoded_bytes > 0 && decoded_bytes <= prefix_len) {
                 payload_len = (size_t)v;
                 prefix_consumed = decoded_bytes;
+                libp2p_logger_info("v2_bridge", "QUIC outbound identify payload_len=%zu\n", payload_len);
                 break;
             }
         }
@@ -223,9 +227,12 @@ int ipfs_swarm_connect_v2_bridge(const char *multiaddr_str,
         while (payload_len > 0 && total < payload_len && total < sizeof(bridge->identify_buf)) {
             ssize_t n = outbound->read(outbound, bridge->identify_buf + total,
                                        sizeof(bridge->identify_buf) - total);
+            libp2p_logger_info("v2_bridge", "QUIC outbound payload read n=%zd total=%zu/%zu\n", n, total, payload_len);
             DBG_SCOPE("v2_bridge", "QUIC outbound payload read n=%zd total=%zu\n", n, total);
-            if (n <= 0)
+            if (n <= 0) {
+                libp2p_logger_info("v2_bridge", "QUIC outbound payload read returned %zd, stopping\n", n);
                 break;
+            }
             total += (size_t)n;
         }
         bridge->identify_len = total;
@@ -234,6 +241,7 @@ int ipfs_swarm_connect_v2_bridge(const char *multiaddr_str,
 
         /* Now that Kubo has seen our outbound request and stream 0 is drained,
          * accept its inbound Identify stream. */
+        libp2p_logger_info("v2_bridge", "QUIC outbound identify drained, accepting inbound stream\n");
         struct Libp2pV2Stream *inbound = libp2p_net_quic_accept_stream(outbound);
         if (!inbound) {
             libp2p_logger_error("v2_bridge", "QUIC accept inbound identify stream failed\n");
@@ -242,6 +250,7 @@ int ipfs_swarm_connect_v2_bridge(const char *multiaddr_str,
             outbound->close(outbound);
             return -ECONNABORTED;
         }
+        libp2p_logger_info("v2_bridge", "QUIC inbound stream acquired\n");
         DBG_SCOPE("v2_bridge", "QUIC inbound stream acquired\n");
 
         /* Inbound stream: peer opened it, so we are the multistream-select
