@@ -69,6 +69,10 @@ static const struct lsquic_stream_if quic_stream_if = {
 
 static int quic_dial(libp2p_transport_t *self, const char *multiaddr, libp2p_stream_t **out_stream) {
     libp2p_quic_transport_t *quic = (libp2p_quic_transport_t *)self;
+    if (!quic || !quic->engine) {
+        fprintf(stderr, "[QUIC] dial called on uninitialized transport\n");
+        return -1;
+    }
 
     char ip[64];
     int port;

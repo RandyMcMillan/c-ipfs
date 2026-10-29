@@ -154,7 +154,9 @@ if ! DEBUG="${DEBUG:-}" "$REPO_ROOT/main/ipfs" swarm connect "/ip4/127.0.0.1/udp
 fi
 echo "PASS: c-ipfs outbound QUIC swarm connect succeeded"
 
-# Test 2: Kubo dials c-ipfs over QUIC (inbound).
+# Test 2: Kubo dials c-ipfs over QUIC (inbound).  Use Kubo's repo for the
+# Kubo CLI so it talks to the running Kubo daemon.
+export IPFS_PATH="$KUBO_REPO"
 if ! "$KUBO_BIN" swarm connect "/ip4/127.0.0.1/udp/$CIPFS_SWARM_QUIC/quic-v1/p2p/$CIPFS_ID"; then
     echo "FAIL: Kubo outbound QUIC swarm connect to c-ipfs failed"
     echo "===== c-ipfs log tail ====="

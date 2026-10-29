@@ -35,4 +35,11 @@ struct Stream *ipfs_noise_handshake_legacy_2arg(struct Stream *legacy_raw_stream
  */
 const noise_identity_callbacks_t *ipfs_noise_rsa_callbacks(void);
 
+/**
+ * Return RSA-based identity callbacks suitable for libp2p TLS 1.3.
+ * Unlike the Noise callbacks, these sign/verify the exact data buffer
+ * passed by the caller (the TLS handshake prefix || SubjectPublicKeyInfo).
+ */
+const noise_identity_callbacks_t *ipfs_tls_rsa_callbacks(void);
+
 #endif

@@ -5,6 +5,7 @@
 #include "libp2p/net/tcp.h"
 #include "libp2p/conn/noise.h"
 #include "libp2p/utils/logger.h"
+#include "libp2p/utils/debug.h"
 #include "libp2p/crypto/rsa.h"
 #include "libp2p/crypto/key.h"
 #include "ipfs/crypto/verify.h"
@@ -140,6 +141,70 @@ static const noise_identity_callbacks_t noise_rsa_callbacks = {
 
 const noise_identity_callbacks_t *ipfs_noise_rsa_callbacks(void) {
     return &noise_rsa_callbacks;
+}
+
+/* ============================================================================
+ * RSA Identity Callbacks for libp2p TLS 1.3 SignedKey Extension
+ * ============================================================================ */
+
+static int tls_rsa_get_identity_key(void *private_key, uint8_t **out_key, size_t *out_len) {
+    return noise_rsa_get_identity_key(private_key, out_key, out_len);
+}
+
+static int tls_rsa_sign(void *private_key, const uint8_t *data, size_t data_len,
+                        uint8_t **out_sig, size_t *out_len) {
+    struct RsaPrivateKey *rsa = (struct RsaPrivateKey *)private_key;
+    if (!rsa)
+        return 0;
+    return libp2p_crypto_rsa_sign(rsa, (const char *)data, data_len, out_sig, out_len);
+}
+
+static int tls_rsa_verify(const uint8_t *identity_key, size_t identity_key_len,
+                          const uint8_t *data, size_t data_len,
+                          const uint8_t *sig, size_t sig_len) {
+    DBG_SCOPE("tls_verify", "tls_rsa_verify: identity_key_len=%zu data_len=%zu sig_len=%zu\n",
+              identity_key_len, data_len, sig_len);
+    struct PublicKey *pubkey = NULL;
+    if (!libp2p_crypto_public_key_protobuf_decode((unsigned char *)identity_key, identity_key_len, &pubkey)) {
+        DBG_SCOPE("tls_verify", "failed to decode identity public key\n");
+        return 0;
+    }
+    if (!pubkey || !pubkey->data) {
+        if (pubkey) libp2p_crypto_public_key_free(pubkey);
+        DBG_SCOPE("tls_verify", "identity public key empty\n");
+        return 0;
+    }
+
+    DBG_SCOPE("tls_verify", "identity key type=%d data_size=%zu\n", pubkey->type, pubkey->data_size);
+
+    int ret = 0;
+    if (pubkey->type == KEYTYPE_ED25519) {
+        ret = ipfs_crypto_verify_ed25519(pubkey->data, pubkey->data_size,
+                                         data, data_len, sig, sig_len);
+    } else if (pubkey->type == KEYTYPE_RSA) {
+        struct RsaPublicKey rsa_pub;
+        memset(&rsa_pub, 0, sizeof(rsa_pub));
+        rsa_pub.der = pubkey->data;
+        rsa_pub.der_length = pubkey->data_size;
+        ret = libp2p_crypto_rsa_verify(&rsa_pub, data, data_len, sig);
+    } else {
+        DBG_SCOPE("tls_verify", "unsupported identity key type=%d\n", pubkey->type);
+    }
+
+    DBG_SCOPE("tls_verify", "tls_rsa_verify result=%d\n", ret);
+    libp2p_crypto_public_key_free(pubkey);
+    return ret;
+}
+
+static const noise_identity_callbacks_t tls_rsa_callbacks = {
+    .get_identity_key = tls_rsa_get_identity_key,
+    .sign = tls_rsa_sign,
+    .verify = tls_rsa_verify,
+    .free_buffer = noise_rsa_free_buffer,
+};
+
+const noise_identity_callbacks_t *ipfs_tls_rsa_callbacks(void) {
+    return &tls_rsa_callbacks;
 }
 
 /* ============================================================================

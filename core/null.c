@@ -27,6 +27,7 @@
 #ifdef HAS_LSQUIC
 #include "libp2p/net/quic.h"
 #include "libp2p/conn/noise.h"
+#include "ipfs/transport/noise_v2_bridge.h"
 #endif
 #include "ipfs/journal/journal.h"
 #include "ipfs/merkledag/merkledag.h"
@@ -169,11 +170,10 @@ static void* ipfs_null_listen_quic(void *arg)
 
     libp2p_logger_info("null", "Starting QUIC listener on %s:%u\n", qa->ip, qa->port);
 
-    noise_identity_callbacks_t noise_cbs;
-    libp2p_noise_identity_callbacks_init(&noise_cbs);
+    const noise_identity_callbacks_t *tls_cbs = ipfs_tls_rsa_callbacks();
 
     struct Libp2pQuicListener *listener = libp2p_net_quic_listener_new(
-        qa->ip, qa->port, &qa->local_node->identity->private_key, &noise_cbs);
+        qa->ip, qa->port, &qa->local_node->identity->private_key, tls_cbs);
     if (!listener) {
         libp2p_logger_error("null", "Failed to create QUIC listener on %s:%u\n", qa->ip, qa->port);
         free(qa->ip);
