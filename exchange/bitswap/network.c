@@ -135,7 +135,9 @@ int ipfs_bitswap_network_handle_block_presence(struct PeerRequest* peer_request,
 		retVal = 1;
 	}
 
-	ipfs_cid_free(cid);
+	/* ipfs_cid_cast makes cid->hash point into presence->cid; do not
+	 * ipfs_cid_free() it or we would free the caller's buffer. */
+	free(cid);
 	return retVal;
 }
 

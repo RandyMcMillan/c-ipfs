@@ -104,10 +104,11 @@ int test_bitswap_network_handle_block_presence_cancel(void) {
 
 	presence = ipfs_bitswap_block_presence_new();
 	if (presence == NULL) goto exit;
-	presence->cid = malloc(32);
+	presence->cid_size = ipfs_cid_to_bytes_size(entry->cid);
+	presence->cid = malloc(presence->cid_size);
 	if (presence->cid == NULL) goto exit;
-	memcpy(presence->cid, "01234567890123456789012345678901", 32);
-	presence->cid_size = 32;
+	size_t written = 0;
+	if (!ipfs_cid_to_bytes(entry->cid, presence->cid, presence->cid_size, &written)) goto exit;
 	presence->type = BLOCK_PRESENCE_HAVE;
 
 	if (!ipfs_bitswap_network_handle_block_presence(request, presence)) goto exit;

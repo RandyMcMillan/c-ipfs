@@ -9,6 +9,7 @@
 #include "ipfs/transport/noise_v2_bridge.h"
 #include "libp2p/net/tcp.h"
 #include "libp2p/net/ws.h"
+#include "libp2p/net/quic.h"
 #include "libp2p/conn/yamux.h"
 #include "libp2p/conn/noise.h"
 #include "libp2p/conn/multistream.h"
@@ -57,6 +58,40 @@ static int bridge_parse_multiaddr(const char *multiaddr_str, char *ip_out, size_
     return 1;
 }
 
+static int bridge_parse_quic_multiaddr(const char *multiaddr_str, char *ip_out, size_t ip_len,
+                                       uint16_t *port_out, char *peer_id_out, size_t peer_id_len)
+{
+    if (!multiaddr_str || !ip_out || !port_out || !peer_id_out)
+        return 0;
+
+    char ip[INET6_ADDRSTRLEN];
+    unsigned int port = 0;
+    int parsed = sscanf(multiaddr_str, "/ip4/%15[^/]/udp/%u/quic-v1", ip, &port);
+    if (parsed != 2)
+        parsed = sscanf(multiaddr_str, "/ip6/%45[^/]/udp/%u/quic-v1", ip, &port);
+    if (parsed != 2)
+        return 0;
+    if (port == 0 || port > 65535)
+        return 0;
+
+    strncpy(ip_out, ip, ip_len - 1);
+    ip_out[ip_len - 1] = '\0';
+    *port_out = (uint16_t)port;
+
+    peer_id_out[0] = '\0';
+    const char *p2p = strstr(multiaddr_str, "/p2p/");
+    if (p2p) {
+        p2p += 5;
+        size_t i = 0;
+        while (p2p[i] && p2p[i] != '/' && i + 1 < peer_id_len) {
+            peer_id_out[i] = p2p[i];
+            i++;
+        }
+        peer_id_out[i] = '\0';
+    }
+    return 1;
+}
+
 static int bridge_negotiate_protocol(struct Libp2pV2Stream *stream, const char *protocol)
 {
     if (!stream || !protocol)
@@ -75,6 +110,166 @@ int ipfs_swarm_connect_v2_bridge(const char *multiaddr_str,
 {
     if (!multiaddr_str || !private_key || !out_bridge)
         return -EINVAL;
+
+    /* ------------------------------------------------------------------
+     * QUIC path: TLS 1.3 + QUIC provides both security and multiplexing,
+     * so we skip Noise and yamux entirely.
+     * ------------------------------------------------------------------ */
+    if (strstr(multiaddr_str, "/quic-v1") != NULL) {
+        char ip[INET6_ADDRSTRLEN];
+        uint16_t port = 0;
+        char expected_peer_id[128];
+        if (!bridge_parse_quic_multiaddr(multiaddr_str, ip, sizeof(ip), &port,
+                                         expected_peer_id, sizeof(expected_peer_id))) {
+            libp2p_logger_error("v2_bridge", "Cannot parse QUIC multiaddr: %s\n", multiaddr_str);
+            return -EINVAL;
+        }
+
+        const noise_identity_callbacks_t *noise_cbs = ipfs_noise_rsa_callbacks();
+        const char *peer_id = expected_peer_id[0] ? expected_peer_id : NULL;
+        struct Libp2pV2Stream *outbound = libp2p_net_quic_dial(ip, port, private_key,
+                                                               peer_id, noise_cbs);
+        if (!outbound) {
+            libp2p_logger_error("v2_bridge", "QUIC dial to %s:%u failed\n", ip, port);
+            return -ECONNREFUSED;
+        }
+
+        struct Libp2pV2Stream *inbound = libp2p_net_quic_accept_stream(outbound);
+        if (!inbound) {
+            libp2p_logger_error("v2_bridge", "QUIC accept inbound identify stream failed\n");
+            outbound->close(outbound);
+            return -ECONNABORTED;
+        }
+
+        char msg[256];
+        /* Inbound stream: peer initiated it, so we are the responder. */
+        if (!libp2p_net_multistream_read_protocol(inbound, msg, sizeof(msg)) ||
+            strcmp(msg, "/multistream/1.0.0\n") != 0) {
+            libp2p_logger_error("v2_bridge", "Failed to read inbound QUIC multistream header\n");
+            inbound->close(inbound);
+            outbound->close(outbound);
+            return -EPROTO;
+        }
+        if (!libp2p_net_multistream_write_protocol(inbound, "/multistream/1.0.0\n")) {
+            inbound->close(inbound);
+            outbound->close(outbound);
+            return -EPROTO;
+        }
+        if (!libp2p_net_multistream_read_protocol(inbound, msg, sizeof(msg)) ||
+            strcmp(msg, "/ipfs/id/1.0.0\n") != 0) {
+            libp2p_logger_error("v2_bridge", "Unexpected inbound QUIC protocol proposal: '%s'\n", msg);
+            inbound->close(inbound);
+            outbound->close(outbound);
+            return -EPROTO;
+        }
+        if (!libp2p_net_multistream_write_protocol(inbound, "/ipfs/id/1.0.0\n")) {
+            inbound->close(inbound);
+            outbound->close(outbound);
+            return -EPROTO;
+        }
+
+        struct RsaPrivateKey *rsa = (struct RsaPrivateKey *)private_key;
+        char *our_peer_id = NULL;
+        const unsigned char *pubkey_der = NULL;
+        size_t pubkey_len = 0;
+        if (rsa && rsa->public_key_der && rsa->public_key_length > 0) {
+            pubkey_der = (const unsigned char *)rsa->public_key_der;
+            pubkey_len = rsa->public_key_length;
+            struct PublicKey pubkey;
+            memset(&pubkey, 0, sizeof(pubkey));
+            pubkey.type = KEYTYPE_RSA;
+            pubkey.data = (unsigned char *)rsa->public_key_der;
+            pubkey.data_size = rsa->public_key_length;
+            libp2p_crypto_public_key_to_peer_id(&pubkey, &our_peer_id);
+        }
+        int send_ok = libp2p_identify_send_response_ipfs(inbound, our_peer_id, pubkey_der, pubkey_len, NULL, 0);
+        if (our_peer_id)
+            free(our_peer_id);
+        if (!send_ok) {
+            libp2p_logger_error("v2_bridge", "Failed to send QUIC Identify response\n");
+            inbound->close(inbound);
+            outbound->close(outbound);
+            return -EPROTO;
+        }
+
+        /* Outbound stream: we initiated it, so Kubo is the responder. */
+        if (!libp2p_net_multistream_read_protocol(outbound, msg, sizeof(msg)) ||
+            strcmp(msg, "/multistream/1.0.0\n") != 0) {
+            libp2p_logger_error("v2_bridge", "Failed to read outbound QUIC multistream header\n");
+            inbound->close(inbound);
+            outbound->close(outbound);
+            return -EPROTO;
+        }
+        if (!libp2p_net_multistream_write_protocol(outbound, "/multistream/1.0.0\n")) {
+            inbound->close(inbound);
+            outbound->close(outbound);
+            return -EPROTO;
+        }
+        if (!libp2p_net_multistream_write_protocol(outbound, "/ipfs/id/1.0.0\n")) {
+            inbound->close(inbound);
+            outbound->close(outbound);
+            return -EPROTO;
+        }
+        if (!libp2p_net_multistream_read_protocol(outbound, msg, sizeof(msg)) ||
+            strcmp(msg, "/ipfs/id/1.0.0\n") != 0) {
+            libp2p_logger_error("v2_bridge", "Outbound QUIC Identify protocol negotiation failed: '%s'\n", msg);
+            inbound->close(inbound);
+            outbound->close(outbound);
+            return -EPROTO;
+        }
+
+        ipfs_v2_stream_bridge_t *bridge = (ipfs_v2_stream_bridge_t *)calloc(1, sizeof(*bridge));
+        if (!bridge) {
+            inbound->close(inbound);
+            outbound->close(outbound);
+            return -ENOMEM;
+        }
+        bridge->connected = 1;
+
+        unsigned char prefix_buf[16];
+        size_t prefix_len = 0;
+        size_t payload_len = 0;
+        size_t prefix_consumed = 0;
+        while (prefix_len < sizeof(prefix_buf)) {
+            ssize_t n = outbound->read(outbound, prefix_buf + prefix_len,
+                                       sizeof(prefix_buf) - prefix_len);
+            DBG_SCOPE("v2_bridge", "QUIC prefix read n=%zd prefix_len=%zu\n", n, prefix_len);
+            if (n <= 0)
+                break;
+            prefix_len += (size_t)n;
+            size_t decoded_bytes = 0;
+            unsigned long long v = varint_decode(prefix_buf, (int)prefix_len, &decoded_bytes);
+            if (decoded_bytes > 0 && decoded_bytes <= prefix_len) {
+                payload_len = (size_t)v;
+                prefix_consumed = decoded_bytes;
+                break;
+            }
+        }
+        size_t payload_in_prefix = 0;
+        if (prefix_consumed > 0 && prefix_len > prefix_consumed) {
+            payload_in_prefix = prefix_len - prefix_consumed;
+            if (payload_in_prefix > sizeof(bridge->identify_buf))
+                payload_in_prefix = sizeof(bridge->identify_buf);
+            memcpy(bridge->identify_buf, prefix_buf + prefix_consumed, payload_in_prefix);
+        }
+        size_t total = payload_in_prefix;
+        while (payload_len > 0 && total < payload_len && total < sizeof(bridge->identify_buf)) {
+            ssize_t n = outbound->read(outbound, bridge->identify_buf + total,
+                                       sizeof(bridge->identify_buf) - total);
+            DBG_SCOPE("v2_bridge", "QUIC payload read n=%zd total=%zu\n", n, total);
+            if (n <= 0)
+                break;
+            total += (size_t)n;
+        }
+        bridge->identify_len = total;
+        libp2p_logger_info("v2_bridge", "Read %zu bytes of QUIC Identify response\n", total);
+
+        inbound->close(inbound);
+        outbound->close(outbound);
+
+        *out_bridge = bridge;
+        return 0;
+    }
 
     char ip[INET6_ADDRSTRLEN];
     uint16_t port = 0;
