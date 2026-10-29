@@ -164,7 +164,9 @@ fi
 
 if [ -n "${KUBO_BIN_CACHE:-}" ] && [ -x "${KUBO_BIN:-}" ] && [ "${INTEROP_MODE}" = "ci" ]; then
     mkdir -p "${KUBO_BIN_CACHE}"
-    cp -f "${KUBO_BIN}" "${KUBO_BIN_CACHE}/ipfs"
+    if [ "${KUBO_BIN}" != "${KUBO_BIN_CACHE}/ipfs" ]; then
+        cp -f "${KUBO_BIN}" "${KUBO_BIN_CACHE}/ipfs"
+    fi
     KUBO_BIN="${KUBO_BIN_CACHE}/ipfs"
 fi
 
