@@ -93,11 +93,21 @@ lowest-layer item, followed by L2.2 TLS, then L1.2 QUIC.
 - **Status:** Outbound and inbound Noise XX handshakes complete against Kubo.
 - **Verify:** `./test/scripts/test_kubo_noise_handshake.sh`, `./test/scripts/test_kubo_swarm_connect.sh`.
 
-### L2.2 TLS 1.3
+### L2.2 TLS 1.3 — NEXT
 - **Spec:** `c-libp2p/specs/tls/tls.md`
-- **Dependencies:** BoringSSL (already built for lsquic/QUIC)
-- **Files:** `transport/tls_transport.c` (new)
-- **Action:** Implement libp2p TLS 1.3 handshake with peer-ID certificate validation over TCP. QUIC uses lsquic's built-in BoringSSL TLS.
+- **Dependencies:** BoringSSL (already built for lsquic/QUIC); OpenSSL/BoringSSL X.509 APIs.
+- **Files:**
+  - `c-libp2p/v2/include/libp2p/conn/tls.h` (new)
+  - `c-libp2p/v2/src/conn/tls.c` (new)
+  - `transport/swarm_dialer_v2_bridge.c` (add `/tls/1.0.0` security path)
+- **Action:**
+  1. **Certificate + extension generation:** generate an ephemeral ECDSA P-256 cert key; create a self-signed X.509 cert valid ~100 years; include the libp2p Public Key Extension (OID `1.3.6.1.4.1.53594.1.1`) containing the host public key protobuf and a signature over `libp2p-tls-handshake:` || cert SubjectPublicKeyInfo DER.
+  2. **Peer certificate verification:** in a custom `VerifyPeerCertificate` callback, require exactly one certificate, find the libp2p extension, verify the cert self-signature, extract the host public key, verify the extension signature, and derive/validate the peer ID.
+  3. **TLS 1.3 handshake wrapper:** build an OpenSSL/BoringSSL `SSL_CTX` with `TLSv1.3`, client cert required, ALPN `libp2p`, and the custom verification callback; expose `libp2p_tls_secure_client/secure_server` that returns a `Libp2pV2Stream` over the raw transport.
+  4. **Integration:** in the v2 bridge, propose `/tls/1.0.0` before Noise when configured (or as an alternate security path); run TLS, then negotiate `/yamux/1.0.0` over the TLS connection, then perform Identify.
+  5. **Interop test:** add `./test/scripts/test_kubo_tls_handshake.sh` that dials Kubo with `/tls/1.0.0` and verifies the Identify response is received.
+- **Verify:** `./test/scripts/test_kubo_tls_handshake.sh` passes against Kubo v0.43.x.
+- **Reference implementation:** `go-libp2p/p2p/security/tls/` (module cache at `/Users/git/go/pkg/mod/github.com/libp2p/go-libp2p@v0.49.0/p2p/security/tls/`).
 
 ---
 
