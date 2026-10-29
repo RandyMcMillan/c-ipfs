@@ -187,8 +187,12 @@ fi
 echo "Kubo ID:    $KUBO_ID"
 echo "c-ipfs ID:  $CIPFS_ID"
 
+# Make any generic DEBUG level available to the CLI without passing it as a
+# positional argument (GNU timeout would try to execute the assignment string).
+export DEBUG="${DEBUG:-}"
+
 # Test 1: c-ipfs dials Kubo over QUIC (outbound).
-if ! run_with_timeout 60 DEBUG="${DEBUG:-}" "$REPO_ROOT/main/ipfs" swarm connect "/ip4/127.0.0.1/udp/$KUBO_SWARM_QUIC/quic-v1/p2p/$KUBO_ID"; then
+if ! run_with_timeout 60 "$REPO_ROOT/main/ipfs" swarm connect "/ip4/127.0.0.1/udp/$KUBO_SWARM_QUIC/quic-v1/p2p/$KUBO_ID"; then
     echo "FAIL: c-ipfs outbound QUIC swarm connect failed or timed out"
     dump_logs
     exit 1
