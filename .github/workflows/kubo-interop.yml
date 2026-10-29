@@ -108,6 +108,8 @@ jobs:
     needs: wait-for-cache
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      HAS_LSQUIC: true
     steps:
       - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
         with:
