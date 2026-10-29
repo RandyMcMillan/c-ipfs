@@ -58,6 +58,11 @@ jobs:
     outputs:
       cache-hit: ${{ steps.shared-cache.outputs.cache-hit }}
     steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
       - uses: ./.github/actions/prepare-repo
 
       - name: Poll for shared cache from Cache Factory
@@ -95,6 +100,11 @@ jobs:
         os: ${{ fromJSON((github.event_name != 'push' && github.event_name != 'pull_request' && inputs.macos_build == true && '["ubuntu-latest", "macos-latest"]') || '["ubuntu-latest"]') }}
     runs-on: ${{ matrix.os }}
     steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
       - uses: ./.github/actions/prepare-repo
 
       - name: Restore shared cache

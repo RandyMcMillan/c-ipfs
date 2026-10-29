@@ -1,24 +1,12 @@
 name: Prepare repository
 
 description: |
-  Check out the repository, sync submodule URLs, and update submodules.
-  This is the common first step for every workflow.
-
-inputs:
-  fetch-depth:
-    description: Number of commits to fetch (0 = all history)
-    required: false
-    default: '0'
+  Sync submodule URLs and update submodules.  The calling workflow must check
+  out the repository first.
 
 runs:
   using: composite
   steps:
-    - name: Checkout repository
-      uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
-      with:
-        submodules: recursive
-        fetch-depth: ${{ inputs.fetch-depth }}
-
     - name: Sync submodule URLs
       shell: bash
       run: git submodule sync --recursive

@@ -35,9 +35,13 @@ jobs:
         os: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: ./.github/actions/prepare-repo
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
         with:
-          fetch-depth: '0'
+          ref: ${{ inputs.tag || inputs.branch || github.ref }}
+          submodules: recursive
+          fetch-depth: 0
+
+      - uses: ./.github/actions/prepare-repo
 
       - name: Resolve shared cache key
         id: cache-key
