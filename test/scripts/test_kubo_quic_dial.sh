@@ -51,6 +51,32 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# Print full daemon logs so CI failures capture the hang point.
+dump_logs() {
+    echo "===== c-ipfs daemon log ($CIPFS_LOG) ====="
+    cat "$CIPFS_LOG" 2>/dev/null || true
+    echo "===== Kubo daemon log ($KUBO_LOG) ====="
+    cat "$KUBO_LOG" 2>/dev/null || true
+}
+
+# Wrap long-blocking CLI commands so a hang yields logs instead of a job timeout.
+TIMEOUT_BIN=""
+if command -v timeout >/dev/null 2>&1; then
+    TIMEOUT_BIN="timeout"
+elif command -v gtimeout >/dev/null 2>&1; then
+    TIMEOUT_BIN="gtimeout"
+fi
+
+run_with_timeout() {
+    local seconds="$1"
+    shift
+    if [ -n "$TIMEOUT_BIN" ]; then
+        "$TIMEOUT_BIN" "$seconds" "$@"
+    else
+        "$@"
+    fi
+}
+
 pick_port() {
     python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1]); s.close()'
 }
@@ -116,6 +142,10 @@ with open(cfg_path, 'w') as f:
     json.dump(cfg, f, indent=1)
 PY
 
+# Enable protocol debug logging for the QUIC path so CI captures the hang point.
+export DEBUG_V2_BRIDGE="${DEBUG_V2_BRIDGE:-true}"
+export DEBUG_QUIC="${DEBUG_QUIC:-true}"
+export DEBUG_MULTISTREAM="${DEBUG_MULTISTREAM:-true}"
 DEBUG="${DEBUG:-}" "$REPO_ROOT/main/ipfs" daemon > "$CIPFS_LOG" 2>&1 &
 CIPFS_PID=$!
 
@@ -144,12 +174,9 @@ echo "Kubo ID:    $KUBO_ID"
 echo "c-ipfs ID:  $CIPFS_ID"
 
 # Test 1: c-ipfs dials Kubo over QUIC (outbound).
-if ! DEBUG="${DEBUG:-}" "$REPO_ROOT/main/ipfs" swarm connect "/ip4/127.0.0.1/udp/$KUBO_SWARM_QUIC/quic-v1/p2p/$KUBO_ID"; then
-    echo "FAIL: c-ipfs outbound QUIC swarm connect failed"
-    echo "===== c-ipfs log tail ====="
-    tail -100 "$CIPFS_LOG"
-    echo "===== Kubo log tail ====="
-    tail -60 "$KUBO_LOG"
+if ! run_with_timeout 60 DEBUG="${DEBUG:-}" "$REPO_ROOT/main/ipfs" swarm connect "/ip4/127.0.0.1/udp/$KUBO_SWARM_QUIC/quic-v1/p2p/$KUBO_ID"; then
+    echo "FAIL: c-ipfs outbound QUIC swarm connect failed or timed out"
+    dump_logs
     exit 1
 fi
 echo "PASS: c-ipfs outbound QUIC swarm connect succeeded"
@@ -157,12 +184,9 @@ echo "PASS: c-ipfs outbound QUIC swarm connect succeeded"
 # Test 2: Kubo dials c-ipfs over QUIC (inbound).  Use Kubo's repo for the
 # Kubo CLI so it talks to the running Kubo daemon.
 export IPFS_PATH="$KUBO_REPO"
-if ! "$KUBO_BIN" swarm connect "/ip4/127.0.0.1/udp/$CIPFS_SWARM_QUIC/quic-v1/p2p/$CIPFS_ID"; then
-    echo "FAIL: Kubo outbound QUIC swarm connect to c-ipfs failed"
-    echo "===== c-ipfs log tail ====="
-    tail -100 "$CIPFS_LOG"
-    echo "===== Kubo log tail ====="
-    tail -60 "$KUBO_LOG"
+if ! run_with_timeout 60 "$KUBO_BIN" swarm connect "/ip4/127.0.0.1/udp/$CIPFS_SWARM_QUIC/quic-v1/p2p/$CIPFS_ID"; then
+    echo "FAIL: Kubo outbound QUIC swarm connect to c-ipfs failed or timed out"
+    dump_logs
     exit 1
 fi
 echo "PASS: Kubo inbound QUIC swarm connect to c-ipfs succeeded"
