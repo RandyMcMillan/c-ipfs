@@ -35,7 +35,6 @@ int test_bitswap_new_free() {
 	int retVal = 0;
 	struct BitswapMessage* message = NULL;
 	struct WantlistEntry* wantlist_entry = NULL;
-	struct Block* block = NULL;
 
 	// Test 1, create a simple BitswapMessage
 	message = ipfs_bitswap_message_new();
@@ -68,16 +67,16 @@ int test_bitswap_new_free() {
 	}
 	// payload
 	message->payload = libp2p_utils_vector_new(1);
-	block = ipfs_block_new();
-	block->data_length = 25;
-	libp2p_utils_vector_add(message->payload, block);
-	block = (struct Block*)libp2p_utils_vector_get(message->payload, 0);
-	if (block == NULL) {
+	struct BitswapBlock* bs_block = ipfs_bitswap_block_new();
+	bs_block->bytes_size = 25;
+	libp2p_utils_vector_add(message->payload, bs_block);
+	bs_block = (struct BitswapBlock*)libp2p_utils_vector_get(message->payload, 0);
+	if (bs_block == NULL) {
 		fprintf(stderr, "Vector didn't have payload entry\n");
 		goto exit;
 	}
-	if (block->data_length != 25) {
-		fprintf(stderr, "Unable to retrieve block->data_length\n");
+	if (bs_block->bytes_size != 25) {
+		fprintf(stderr, "Unable to retrieve bs_block->bytes_size\n");
 	}
 
 	retVal = 1;

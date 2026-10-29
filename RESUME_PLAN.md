@@ -60,6 +60,11 @@ Percentages are rough estimates against the relevant spec documents in `specs/` 
 
 ## L1 — Transport
 
+**Sequencing note:** L1.2 QUIC cannot be completed until L2.2 TLS 1.3 is ready,
+because QUIC uses TLS 1.3 for peer authentication (`c-libp2p/specs/quic/README.md`).
+Therefore L1.3 WebSocket (which runs Noise + yamux over TCP) is the next
+lowest-layer item, followed by L2.2 TLS, then L1.2 QUIC.
+
 ### L1.1 TCP dial/listen — DONE
 - **Spec:** `c-libp2p/specs/connections/README.md`
 - **Files:** `c-libp2p/c-multiaddr/protoutils.c`, `c-libp2p/conn/tcp_transport_dialer.c`, `c-libp2p/net/socket.c`, `c-libp2p/net/connectionstream.c`, `c-libp2p/v2/src/net/multiaddr.c`, `c-libp2p/v2/src/net/tcp_dial.c`, `transport/swarm_dialer_v2_bridge.c`
