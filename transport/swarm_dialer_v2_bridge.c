@@ -134,7 +134,7 @@ int ipfs_swarm_connect_v2_bridge(const char *multiaddr_str,
             libp2p_logger_error("v2_bridge", "QUIC dial to %s:%u failed\n", ip, port);
             return -ECONNREFUSED;
         }
-        fprintf(stderr, "TRACE QUIC: outbound stream acquired\n");
+        DBG_SCOPE("v2_bridge", "QUIC outbound stream acquired\n");
 
         char msg[256];
 
@@ -161,7 +161,7 @@ int ipfs_swarm_connect_v2_bridge(const char *multiaddr_str,
          * Do this BEFORE accepting the peer's inbound Identify stream: Kubo
          * only opens its stream after it sees our outbound multistream-select
          * request. */
-        fprintf(stderr, "TRACE QUIC: outbound multistream handshake start\n");
+        DBG_SCOPE("v2_bridge", "QUIC outbound multistream handshake start\n");
         if (!libp2p_net_multistream_write_protocol(outbound, "/multistream/1.0.0\n") ||
             !libp2p_net_multistream_read_protocol(outbound, msg, sizeof(msg)) ||
             strcmp(msg, "/multistream/1.0.0\n") != 0) {
@@ -179,7 +179,7 @@ int ipfs_swarm_connect_v2_bridge(const char *multiaddr_str,
             return -EPROTO;
         }
         libp2p_logger_info("v2_bridge", "Outbound QUIC Identify negotiated; reading peer response\n");
-        fprintf(stderr, "TRACE QUIC: outbound identify negotiated\n");
+        DBG_SCOPE("v2_bridge", "QUIC outbound identify negotiated\n");
 
         /* Read Kubo's length-delimited (msgio) Identify response from the
          * outbound stream into a temporary bridge buffer before touching the
@@ -230,7 +230,7 @@ int ipfs_swarm_connect_v2_bridge(const char *multiaddr_str,
         }
         bridge->identify_len = total;
         libp2p_logger_info("v2_bridge", "Read %zu bytes of QUIC Identify response\n", total);
-        fprintf(stderr, "TRACE QUIC: read %zu bytes outbound response\n", total);
+        DBG_SCOPE("v2_bridge", "QUIC read %zu bytes outbound response\n", total);
 
         /* Now that Kubo has seen our outbound request and stream 0 is drained,
          * accept its inbound Identify stream. */
@@ -242,7 +242,7 @@ int ipfs_swarm_connect_v2_bridge(const char *multiaddr_str,
             outbound->close(outbound);
             return -ECONNABORTED;
         }
-        fprintf(stderr, "TRACE QUIC: inbound stream acquired\n");
+        DBG_SCOPE("v2_bridge", "QUIC inbound stream acquired\n");
 
         /* Inbound stream: peer opened it, so we are the multistream-select
          * responder.  Echo the header and protocol, then send our Identify
@@ -268,7 +268,7 @@ int ipfs_swarm_connect_v2_bridge(const char *multiaddr_str,
             return -EPROTO;
         }
         libp2p_logger_info("v2_bridge", "Inbound QUIC Identify negotiated; sending our response\n");
-        fprintf(stderr, "TRACE QUIC: inbound identify negotiated, sending response\n");
+        DBG_SCOPE("v2_bridge", "QUIC inbound identify negotiated, sending response\n");
         if (!libp2p_identify_send_response_ipfs(inbound, our_peer_id, pubkey_der, pubkey_len, NULL, 0)) {
             libp2p_logger_error("v2_bridge", "Failed to send QUIC Identify response on inbound stream\n");
             if (our_peer_id) free(our_peer_id);
@@ -278,18 +278,18 @@ int ipfs_swarm_connect_v2_bridge(const char *multiaddr_str,
             return -EPROTO;
         }
 
-        fprintf(stderr, "TRACE QUIC: identify response sent, closing streams\n");
+        DBG_SCOPE("v2_bridge", "QUIC identify response sent, closing streams\n");
 
         if (our_peer_id)
             free(our_peer_id);
-        fprintf(stderr, "TRACE QUIC: about to close inbound\n");
+        DBG_SCOPE("v2_bridge", "QUIC about to close inbound\n");
         inbound->close(inbound);
-        fprintf(stderr, "TRACE QUIC: about to close outbound\n");
+        DBG_SCOPE("v2_bridge", "QUIC about to close outbound\n");
         outbound->close(outbound);
-        fprintf(stderr, "TRACE QUIC: streams closed, returning bridge\n");
+        DBG_SCOPE("v2_bridge", "QUIC streams closed, returning bridge\n");
 
         *out_bridge = bridge;
-        fprintf(stderr, "TRACE QUIC: returning 0\n");
+        DBG_SCOPE("v2_bridge", "QUIC returning 0\n");
         return 0;
     }
 #else
