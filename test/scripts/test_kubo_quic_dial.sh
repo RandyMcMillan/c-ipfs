@@ -117,9 +117,9 @@ with open(cfg_path, 'w') as f:
 PY
 
 if command -v gdb >/dev/null 2>&1; then
-    DEBUG="${DEBUG:-}" gdb -batch -ex "handle SIGPIPE nostop noprint pass" -ex run -ex "bt 30" -ex "thread apply all bt 12" --args "$REPO_ROOT/main/ipfs" daemon > "$CIPFS_LOG" 2>&1 &
+    DEBUG="${DEBUG:-all}" gdb -batch -ex "handle SIGPIPE nostop noprint pass" -ex run -ex "bt 30" -ex "thread apply all bt 12" --args "$REPO_ROOT/main/ipfs" daemon > "$CIPFS_LOG" 2>&1 &
 else
-DEBUG="${DEBUG:-}" "$REPO_ROOT/main/ipfs" daemon > "$CIPFS_LOG" 2>&1 &
+DEBUG="${DEBUG:-all}" "$REPO_ROOT/main/ipfs" daemon > "$CIPFS_LOG" 2>&1 &
 fi
 CIPFS_PID=$!
 
