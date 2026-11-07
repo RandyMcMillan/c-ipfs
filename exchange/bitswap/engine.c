@@ -1,3 +1,4 @@
+#include "libp2p/utils/debug.h"
 #include <unistd.h>
 #include <pthread.h>
 
@@ -101,6 +102,7 @@ void* ipfs_bitswap_engine_peer_request_processor_start(void* ctx) {
 			libp2p_logger_error("bitswap_engine", "Peerstore has an item that is a null peer.\n");
 			break;
 		}
+		DBG_SCOPE("bitswap_engine", "loop peer=%s conn=%d local=%d\n", libp2p_peer_id_to_string(current_peer_entry), current_peer_entry->connection_type, current_peer_entry->is_local);
 			if (current_peer_entry->connection_type == CONNECTION_TYPE_CONNECTED) {
 				struct SessionContext* sc = current_peer_entry->sessionContext;
 				if (sc == NULL || sc->default_stream == NULL) {

@@ -8,6 +8,7 @@
 #include <pthread.h>
 
 #include "libp2p/utils/logger.h"
+#include "libp2p/utils/debug.h"
 #include "libp2p/conn/dialer.h"
 #include "ipfs/exchange/bitswap/network.h"
 #include "ipfs/exchange/bitswap/peer_request_queue.h"
@@ -154,8 +155,15 @@ int ipfs_bitswap_network_handle_message(const struct IpfsNode* node, const struc
 	struct BitswapContext* bitswapContext = (struct BitswapContext*)node->exchange->exchangeContext;
 	// un-protobuf the message
 	struct BitswapMessage* message = NULL;
-	if (!ipfs_bitswap_message_protobuf_decode(bytes, bytes_length, &message))
+	if (!ipfs_bitswap_message_protobuf_decode(bytes, bytes_length, &message)) {
+		DBG_SCOPE("bitswap_network", "protobuf decode failed (%zu bytes)\n", bytes_length);
 		return 0;
+	}
+	DBG_SCOPE("bitswap_network", "decoded: payload=%d presences=%d wantlist_entries=%d remote_peer=%s\n",
+	          message && message->payload ? (int)message->payload->total : -1,
+	          message && message->block_presences ? (int)message->block_presences->total : -1,
+	          message && message->wantlist && message->wantlist->entries ? (int)message->wantlist->entries->total : -1,
+	          sessionContext->remote_peer_id ? sessionContext->remote_peer_id : "(null)");
 	// process the message
 	// payload - what we want (Bitswap 1.2.0 prefix+data)
 	if (message->payload != NULL) {
@@ -205,7 +213,22 @@ int ipfs_bitswap_network_handle_message(const struct IpfsNode* node, const struc
 				ipfs_bitswap_message_free(message);
 				return 0;
 			}
+			/* ipfs_cid_cast points cid->hash into the message buffer, which is freed
+			 * below; own a copy so the queued CID stays valid. */
+			unsigned char* hash_copy = (unsigned char*) malloc(cid->hash_length);
+			if (hash_copy == NULL) {
+				free(cid);
+				ipfs_bitswap_message_free(message);
+				return 0;
+			}
+			memcpy(hash_copy, cid->hash, cid->hash_length);
+			cid->hash = hash_copy;
+			int total_before = peerRequest->cids_they_want->total;
 			ipfs_bitswap_network_adjust_cid_queue(peerRequest->cids_they_want, cid, entry->cancel);
+			if (peerRequest->cids_they_want->total <= total_before)
+				ipfs_cid_free(cid); // not queued, so we still own it
+			DBG_SCOPE("bitswap_network", "queued want from peer=%s cancel=%d queue_size=%d\n",
+			          sessionContext->remote_peer_id, (int)entry->cancel, peerRequest->cids_they_want->total);
 		}
 	}
 	ipfs_bitswap_message_free(message);

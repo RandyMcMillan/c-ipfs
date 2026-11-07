@@ -110,6 +110,13 @@ wait_for_port() {
 }
 
 cleanup() {
+    local rc=$?
+    if [ "${rc}" -ne 0 ]; then
+        for f in c_ipfs.log kubo.log; do
+            echo "===== ${f} (last 2000 lines) ====="
+            tail -n 2000 "${TMP_DIR}/${f}" 2>/dev/null || true
+        done
+    fi
     if [ -n "${c_ipfs_pid}" ] && kill -0 "${c_ipfs_pid}" 2>/dev/null; then
         kill -9 "${c_ipfs_pid}" 2>/dev/null || true
     fi

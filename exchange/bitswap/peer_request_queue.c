@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include "libp2p/conn/session.h"
 #include "libp2p/utils/logger.h"
+#include "libp2p/utils/debug.h"
 #include "ipfs/cid/cid.h"
 #include "ipfs/exchange/bitswap/peer_request_queue.h"
 #include "ipfs/exchange/bitswap/message.h"
@@ -330,6 +331,8 @@ int ipfs_bitswap_peer_request_get_blocks_they_want(const struct BitswapContext* 
 		if (cidEntry != NULL && !cidEntry->cancel) {
 			struct Block* block = NULL;
 			context->ipfsNode->blockstore->Get(context->ipfsNode->blockstore->blockstoreContext, cidEntry->cid, &block);
+			DBG_SCOPE("bitswap_engine", "blockstore get cid_version=%d codec=%d hash_len=%zu found=%d\n",
+			          cidEntry->cid->version, cidEntry->cid->codec, cidEntry->cid->hash_length, block != NULL);
 			if (block != NULL) {
 				libp2p_utils_vector_add(request->blocks_we_want_to_send, block);
 				cidEntry->cancel = 1;
@@ -371,6 +374,10 @@ int ipfs_bitswap_peer_request_process_entry(const struct BitswapContext* context
 		return 0;
 	if (request->peer == NULL)
 		return 0;
+	if (ipfs_bitswap_peer_request_cids_waiting(request->cids_they_want))
+		DBG_SCOPE("bitswap_engine", "process_entry peer=%s conn=%d addr=%p sess=%p local=%d\n",
+		          libp2p_peer_id_to_string(request->peer), request->peer->connection_type,
+		          (void*)request->peer->addr_head, (void*)request->peer->sessionContext, request->peer->is_local);
 	if (!request->peer->is_local) {
 		if (request->peer->connection_type != CONNECTION_TYPE_CONNECTED)
 			if (request->peer->addr_head == NULL || request->peer->addr_head->item == NULL)

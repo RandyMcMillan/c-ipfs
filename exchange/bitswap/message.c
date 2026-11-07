@@ -25,11 +25,21 @@ struct BitswapBlock* ipfs_block_to_bitswap_block(const struct Block* block) {
 	size_t written = 0;
 	if (!ipfs_cid_to_bytes(block->cid, cid_bytes, cid_size, &written))
 		goto err;
-	bb->prefix_size = written - block->cid->hash_length;
+	size_t mh_header_size = written - block->cid->hash_length;
+	size_t implicit_size = 0;
+	/* CIDv0 bytes are a bare multihash; the wire prefix still needs
+	 * <version><codec> in front of the multihash header. */
+	if (block->cid->version == 0)
+		implicit_size = 2;
+	bb->prefix_size = mh_header_size + implicit_size;
 	bb->prefix = (uint8_t*) malloc(bb->prefix_size);
 	if (bb->prefix == NULL)
 		goto err;
-	memcpy(bb->prefix, cid_bytes, bb->prefix_size);
+	if (block->cid->version == 0) {
+		bb->prefix[0] = 0x00;
+		bb->prefix[1] = 0x70;
+	}
+	memcpy(bb->prefix + implicit_size, cid_bytes, mh_header_size);
 	bb->bytes_size = block->data_length;
 	if (bb->bytes_size > 0) {
 		bb->bytes = (uint8_t*) malloc(bb->bytes_size);
