@@ -1,3 +1,4 @@
+#include "libp2p/utils/debug.h"
 #include <stdlib.h>
 #include "libp2p/conn/session.h"
 #include "libp2p/utils/vector.h"
@@ -350,9 +351,14 @@ int ipfs_bitswap_wantlist_get_block_remote(struct BitswapContext* context, struc
 	struct Libp2pLinkedList* current_entry = context->ipfsNode->peerstore->head_entry;
 	while (current_entry != NULL) {
 		struct PeerEntry* peerEntry = (struct PeerEntry*)current_entry->item;
+		/* Peers that dropped their connection are retried when they still have
+		 * an address; ipfs_bitswap_network_send_message reconnects on demand. */
 		if (peerEntry != NULL && peerEntry->peer != NULL && !peerEntry->peer->is_local
-			&& peerEntry->peer->connection_type == CONNECTION_TYPE_CONNECTED) {
-			if (ipfs_bitswap_wantlist_send_cid_to_peer(context, peerEntry->peer, cid))
+			&& (peerEntry->peer->connection_type == CONNECTION_TYPE_CONNECTED
+				|| (peerEntry->peer->addr_head != NULL && peerEntry->peer->addr_head->item != NULL))) {
+			int ok = ipfs_bitswap_wantlist_send_cid_to_peer(context, peerEntry->peer, cid);
+			DBG_SCOPE("bitswap_wantlist", "send want to peer=%s ok=%d\n", libp2p_peer_id_to_string(peerEntry->peer), ok);
+			if (ok)
 				sent = 1;
 		}
 		current_entry = current_entry->next;
@@ -389,6 +395,7 @@ int ipfs_bitswap_wantlist_get_block_remote(struct BitswapContext* context, struc
 int ipfs_bitswap_wantlist_process_entry(struct BitswapContext* context, struct WantListQueueEntry* entry) {
 	int local_request = ipfs_bitswap_wantlist_local_request(entry->sessionsRequesting);
 	int have_local = ipfs_bitswap_wantlist_get_block_locally(context, entry->cid, &entry->block);
+	DBG_SCOPE("bitswap_wantlist", "process_entry local_request=%d have_local=%d attempts=%d\n", local_request, have_local, entry->attempts);
 	// should we go get it?
 	if (!local_request && !have_local) {
 		return 0;

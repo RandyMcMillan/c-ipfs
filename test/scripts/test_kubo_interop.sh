@@ -219,7 +219,7 @@ IPFS_PATH="${K_REPO}" "${KUBO_BIN}" config --json Discovery.MDNS.Enabled false
 IPFS_PATH="${K_REPO}" "${KUBO_BIN}" config --json Bootstrap '[]'
 
 echo "=== Starting c-ipfs daemon ==="
-IPFS_PATH="${C_REPO}" "${C_IPFS_BIN}" daemon > "${TMP_DIR}/c_ipfs.log" 2>&1 &
+IPFS_PATH="${C_REPO}" stdbuf -oL -eL "${C_IPFS_BIN}" daemon > "${TMP_DIR}/c_ipfs.log" 2>&1 &
 c_ipfs_pid=$!
 
 echo "Waiting for c-ipfs daemon API on ${C_API_PORT}..."
@@ -310,7 +310,9 @@ if [ -z "${K_CID}" ]; then
 fi
 
 C_FETCHED_FILE="${TMP_DIR}/fetched_c_ipfs.txt"
-if ! IPFS_PATH="${C_REPO}" timeout 60 "${C_IPFS_BIN}" cat "${K_CID}" > "${C_FETCHED_FILE}"; then
+# `c-ipfs cat` opens its own offline node, so it cannot reach Kubo. Fetch through
+# the running daemon's gateway so the block is requested over Bitswap.
+if ! curl -fsS -m 60 "http://127.0.0.1:${C_API_PORT}/ipfs/${K_CID}" > "${C_FETCHED_FILE}"; then
     echo "FAIL: c-ipfs cat of Kubo block ${K_CID} failed or timed out after 60s"
     exit 1
 fi
