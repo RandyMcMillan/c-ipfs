@@ -287,7 +287,10 @@ if [ -z "${CID}" ]; then
 fi
 
 FETCHED_FILE="${TMP_DIR}/fetched_kubo.txt"
-IPFS_PATH="${K_REPO}" "${KUBO_BIN}" cat "${CID}" > "${FETCHED_FILE}"
+if ! IPFS_PATH="${K_REPO}" timeout 60 "${KUBO_BIN}" cat "${CID}" > "${FETCHED_FILE}"; then
+    echo "FAIL: Kubo cat of c-ipfs block ${CID} failed or timed out after 60s"
+    exit 1
+fi
 diff -q "${TEST_FILE}" "${FETCHED_FILE}"
 
 echo "=== Test 3: Vector 002 - Kubo add -> c-ipfs cat ==="
@@ -300,7 +303,10 @@ if [ -z "${K_CID}" ]; then
 fi
 
 C_FETCHED_FILE="${TMP_DIR}/fetched_c_ipfs.txt"
-IPFS_PATH="${C_REPO}" "${C_IPFS_BIN}" cat "${K_CID}" > "${C_FETCHED_FILE}"
+if ! IPFS_PATH="${C_REPO}" timeout 60 "${C_IPFS_BIN}" cat "${K_CID}" > "${C_FETCHED_FILE}"; then
+    echo "FAIL: c-ipfs cat of Kubo block ${K_CID} failed or timed out after 60s"
+    exit 1
+fi
 diff -q "${K_TEST_FILE}" "${C_FETCHED_FILE}"
 
 echo "=== Test 4: Vector 003 - local DAG-CBOR vector validation ==="
